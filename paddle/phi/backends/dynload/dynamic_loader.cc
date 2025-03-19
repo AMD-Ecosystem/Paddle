@@ -68,6 +68,11 @@ PHI_DEFINE_string(rccl_dir,
                   "dlopen will search rccl from LD_LIBRARY_PATH");
 #endif
 
+// use hardcoded path for now to ensure correctness
+#ifdef PADDLE_WITH_FLAGCX
+COMMON_DECLARE_string(flagcx_dir);
+#endif
+
 #ifdef PADDLE_WITH_XPU
 PD_DEFINE_string(xpti_dir, "", "Specify path for loading libxpti.so.");
 #endif
@@ -774,6 +779,14 @@ void* GetNCCLDsoHandle() {
       FLAGS_nccl_dir, "libnccl.so", true, {}, warning_msg);
 #endif
 
+#endif
+}
+
+void* GetFLAGCXDsoHandle() {
+#ifdef PADDLE_WITH_FLAGCX
+  return GetDsoHandleFromSearchPath(FLAGS_flagcx_dir, "libflagcx.so");
+#else
+  return nullptr;
 #endif
 }
 

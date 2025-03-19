@@ -1261,6 +1261,19 @@ PHI_DEFINE_EXPORTED_bool(multi_node_sample_use_gpu_table,
 PHI_DEFINE_EXPORTED_bool(nccl_blocking_wait, false, "nccl blocking wait");
 #endif
 
+/**
+ * ProcessGroupFlagCX related FLAG
+ * Name: flagcx_blocking_wait
+ * Since Version:
+ * Value Range: bool, default=false
+ * Example:
+ * Note: nccl blocking wait.
+ * blocks host thread until collective operation completes
+ */
+#if defined(PADDLE_WITH_FLAGCX)
+PHI_DEFINE_EXPORTED_bool(flagcx_blocking_wait, false, "flagcx blocking wait");
+#endif
+
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 PHI_DEFINE_EXPORTED_bool(benchmark_nccl,
                          false,
@@ -1765,6 +1778,13 @@ PHI_DEFINE_EXPORTED_string(
     "Specify path for loading nccl library, such as libnccl.so. "
     "For instance, /usr/local/cuda/lib64. If default, "
     "dlopen will search cuda from LD_LIBRARY_PATH");
+
+PHI_DEFINE_EXPORTED_string(
+    flagcx_dir,  // NOLINT
+    "",
+    "Specify path for loading libflagcx.so. For instance, "
+    "For instance, /usr/local/flagcx/lib. If default, "
+    "dlopen will search flagcx from LD_LIBRARY_PATH");
 
 PHI_DEFINE_EXPORTED_string(cupti_dir,
                            "",

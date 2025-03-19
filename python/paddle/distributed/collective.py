@@ -75,7 +75,7 @@ _group_map_backend = {}
 # Name of the default group for init_parallel_env
 _default_group_name = "_default_pg"
 
-_valid_backend_list = ['nccl', 'gloo', 'heter', 'xccl', 'bkcl']
+_valid_backend_list = ['nccl', 'gloo', 'heter', 'xccl', 'bkcl', 'flagcx']
 _default_store = None  # the default tcp store
 _default_backend = None
 _default_timeout = datetime.timedelta(seconds=1800)
@@ -178,6 +178,15 @@ def _new_process_group_impl(
         )
     elif backend == "bkcl":
         pg = core.ProcessGroupBKCL.create(store, rank, world_size, group_id)
+    elif backend == "flagcx":
+        pg = core.ProcessGroupFlagcx.create(
+            store,
+            rank,
+            world_size,
+            group_id,
+            genv.pg_timeout,
+            nccl_comm_init_option,
+        )
     return pg
 
 

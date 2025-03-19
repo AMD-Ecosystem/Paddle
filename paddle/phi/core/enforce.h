@@ -55,6 +55,10 @@ limitations under the License. */
 #endif  // __APPLE__
 #endif  // PADDLE_WITH_CUDA
 
+#ifdef PADDLE_WITH_FLAGCX
+#include <flagcx.h>
+#endif
+
 #ifdef PADDLE_WITH_HIP
 #include "paddle/phi/backends/dynload/hipblasLt.h"
 #include "paddle/phi/backends/dynload/hipfft.h"
