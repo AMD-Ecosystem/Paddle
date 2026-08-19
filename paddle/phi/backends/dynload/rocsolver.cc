@@ -23,7 +23,12 @@ void *rocsolver_dso_handle;
 
 ROCSOLVER_ROUTINE_EACH(DEFINE_WRAP);
 
+// AMD ROCm overlay: guard EACH1 -- rocsolver.h only defines
+// ROCSOLVER_ROUTINE_EACH1 for HIP_VERSION >= 50300000, so the unguarded
+// upstream form fails to compile on older HIP. The guard is compatible with
+// upstream's intent on ROCm 6+ and safe on older toolchains.
 #ifdef ROCSOLVER_ROUTINE_EACH1
 ROCSOLVER_ROUTINE_EACH1(DEFINE_WRAP);
 #endif
+
 }  // namespace phi::dynload

@@ -36,6 +36,7 @@
 /*! \file */
 // Here we include some header files with relative paths, for that in deploy,
 // the abstract path of this header file will be changed.
+#include "paddle/common/macros.h"
 #include "paddle_api.h"           // NOLINT
 #include "paddle_pass_builder.h"  // NOLINT
 
@@ -43,7 +44,7 @@ namespace paddle {
 
 class AnalysisPredictor;
 
-struct PD_INFER_DECL XpuConfig {
+struct PADDLE_API XpuConfig {
   // Select which xpu device to run model.
   int device_id{0};
 
@@ -133,7 +134,7 @@ struct PD_INFER_DECL XpuConfig {
 /// AnalysisConfig,
 /// and loading it into AnalysisPredictor.
 ///
-struct PD_INFER_DECL AnalysisConfig {
+struct PADDLE_API AnalysisConfig {
   AnalysisConfig();
   ///
   /// \brief Construct a new AnalysisConfig from another
@@ -869,6 +870,35 @@ struct PD_INFER_DECL AnalysisConfig {
   /// \brief Turn on OneDNN.
   ///
   ///
+  void EnableMKLDNN();  // deprecated
+
+  ///
+  /// \brief Turn down OneDNN.
+  ///
+  ///
+  void DisableMKLDNN();  // deprecated
+
+  ///
+  /// \brief Set the cache capacity of different input shapes for OneDNN.
+  /// Default value 0 means not caching any shape.
+  /// Please see MKL-DNN Data Caching Design Document:
+  /// https://github.com/PaddlePaddle/docs/blob/develop/docs/design/mkldnn/caching/caching.md
+  ///
+  /// \param capacity The cache capacity.
+  ///
+  void SetMkldnnCacheCapacity(int capacity);  // deprecated
+
+  ///
+  /// \brief A boolean state telling whether to use the OneDNN.
+  ///
+  /// \return bool Whether to use the OneDNN.
+  ///
+  bool mkldnn_enabled() const { return use_onednn_; }  // deprecated
+
+  ///
+  /// \brief Turn on OneDNN.
+  ///
+  ///
   void EnableONEDNN();
 
   ///
@@ -881,17 +911,18 @@ struct PD_INFER_DECL AnalysisConfig {
   /// \brief Set the cache capacity of different input shapes for OneDNN.
   /// Default value 0 means not caching any shape.
   /// Please see MKL-DNN Data Caching Design Document:
-  /// https://github.com/PaddlePaddle/FluidDoc/blob/develop/doc/fluid/design/mkldnn/caching/caching.md
+  /// https://github.com/PaddlePaddle/docs/blob/develop/docs/design/mkldnn/caching/caching.md
   ///
   /// \param capacity The cache capacity.
   ///
   void SetOnednnCacheCapacity(int capacity);
+
   ///
   /// \brief A boolean state telling whether to use the OneDNN.
   ///
   /// \return bool Whether to use the OneDNN.
   ///
-  bool mkldnn_enabled() const { return use_onednn_; }
+  bool onednn_enabled() const { return use_onednn_; }
 
   ///
   /// \brief Set the number of cpu math library threads.
@@ -921,6 +952,14 @@ struct PD_INFER_DECL AnalysisConfig {
   ///
   /// \param op_list The operator type list.
   ///
+  void SetMKLDNNOp(std::unordered_set<std::string> op_list) {  // deprecated
+    onednn_enabled_op_types_ = op_list;
+  }
+  ///
+  /// \brief Specify the operator type list to use OneDNN acceleration.
+  ///
+  /// \param op_list The operator type list.
+  ///
   void SetONEDNNOp(std::unordered_set<std::string> op_list) {
     onednn_enabled_op_types_ = op_list;
   }
@@ -930,20 +969,46 @@ struct PD_INFER_DECL AnalysisConfig {
   ///
   /// \param op_list The operator type list.
   ///
-  void EnableMkldnnInt8(const std::unordered_set<std::string>& op_list = {});
+  void EnableMkldnnInt8(
+      const std::unordered_set<std::string>& op_list = {});  // deprecated
 
   ///
   /// \brief A boolean state telling whether to use the OneDNN Int8.
   ///
   /// \return bool Whether to use the OneDNN Int8.
   ///
-  bool mkldnn_int8_enabled() const { return use_onednn_int8_; }
+  bool mkldnn_int8_enabled() const { return use_onednn_int8_; }  // deprecated
 
   ///
   /// \brief Turn on OneDNN bfloat16.
   ///
   ///
-  void EnableMkldnnBfloat16();
+  void EnableMkldnnBfloat16();  // deprecated
+
+  ///
+  /// \brief Turn off OneDNN fc passes.
+  ///
+  void DisableMkldnnFcPasses();  // deprecated
+
+  ///
+  /// \brief Turn on OneDNN int8.
+  ///
+  /// \param op_list The operator type list.
+  ///
+  void EnableOnednnInt8(const std::unordered_set<std::string>& op_list = {});
+
+  ///
+  /// \brief A boolean state telling whether to use the OneDNN Int8.
+  ///
+  /// \return bool Whether to use the OneDNN Int8.
+  ///
+  bool onednn_int8_enabled() const { return use_onednn_int8_; }
+
+  ///
+  /// \brief Turn on OneDNN bfloat16.
+  ///
+  ///
+  void EnableOnednnBfloat16();
 
   ///
   /// \brief Turn off OneDNN fc passes.
@@ -955,14 +1020,32 @@ struct PD_INFER_DECL AnalysisConfig {
   ///
   /// \return bool Whether to disable the OneDNN Fc passes.
   ///
-  bool mkldnn_fc_passes_disabled() const { return disable_onednn_fc_passes_; }
+  bool mkldnn_fc_passes_disabled() const {
+    return disable_onednn_fc_passes_;
+  }  // deprecated
 
   ///
   /// \brief A boolean state telling whether to use the OneDNN Bfloat16.
   ///
   /// \return bool Whether to use the OneDNN Bfloat16.
   ///
-  bool mkldnn_bfloat16_enabled() const { return use_onednn_bfloat16_; }
+  bool mkldnn_bfloat16_enabled() const {
+    return use_onednn_bfloat16_;
+  }  // deprecated
+
+  ///
+  /// \brief A boolean state telling whether to disable the OneDNN Fc passes.
+  ///
+  /// \return bool Whether to disable the OneDNN Fc passes.
+  ///
+  bool onednn_fc_passes_disabled() const { return disable_onednn_fc_passes_; }
+
+  ///
+  /// \brief A boolean state telling whether to use the OneDNN Bfloat16.
+  ///
+  /// \return bool Whether to use the OneDNN Bfloat16.
+  ///
+  bool onednn_bfloat16_enabled() const { return use_onednn_bfloat16_; }
 
   /// \brief Specify the operator type list to use Bfloat16 acceleration.
   ///
