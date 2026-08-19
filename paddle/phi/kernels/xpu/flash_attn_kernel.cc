@@ -31,11 +31,12 @@ void FlashAttnKernelBase(const Context& ctx,
                          const paddle::optional<DenseTensor>& fixed_seed_offset,
                          const paddle::optional<DenseTensor>& attn_mask,
                          const int batch_size,
-                         int64_t max_seqlen_q,
-                         int64_t max_seqlen_k,
+                         const Scalar& max_seqlen_q_,
+                         const Scalar& max_seqlen_k_,
                          const int num_heads,
                          const int num_heads_k,
                          const int head_size,
+                         const int head_size_v,
                          float scale,
                          float dropout,
                          bool causal,
@@ -52,6 +53,8 @@ void FlashAttnKernelBase(const Context& ctx,
   float real_dropout = is_test ? 0.0f : dropout;
 
   // output: softmax_lse, 训练参数，给反向用于反向重计算的L
+  int64_t max_seqlen_q = max_seqlen_q_.to<int64_t>();
+  int64_t max_seqlen_k = max_seqlen_k_.to<int64_t>();
   std::vector<int64_t> softmax_lse_dims = {batch_size, num_heads, max_seqlen_q};
   softmax_lse->Resize(phi::make_ddim(softmax_lse_dims));
   ctx.template Alloc<float>(softmax_lse);
@@ -137,20 +140,27 @@ void FlashAttnKernelBase(const Context& ctx,
                              real_scale,        // softmax_scale
                              real_dropout,      // p_dropout
                              static_cast<int32_t>(seed_offset_data[0]),  // seed
-                             causal,     // is_causal
-                             nullptr,    // attn_mask
-                             bias_data,  // bias
-                             nullptr,    // q_maxptr
-                             nullptr,    // k_maxptr
-                             nullptr,    // v_maxptr
-                             nullptr,    // o_maxptr
-                             false,      // is_qkv_fusion
-                             fa_layout,  // qkv_layout
-                             nullptr,    // alibi_slopes
-                             {},         // alibi_slopes_shape
-                             -1,         // window_size_left
-                             -1,         // window_size_right
-                             -1          // v_head_dim
+                             causal,       // is_causal
+                             nullptr,      // attn_mask
+                             bias_data,    // bias
+                             nullptr,      // q_maxptr
+                             nullptr,      // k_maxptr
+                             nullptr,      // v_maxptr
+                             nullptr,      // o_maxptr
+                             false,        // is_qkv_fusion
+                             fa_layout,    // qkv_layout
+                             nullptr,      // alibi_slopes
+                             {},           // alibi_slopes_shape
+                             -1,           // window_size_left
+                             -1,           // window_size_right
+                             head_size_v,  // v_head_dim
+                             nullptr,      // downstart_row_indices_data
+                             nullptr,      // downend_row_indices_data
+                             nullptr,      // upstart_row_indices_data
+                             nullptr,      // upend_row_indices_data
+                             0,            // flash_mask_head_num
+                             nullptr,      // flashmask_maxmin
+                             nullptr       // side_stream
       );
   PADDLE_ENFORCE_XDNN_SUCCESS(r, "mha_varlen_fwd");
 }
@@ -184,8 +194,8 @@ void FlashAttnUnpaddedKernel(
     const DenseTensor& cu_seqlens_k,
     const paddle::optional<DenseTensor>& fixed_seed_offset,
     const paddle::optional<DenseTensor>& attn_mask,
-    int64_t max_seqlen_q,
-    int64_t max_seqlen_k,
+    const Scalar& max_seqlen_q,
+    const Scalar& max_seqlen_k,
     float scale,
     float dropout,
     bool causal,
@@ -204,24 +214,25 @@ void FlashAttnUnpaddedKernel(
   const int num_heads = dims[1];
   const int head_size = dims[2];
   const int num_heads_k = k.dims()[1];
+  const int head_size_v = v.dims()[2];
 #ifndef PADDLE_WITH_XPU_XRE5
   // lod info, only support qlod == klod
   std::vector<int> qlod_vec(batch_size + 1, 0);
   int r = xpu_wait(ctx.x_context()->xpu_stream);
-  PADDLE_ENFORCE_EQ(r, 0, "xpu_wait failed.");
+  PADDLE_ENFORCE_XPU_SUCCESS(r);
   r = xpu_memcpy(qlod_vec.data(),
                  cu_seqlens_q.data<int>(),
                  sizeof(int32_t) * (batch_size + 1),
                  XPUMemcpyKind::XPU_DEVICE_TO_HOST);
-  PADDLE_ENFORCE_EQ(r, 0, "xpu_memcpy failed.");
+  PADDLE_ENFORCE_XPU_SUCCESS(r);
   std::vector<int> klod_vec(batch_size + 1, 0);
   r = xpu_wait(ctx.x_context()->xpu_stream);
-  PADDLE_ENFORCE_EQ(r, 0, "xpu_wait failed.");
+  PADDLE_ENFORCE_XPU_SUCCESS(r);
   r = xpu_memcpy(klod_vec.data(),
                  cu_seqlens_k.data<int>(),
                  sizeof(int32_t) * (batch_size + 1),
                  XPUMemcpyKind::XPU_DEVICE_TO_HOST);
-  PADDLE_ENFORCE_EQ(r, 0, "xpu_memcpy failed.");
+  PADDLE_ENFORCE_XPU_SUCCESS(r);
   // output: softmax_lse, 训练参数，给反向用于反向重计算的L
   bool is_cross_attn = false;
   for (int i = 0; i < batch_size + 1; ++i) {
@@ -283,7 +294,7 @@ void FlashAttnUnpaddedKernel(
                                   nullptr,
                                   nullptr,
                                   nullptr);
-    PADDLE_ENFORCE_EQ(r, 0, "xpu::qkv_attention failed.");
+    PADDLE_ENFORCE_XDNN_SUCCESS(r, "qkv_attention");
   } else {
     std::vector<int> lod;
     lod.reserve(2 * batch_size + 2);
@@ -313,7 +324,7 @@ void FlashAttnUnpaddedKernel(
         qk_max_buf,
         dis_api_attn_param,
         nullptr);
-    PADDLE_ENFORCE_EQ(r, 0, "xpu::qk_attention failed.");
+    PADDLE_ENFORCE_XDNN_SUCCESS(r, "qk_attention");
     r = xpu::qk_v_attention<XPUType, XPUType, XPUType, int16_t, float>(
         ctx.x_context(),
         qk_buf,
@@ -324,7 +335,7 @@ void FlashAttnUnpaddedKernel(
         nullptr,
         dis_api_attn_param,
         nullptr);
-    PADDLE_ENFORCE_EQ(r, 0, "xpu::qk_v_attention failed.");
+    PADDLE_ENFORCE_XDNN_SUCCESS(r, "qk_v_attention");
   }
 #else
   api::VectorParam<int> qlod{cu_seqlens_q.data<int>(),
@@ -348,6 +359,7 @@ void FlashAttnUnpaddedKernel(
                          num_heads,
                          num_heads_k,
                          head_size,
+                         head_size_v,
                          scale,
                          dropout,
                          causal,
@@ -397,7 +409,7 @@ void FlashAttnKernel(const Context& ctx,
   const int64_t head_size = dims[3];
   const int64_t seqlen_k = k.dims()[1];
   const int64_t num_heads_k = k.dims()[2];
-
+  const int64_t head_size_v = v.dims()[3];
   // lod info
   std::vector<int> qlod_vec = {0};
   std::vector<int> kvlod_vec = {0};
@@ -424,6 +436,7 @@ void FlashAttnKernel(const Context& ctx,
                          num_heads,
                          num_heads_k,
                          head_size,
+                         head_size_v,
                          0.0,  // scale
                          dropout,
                          causal,

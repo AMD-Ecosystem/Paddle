@@ -154,7 +154,8 @@ __device__ inline void VectorizeLarsUpdate(const T* __restrict__ grad,
   --rdc=true compile flag, then L2_norm kernel can be set with __device__ and
   cooperative_groups::grid_group also can be involved. Otherwise, adding this
   flag may affect much, L2_norm kernel shall be set with __global__.*/
-// TODO(limingshu): declaration of cooperative_groups wapper is invalid in host.
+// TODO(limingshu): declaration of cooperative_groups wrapper is invalid in
+// host.
 template <typename T, typename MT>
 __forceinline__ __device__ void L2NormKernel(
     const cooperative_groups::grid_group* cg,
@@ -193,7 +194,7 @@ __global__ void L2NormKernel(
     g_buffer[blockIdx.x] = g_tmp;
   }
 #if CUDA_VERSION >= 11000
-  cg->sync();  // Grid sync for writring partial result to global memory
+  cg->sync();  // Grid sync for writing partial result to global memory
   MT p_part_sum = threadIdx.x < gridDim.x ? p_buffer[threadIdx.x] : 0;
   MT g_part_sum = threadIdx.x < gridDim.x ? g_buffer[threadIdx.x] : 0;
   MT tmp0 = phi::funcs::BlockReduceSum<MT>(p_part_sum, FINAL_MASK);
@@ -513,17 +514,17 @@ void LarsMomentumKernel(
         LARS_MAX_MERGED_OPS,
         errors::InvalidArgument(
             "The maximum number of merged-ops supported is (%d), but"
-            "lars op required for trainning this model is (%d)\n",
+            "lars op required for training this model is (%d)\n",
             LARS_MAX_MERGED_OPS,
             op_num));
 
     /* Implementation of lars optimizer consists of following two steps:
       1. Figure out the L2 norm statistic result of grad data and param data.
       2. Update param and velocity with usage of L2 norm statistic result.
-    Step1 and step2 can be merged with api provided by nvida
+    Step1 and step2 can be merged with api provided by nvidia
       cudaLaunchCooperativeKernel:
-      - The thread quantity shall less than pyhsical SM limited threads
-      - Launche as thread-block can synchronizlly execute. */
+      - The thread quantity shall less than physical SM limited threads
+      - Launches as thread-block can synchronizlly execute. */
     cudaOccupancyMaxActiveBlocksPerMultiprocessor(
         &num_blocks_per_sm,
         MergedMomentumLarsKernel<T, MT>,

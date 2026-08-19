@@ -230,31 +230,6 @@ class Engine:
 
         self._logger = get_logger(logging.INFO)
 
-        self._json_config = None
-        if cluster:
-            self._cluster = cluster
-        else:
-            auto_config = None
-            if os.getenv("PADDLE_AUTO_PARALLEL_CONFIG"):
-                try:
-                    path = os.getenv("PADDLE_AUTO_PARALLEL_CONFIG")
-                    with open(path, "r") as f:
-                        self._json_config = json.load(f)
-                except Exception as e:
-                    self._logger.info(
-                        "Load json failed, please check json file, engine will run default config."
-                    )
-                    self._json_config = None
-            else:
-                if os.getenv("PADDLE_AUTO_CLUSTER"):
-                    auto_config = int(os.getenv("PADDLE_AUTO_CLUSTER"))
-            self._cluster = get_default_cluster(self._json_config, auto_config)
-
-        if self._cluster is None:
-            raise TypeError(
-                "'cluster' must be the object or class `paddle.distributed.auto_parallel.Cluster`"
-            )
-
         # for compute cost
         # TODO: remove _fwd_main_progs and _orig_optimizer and _pir_main_progs
         self._fwd_dist_contexts = {}
@@ -325,6 +300,35 @@ class Engine:
         self.enable_job_schedule_profiler = False
 
         self.fused_ffn_qkv = None
+
+        # self._cluster is UNUSED in PIR mode
+        if not self._in_pir_mode:
+            self._json_config = None
+            if cluster:
+                self._cluster = cluster
+            else:
+                auto_config = None
+                if os.getenv("PADDLE_AUTO_PARALLEL_CONFIG"):
+                    try:
+                        path = os.getenv("PADDLE_AUTO_PARALLEL_CONFIG")
+                        with open(path, "r") as f:
+                            self._json_config = json.load(f)
+                    except Exception as e:
+                        self._logger.info(
+                            "Load json failed, please check json file, engine will run default config."
+                        )
+                        self._json_config = None
+                else:
+                    if os.getenv("PADDLE_AUTO_CLUSTER"):
+                        auto_config = int(os.getenv("PADDLE_AUTO_CLUSTER"))
+                self._cluster = get_default_cluster(
+                    self._json_config, auto_config
+                )
+
+            if self._cluster is None:
+                raise TypeError(
+                    "'cluster' must be the object or class `paddle.distributed.auto_parallel.Cluster`"
+                )
 
     # get dist input spec from shard dataloader
     def _prepare_data_spec_from_dataloader(self, dataloader):
@@ -740,6 +744,21 @@ class Engine:
                 [dist_program], [startup_program]
             )
 
+        if self._strategy.pipeline.auto_parallel_sync_shared_params:
+            config = {}
+            config["concrete_program"] = self.concrete_program
+            config["pipeline_strategy"] = self._strategy.pipeline
+            auto_parallel_sync_shared_params_pass = new_pass(
+                "auto_parallel_sync_shared_params", config
+            )
+            shared_params = (
+                auto_parallel_sync_shared_params_pass.sync_shared_parameters(
+                    dist_program, startup_program
+                )
+            )
+            for pname in shared_params:
+                self._parameter_name_list.append(pname)
+
         # Step 1.2: pir backward
         if mode == "train" and self._loss and self._optimizer:
             loss = dist_program.get_output_value_by_name(self._loss_names[0])
@@ -869,6 +888,11 @@ class Engine:
 
         RemovePasses.apply_all(dist_program, startup_program, params_grads)
 
+        if self._strategy.pipeline.auto_parallel_sync_shared_params:
+            global_params_grads = auto_parallel_sync_shared_params_pass.sync_shared_parameter_gradient(
+                dist_program, startup_program, global_params_grads
+            )
+
         # Part 4: Optimization Pass
         # NOTE Only those Optimization Pass that related to Parallelism (need dist attr) should be placed here and all the Pass should be Optional.
 
@@ -928,6 +952,18 @@ class Engine:
             dense_program = decomp.auto_recompute_pir_program(
                 dense_program,
                 lambda op: bool(op.has_attr('op_role') and op.op_role == 0),
+            )
+
+        if (
+            self._strategy.fused_passes.fused_passes_list is not None
+            and "fused_gemm_epilogue_pass"
+            in self._strategy.fused_passes.fused_passes_list
+        ):
+            pm = pir.PassManager()
+            pm.add_pass("fused_gemm_epilogue_pass", {})
+            pm.run(dense_program)
+            self._strategy.fused_passes.fused_passes_list.remove(
+                "fused_gemm_epilogue_pass"
             )
 
         if self._strategy.pipeline.enable:
@@ -1366,7 +1402,7 @@ class Engine:
             self.program_helper.init_pir(
                 self._pir_dist_main_progs[mode], self._place
             )
-            changed_ouput_op_list = []
+            changed_output_op_list = []
             if self._executor is None:
                 self._executor = paddle.static.Executor(self._place)
                 startup_prog = self._startup_progs[mode].clone()
@@ -1424,7 +1460,7 @@ class Engine:
                             )
                             if src_value.persistable:
                                 src_value.persistable = False
-                                changed_ouput_op_list.append(op)
+                                changed_output_op_list.append(op)
                             op.operand(0).set_source(reshard_var)
                 for del_op in del_ops:
                     del_op.erase()
@@ -1434,7 +1470,7 @@ class Engine:
                 paddle.base.libpaddle.pir.apply_dist2dense_pass(startup_prog)
                 remove_unuseful_comm_op_pass(startup_prog)
 
-                for op in changed_ouput_op_list:
+                for op in changed_output_op_list:
                     op.operand_source(0).persistable = True
                 self._executor.run(startup_prog)
                 if self._job_plan is not None:

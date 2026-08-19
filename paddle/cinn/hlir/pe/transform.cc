@@ -17,7 +17,6 @@
 #include <algorithm>
 #include <utility>
 
-#include "paddle/cinn/common/cas.h"
 #include "paddle/cinn/common/context.h"
 #include "paddle/cinn/common/ir_util.h"
 #include "paddle/cinn/hlir/op/op_util.h"
@@ -25,6 +24,7 @@
 #include "paddle/cinn/hlir/pe/schedule.h"
 #include "paddle/cinn/ir/tensor.h"
 #include "paddle/cinn/lang/compute.h"
+#include "paddle/cinn/optim/ir_simplify.h"
 #include "paddle/cinn/utils/string.h"
 #include "paddle/common/enforce.h"
 #include "paddle/common/errors.h"
@@ -1367,10 +1367,20 @@ ir::Tensor SliceSymbolic(const ir::Tensor& A,
       } else if (new_starts[i].as_int64() > input_shape[axes[i]].as_int64()) {
         new_starts[i] = input_shape[axes[i]].as_int64() - ir::Expr(1);
       }
-    } else {
-      if (new_starts[i].is_constant() && new_starts[i].as_int64() < 0) {
-        new_starts[i] = ir::Add::Make(input_shape[axes[i]], new_starts[i]);
+    } else if (new_starts[i]
+                   .is_constant()) {  // input_shape[axes[i]] is not constant
+      if (new_starts[i].as_int64() < 0) {
+        new_starts[i] = ir::Max::Make(
+            Expr(0), ir::Add::Make(input_shape[axes[i]], new_starts[i]));
+      } else {
+        new_starts[i] = ir::Min::Make(input_shape[axes[i]], new_starts[i]);
       }
+    } else if (input_shape[axes[i]]
+                   .is_constant()) {  // new_starts[i] is not constant, only
+                                      // support new_starts[i] >= 0
+      new_starts[i] = ir::Min::Make(input_shape[axes[i]], new_starts[i]);
+    } else {  // both are not constant, only support new_starts[i] >= 0
+      new_starts[i] = ir::Min::Make(input_shape[axes[i]], new_starts[i]);
     }
   }
 

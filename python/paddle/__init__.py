@@ -386,6 +386,8 @@ from .tensor.math import (  # noqa: F401
     atan_,
     atanh,
     atanh_,
+    baddbmm,
+    baddbmm_,
     bitwise_left_shift,
     bitwise_left_shift_,
     bitwise_right_shift,
@@ -650,6 +652,9 @@ if __is_metainfo_generated and is_compiled_with_cuda():
         nccl_lib_path = package_dir + "/.." + "/nvidia/nccl/lib"
         set_flags({"FLAGS_nccl_dir": nccl_lib_path})
 
+        flagcx_lib_path = os.getenv('FLAGCX_ROOT', '') + "/build/lib"
+        set_flags({"FLAGS_flagcx_dir": flagcx_lib_path})
+
         cupti_dir_lib_path = package_dir + "/.." + "/nvidia/cuda_cupti/lib"
         set_flags({"FLAGS_cupti_dir": cupti_dir_lib_path})
 
@@ -805,6 +810,8 @@ __all__ = [
     'raw',
     'addmm',
     'addmm_',
+    'baddbmm',
+    'baddbmm_',
     'allclose',
     'isclose',
     't',
@@ -1223,3 +1230,13 @@ __all__ = [
     'pi',
     'e',
 ]
+
+import os
+
+FLAGS_trace_api = os.environ.get("FLAGS_trace_api", None)
+if FLAGS_trace_api is not None and FLAGS_trace_api != "":
+    from .api_tracer import start_api_tracer
+
+    api_path = FLAGS_trace_api.split(",")[0]
+    save_config_path = FLAGS_trace_api.split(",")[1]
+    start_api_tracer(api_path, save_config_path)

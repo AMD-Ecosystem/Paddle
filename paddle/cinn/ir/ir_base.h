@@ -177,8 +177,12 @@ enum class StmtNodeTy { kUnk = -1, NODETY_FORALL_STMT(__m) };
 //! String representations for IrNodeTy.
 // @{
 #define __m(x__) #x__,
-const std::vector<std::string> kIrNodeTyReprs(
-    {NODETY_FORALL(__m) "IterSplit", "IterSum", "IterMark", "None"});
+const std::vector<std::string> kIrNodeTyReprs({"Module",
+                                               "LoweredFunc",
+                                               "IterSplit",
+                                               "IterSum",
+                                               "IterMark",
+                                               NODETY_FORALL(__m)});
 #undef __m
 // @}
 
@@ -536,6 +540,13 @@ struct IndexExpr : public IrNodeRef {
     Level2 = 2   // Top level, simplify
   };
 
+  enum class IndexType {
+    kInvalid = 0,  // invalid expr
+    kValid = 1,    // valid expr
+    kLoad = 2,     // exist Load
+    kCast = 3      // exist cast
+  };
+
   IndexExpr Normalize(OptLevel level = OptLevel::Level1) const;
 
   bool IsDynamic() const;
@@ -695,6 +706,8 @@ Expr ExprNode<T>::Copy() const {
 }
 
 void TryElevateInt32ToInt64(const std::vector<Expr>& expr_vec);
+
+void TryElevateInt64ToInt32(const std::vector<Expr>& expr_vec);
 
 }  // namespace ir
 }  // namespace cinn

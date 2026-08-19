@@ -14,6 +14,12 @@
 
 #include "paddle/phi/backends/xpu/xpu_context.h"
 
+#ifdef PADDLE_WITH_XPU
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include "paddle/phi/core/xpu_cuda_stream.h"
+#endif
+
 #include <memory>
 
 #include "glog/logging.h"
@@ -381,7 +387,7 @@ void XPUContext::CheckValidStreamId(int i) const {
   PADDLE_ENFORCE_LT(
       i,
       GetStreamNum(),
-      errors::InvalidArgument("The stream index shoule be less than the number "
+      errors::InvalidArgument("The stream index should be less than the number "
                               "of stream used (%d), but got %d",
                               GetStreamNum(),
                               i));

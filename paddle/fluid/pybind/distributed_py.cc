@@ -51,6 +51,11 @@ limitations under the License. */
 
 #if defined(PADDLE_WITH_XPU_BKCL)
 #include "paddle/fluid/distributed/collective/process_group_bkcl.h"
+#include "paddle/fluid/distributed/collective/xpu_async_load.h"
+#endif
+
+#if defined(PADDLE_WITH_FLAGCX)
+#include "paddle/fluid/distributed/collective/process_group_flagcx.h"
 #endif
 
 #include "paddle/phi/kernels/sync_batch_norm_kernel.h"
@@ -79,6 +84,10 @@ std::shared_ptr<distributed::EagerReducer> CreateEagerReducer(
 using ProcessGroupGloo = paddle::distributed::ProcessGroupGloo;
 using GlooStore = paddle::distributed::ProcessGroupGloo::GlooStore;
 using GlooOptions = paddle::distributed::ProcessGroupGloo::GlooOptions;
+#endif
+
+#if defined(PADDLE_WITH_FLAGCX)
+using ProcessGroupFlagcx = paddle::distributed::ProcessGroupFlagcx;
 #endif
 
 static UNUSED void *use_ccl_comm_func =
@@ -1424,6 +1433,92 @@ void BindDistributed(py::module *m) {
           .def_static("group_end",
                       distributed::ProcessGroupBKCL::GroupEnd,
                       py::call_guard<py::gil_scoped_release>());
+
+  py::class_<distributed::XpuAsyncLoad::Task,
+             std::shared_ptr<distributed::XpuAsyncLoad::Task>>(
+      *m, "XpuAsyncLoadTask")
+      .def("is_completed",
+           &distributed::XpuAsyncLoad::Task::IsCompleted,
+           py::call_guard<py::gil_scoped_release>())
+      .def("xpu_wait",
+           &distributed::XpuAsyncLoad::Task::XpuSynchronize,
+           py::call_guard<py::gil_scoped_release>())
+      .def("cpu_wait",
+           &distributed::XpuAsyncLoad::Task::CpuSynchronize,
+           py::call_guard<py::gil_scoped_release>());
+
+  auto XpuAsyncLoad =
+      py::class_<distributed::XpuAsyncLoad>(*m, "XpuAsyncLoad")
+          .def(py::init<>())
+          .def(
+              "offload",
+              [](distributed::XpuAsyncLoad &self,
+                 py::handle py_dst_tensor,
+                 py::handle py_src_tensor) {
+                auto dst_tensor = CastPyArg2Tensor(py_dst_tensor.ptr(), 0);
+                auto src_tensor = CastPyArg2Tensor(py_src_tensor.ptr(), 0);
+                py::gil_scoped_release release;
+
+                auto p_dst_tensor = std::dynamic_pointer_cast<phi::DenseTensor>(
+                    dst_tensor.impl());
+                auto *dst_dense = p_dst_tensor.get();
+
+                auto p_src_tensor = std::dynamic_pointer_cast<phi::DenseTensor>(
+                    src_tensor.impl());
+                auto src_dense = *p_src_tensor;
+
+                return self.Offload(dst_dense, src_dense);
+              },
+              py::arg("dst"),
+              py::arg("src"))
+          .def(
+              "offload_with_offset",
+              [](distributed::XpuAsyncLoad &self,
+                 py::handle py_dst_tensor,
+                 py::handle py_src_tensor,
+                 size_t dst_offset,
+                 size_t src_offset,
+                 size_t offload_size) {
+                auto dst_tensor = CastPyArg2Tensor(py_dst_tensor.ptr(), 0);
+                auto p_dst_tensor = std::dynamic_pointer_cast<phi::DenseTensor>(
+                    dst_tensor.impl());
+                auto *dst_dense = p_dst_tensor.get();
+
+                auto src_tensor = CastPyArg2Tensor(py_src_tensor.ptr(), 0);
+                auto p_src_tensor = std::dynamic_pointer_cast<phi::DenseTensor>(
+                    src_tensor.impl());
+                auto src_dense = *p_src_tensor;
+
+                return self.OffloadWithOffset(
+                    dst_dense, src_dense, dst_offset, src_offset, offload_size);
+              },
+              py::arg("dst"),
+              py::arg("src"),
+              py::arg("dst_offset"),
+              py::arg("src_offset"),
+              py::arg("offload_size"),
+              py::call_guard<py::gil_scoped_release>())
+          .def(
+              "reload",
+              [](distributed::XpuAsyncLoad &self,
+                 py::handle py_dst_tensor,
+                 py::handle py_src_tensor) {
+                auto dst_tensor = CastPyArg2Tensor(py_dst_tensor.ptr(), 0);
+                auto src_tensor = CastPyArg2Tensor(py_src_tensor.ptr(), 0);
+                py::gil_scoped_release release;
+
+                auto p_dst_tensor = std::dynamic_pointer_cast<phi::DenseTensor>(
+                    dst_tensor.impl());
+                auto *dst_dense = p_dst_tensor.get();
+
+                auto p_src_tensor = std::dynamic_pointer_cast<phi::DenseTensor>(
+                    src_tensor.impl());
+                auto src_dense = *p_src_tensor;
+
+                return self.Reload(dst_dense, src_dense);
+              },
+              py::arg("dst"),
+              py::arg("src"));
 #endif
 
   py::class_<distributed::ProcessGroup::Task,
@@ -1454,6 +1549,20 @@ void BindDistributed(py::module *m) {
                   py::call_guard<py::gil_scoped_release>())
       .def_static("create_default_device",
                   &ProcessGroupGloo::createDefaultDevice,
+                  py::call_guard<py::gil_scoped_release>());
+#endif
+
+#if defined(PADDLE_WITH_FLAGCX)
+  py::class_<ProcessGroupFlagcx, std::shared_ptr<ProcessGroupFlagcx>>(
+      *m, "ProcessGroupFlagcx", ProcessGroup)
+      .def_static("create",
+                  distributed::ProcessGroupFlagcx::CreateProcessGroupFlagcx,
+                  py::arg("store"),
+                  py::arg("rank"),
+                  py::arg("world_size"),
+                  py::arg("group_id") = 0,
+                  py::arg("timeout") = 30 * 60 * 1000,
+                  py::arg("nccl_comm_init_option") = 0,
                   py::call_guard<py::gil_scoped_release>());
 #endif
 

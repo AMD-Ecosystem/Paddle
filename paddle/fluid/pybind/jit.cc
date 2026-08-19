@@ -137,6 +137,19 @@ void BindSot(pybind11::module *m) {
       },
       py::arg("callback"));
 
+  m->def("has_custom_getattro", [](py::object obj) {
+    PyObject *py_obj = obj.ptr();
+
+    if (!PyType_Check(py_obj)) {
+      PADDLE_THROW(common::errors::InvalidArgument(
+          "The input object should be a type object, but got %s.",
+          py::str(py_obj).cast<std::string>()));
+    }
+    PyTypeObject *type = reinterpret_cast<PyTypeObject *>(py_obj);
+
+    return type->tp_getattro != PyObject_GenericGetAttr;
+  });
+
   m->def(
       "sot_setup_codes_with_graph",
       [](const py::object &py_codes) {

@@ -42,6 +42,7 @@
 #include "paddle/phi/core/distributed/comm_context_manager.h"
 #include "paddle/phi/core/distributed/nccl_comm_context.h"
 #include "paddle/phi/core/platform/collective_helper.h"
+COMMON_DECLARE_bool(dynamic_static_unified_comm);
 #endif
 
 namespace paddle::framework {
@@ -121,17 +122,24 @@ phi::DeviceContext* ParseDeviceContext(pir::Operation* op,
                 .data() == false) {
       int ring_id =
           op_attributes.at("ring_id").dyn_cast<pir::Int32Attribute>().data();
-      const auto& comm_context_manager =
-          phi::distributed::CommContextManager::GetInstance();
-      dev_ctx = static_cast<phi::DeviceContext*>(
-          static_cast<phi::distributed::NCCLCommContext*>(
-              comm_context_manager.Get(std::to_string(ring_id)))
-              ->GetDevContext());
+      if (FLAGS_dynamic_static_unified_comm) {
+        const auto& comm_context_manager =
+            phi::distributed::CommContextManager::GetInstance();
+        dev_ctx = static_cast<phi::DeviceContext*>(
+            static_cast<phi::distributed::NCCLCommContext*>(
+                comm_context_manager.Get(std::to_string(ring_id)))
+                ->GetDevContext());
+      } else {
+        dev_ctx = platform::NCCLCommContext::Instance()
+                      .Get(ring_id, place)
+                      ->dev_context();
+      }
       return dev_ctx;
     }
 
     // handle comm op
-    if (op_attributes.count("ring_id") != 0) {
+    if (op_attributes.count("ring_id") != 0 &&
+        FLAGS_dynamic_static_unified_comm) {
       int ring_id =
           op_attributes.at("ring_id").dyn_cast<pir::Int32Attribute>().data();
       const auto& comm_context_manager =
@@ -165,7 +173,12 @@ phi::DeviceContext* ParseDeviceContext(pir::Operation* op,
             op_name.compare(paddle::dialect::AllGatherOp::name()) == 0 ||
             op_name.compare(paddle::dialect::MpAllreduceSum_Op::name()) == 0 ||
             op_name.compare(paddle::dialect::CIdentity_Op::name()) == 0 ||
-            op_name.compare(paddle::dialect::CConcatOp::name()) == 0) {
+            op_name.compare(paddle::dialect::CConcatOp::name()) == 0 ||
+            op_name.compare(paddle::dialect::CConcatOp::name()) == 0 ||
+            op_name.compare(paddle::dialect::AllGatherOp::name()) == 0 ||
+            op_name.compare(paddle::dialect::AllToAllOp::name()) == 0 ||
+            op_name.compare(
+                paddle::dialect::CSoftmaxWithCrossEntropyOp::name()) == 0) {
           if (phi::is_gpu_place(place) && execution_stream == kDefaultStream) {
             if (origin_dev_ctx != nullptr) {
               // set stream

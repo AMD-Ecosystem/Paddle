@@ -168,7 +168,7 @@ class TensorRTBaseTest(unittest.TestCase):
                     new_list_args[sub_arg_name] = self.api_args[arg_name][i]
                 self.api_args[arg_name] = new_list_args
 
-    def check_trt_result(self, rtol=1e-4, atol=1e-4, precision_mode="fp32"):
+    def check_trt_result(self, rtol=1e-5, atol=1e-5, precision_mode="fp32"):
         paddle.framework.set_flags({"FLAGS_trt_min_group_size": 1})
         with paddle.pir_utils.IrGuard():
             self.prepare_feed()
@@ -271,9 +271,7 @@ class TensorRTBaseTest(unittest.TestCase):
             scope = paddle.static.global_scope()
             main_program = warmup_shape_infer(
                 main_program,
-                min_shape_feed=min_shape_data,
-                opt_shape_feed=opt_shape_data,
-                max_shape_feed=max_shape_data,
+                feeds=[min_shape_data, opt_shape_data, max_shape_data],
                 scope=scope,
             )
             for op in main_program.global_block().ops[::-1]:

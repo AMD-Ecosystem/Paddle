@@ -31,8 +31,8 @@ MANUAL_IMPL_DECOMP = [
 GENERATE_IMPL_DECOMP = [
     "add_n",
     "addmm",
-    "allclose",
     "any",
+    "baddbmm",
     "bce_loss",
     "bmm",
     "diag",
@@ -119,6 +119,7 @@ GENERATE_IMPL_VJP = [
     'reduce_as_grad',
     'relu_grad',
     'relu6_grad',
+    'elu_grad',
     'reshape_grad',
     'roll_grad',
     'rsqrt_grad',

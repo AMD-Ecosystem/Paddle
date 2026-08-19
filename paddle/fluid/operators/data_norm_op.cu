@@ -24,6 +24,7 @@ limitations under the License. */
 #include "paddle/phi/core/distributed/comm_context_manager.h"
 #include "paddle/phi/core/distributed/nccl_comm_context.h"
 #include "paddle/phi/core/platform/collective_helper.h"
+COMMON_DECLARE_bool(dynamic_static_unified_comm);
 #endif
 
 namespace paddle {
@@ -128,19 +129,22 @@ class DataNormKernel<T, phi::GPUContext> : public framework::OpKernel<T> {
                           "The dims of Input(X) should be greater than 0."));
 
     const T *batch_size_in =
-        ctx.Input<phi::DenseTensor>("BatchSize")->data<T>();
-    const T *batch_sum_in = ctx.Input<phi::DenseTensor>("BatchSum")->data<T>();
+        ctx.Input<phi::DenseTensor>("BatchSize")->template data<T>();
+    const T *batch_sum_in =
+        ctx.Input<phi::DenseTensor>("BatchSum")->template data<T>();
     const T *batch_square_sum_in =
-        ctx.Input<phi::DenseTensor>("BatchSquareSum")->data<T>();
-    auto *x_data = x->data<T>();
+        ctx.Input<phi::DenseTensor>("BatchSquareSum")->template data<T>();
+    auto *x_data = x->template data<T>();
 
     // alloc memory
-    T *y_data =
-        ctx.Output<phi::DenseTensor>("Y")->mutable_data<T>(ctx.GetPlace());
+    T *y_data = ctx.Output<phi::DenseTensor>("Y")->template mutable_data<T>(
+        ctx.GetPlace());
     T *mean_out_data =
-        ctx.Output<phi::DenseTensor>("Means")->mutable_data<T>(ctx.GetPlace());
+        ctx.Output<phi::DenseTensor>("Means")->template mutable_data<T>(
+            ctx.GetPlace());
     T *scale_out_data =
-        ctx.Output<phi::DenseTensor>("Scales")->mutable_data<T>(ctx.GetPlace());
+        ctx.Output<phi::DenseTensor>("Scales")->template mutable_data<T>(
+            ctx.GetPlace());
 
     auto stream = ctx.template device_context<phi::GPUContext>().stream();
 
@@ -184,31 +188,32 @@ class DataNormGradKernel<T, phi::GPUContext> : public framework::OpKernel<T> {
     }
     T *d_batch_size =
         ctx.Output<phi::DenseTensor>(framework::GradVarName("BatchSize"))
-            ->mutable_data<T>(ctx.GetPlace());
+            ->template mutable_data<T>(ctx.GetPlace());
     T *d_batch_sum =
         ctx.Output<phi::DenseTensor>(framework::GradVarName("BatchSum"))
-            ->mutable_data<T>(ctx.GetPlace());
+            ->template mutable_data<T>(ctx.GetPlace());
     T *d_batch_square_sum =
         ctx.Output<phi::DenseTensor>(framework::GradVarName("BatchSquareSum"))
-            ->mutable_data<T>(ctx.GetPlace());
+            ->template mutable_data<T>(ctx.GetPlace());
 
     auto stream = ctx.template device_context<phi::GPUContext>().stream();
     if (d_x != nullptr) {
       KernelDataNormBP<<<GET_BLOCKS(C * N),
                          PADDLE_CUDA_NUM_THREADS,
                          0,
-                         stream>>>(N,
-                                   C,
-                                   d_y->data<T>(),
-                                   scales->data<T>(),
-                                   d_x->mutable_data<T>(ctx.GetPlace()));
+                         stream>>>(
+          N,
+          C,
+          d_y->template data<T>(),
+          scales->template data<T>(),
+          d_x->template mutable_data<T>(ctx.GetPlace()));
     }
 
     KernelDataNormBPStat<<<GET_BLOCKS(C), PADDLE_CUDA_NUM_THREADS, 0, stream>>>(
         N,
         C,
-        x->data<T>(),
-        means->data<T>(),
+        x->template data<T>(),
+        means->template data<T>(),
         epsilon,
         d_batch_size,
         d_batch_sum,
@@ -217,48 +222,85 @@ class DataNormGradKernel<T, phi::GPUContext> : public framework::OpKernel<T> {
     if (need_sync_stats) {
 #if defined(PADDLE_WITH_NCCL) || defined(PADDLE_WITH_RCCL)
       int rid = 0;
+      platform::NCCLComm *comm = nullptr;
       const auto &comm_context_manager =
           phi::distributed::CommContextManager::GetInstance();
       phi::distributed::NCCLCommContext *comm_ctx = nullptr;
-      PADDLE_ENFORCE_EQ(comm_context_manager.Has(std::to_string(rid)),
-                        true,
-                        common::errors::InvalidArgument(
-                            "You choose to use new communication library. "
-                            "But ring_id(%d) is "
-                            "not found in comm_context_manager.",
-                            std::to_string(rid)));
-      comm_ctx = static_cast<phi::distributed::NCCLCommContext *>(
-          comm_context_manager.Get(std::to_string(rid)));
-      PADDLE_ENFORCE_NE(comm_ctx,
-                        nullptr,
-                        common::errors::Unavailable(
-                            "NCCLCommContext is nullptr, collective op should "
-                            "has ring_id attr."));
+      if (FLAGS_dynamic_static_unified_comm) {
+        PADDLE_ENFORCE_EQ(
+            comm_context_manager.Has(std::to_string(rid)),
+            true,
+            common::errors::InvalidArgument(
+                "You choose to use new communication library by "
+                "setting environment "
+                "variable FLAGS_dynamic_static_unified_comm True. "
+                "But ring_id(%d) is "
+                "not found in comm_context_manager.",
+                std::to_string(rid)));
+        comm_ctx = static_cast<phi::distributed::NCCLCommContext *>(
+            comm_context_manager.Get(std::to_string(rid)));
+        PADDLE_ENFORCE_NE(
+            comm_ctx,
+            nullptr,
+            common::errors::Unavailable(
+                "NCCLCommContext is nullptr, collective op should "
+                "has ring_id attr."));
+      } else {
+        comm = paddle::platform::NCCLCommContext::Instance().Get(
+            rid, ctx.GetPlace());
+      }
 
-      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::ncclAllReduce(
-          reinterpret_cast<const void *>(d_batch_size),
-          reinterpret_cast<void *>(d_batch_size),
-          C,
-          phi::ToNCCLDataType(x->dtype()),
-          ncclSum,
-          comm_ctx->GetNcclComm(),
-          stream));
-      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::ncclAllReduce(
-          reinterpret_cast<const void *>(d_batch_sum),
-          reinterpret_cast<void *>(d_batch_sum),
-          C,
-          phi::ToNCCLDataType(x->dtype()),
-          ncclSum,
-          comm_ctx->GetNcclComm(),
-          stream));
-      PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::ncclAllReduce(
-          reinterpret_cast<const void *>(d_batch_square_sum),
-          reinterpret_cast<void *>(d_batch_square_sum),
-          C,
-          phi::ToNCCLDataType(x->dtype()),
-          ncclSum,
-          comm_ctx->GetNcclComm(),
-          stream));
+      if (comm_ctx) {
+        PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::ncclAllReduce(
+            reinterpret_cast<const void *>(d_batch_size),
+            reinterpret_cast<void *>(d_batch_size),
+            C,
+            phi::ToNCCLDataType(x->dtype()),
+            ncclSum,
+            comm_ctx->GetNcclComm(),
+            stream));
+        PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::ncclAllReduce(
+            reinterpret_cast<const void *>(d_batch_sum),
+            reinterpret_cast<void *>(d_batch_sum),
+            C,
+            phi::ToNCCLDataType(x->dtype()),
+            ncclSum,
+            comm_ctx->GetNcclComm(),
+            stream));
+        PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::ncclAllReduce(
+            reinterpret_cast<const void *>(d_batch_square_sum),
+            reinterpret_cast<void *>(d_batch_square_sum),
+            C,
+            phi::ToNCCLDataType(x->dtype()),
+            ncclSum,
+            comm_ctx->GetNcclComm(),
+            stream));
+      } else {
+        PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::ncclAllReduce(
+            reinterpret_cast<const void *>(d_batch_size),
+            reinterpret_cast<void *>(d_batch_size),
+            C,
+            phi::ToNCCLDataType(x->dtype()),
+            ncclSum,
+            comm->comm(),
+            stream));
+        PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::ncclAllReduce(
+            reinterpret_cast<const void *>(d_batch_sum),
+            reinterpret_cast<void *>(d_batch_sum),
+            C,
+            phi::ToNCCLDataType(x->dtype()),
+            ncclSum,
+            comm->comm(),
+            stream));
+        PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::ncclAllReduce(
+            reinterpret_cast<const void *>(d_batch_square_sum),
+            reinterpret_cast<void *>(d_batch_square_sum),
+            C,
+            phi::ToNCCLDataType(x->dtype()),
+            ncclSum,
+            comm->comm(),
+            stream));
+      }
       phi::backends::gpu::GpuStreamSync(stream);
 #else
       PADDLE_THROW(common::errors::PreconditionNotMet(
@@ -268,11 +310,11 @@ class DataNormGradKernel<T, phi::GPUContext> : public framework::OpKernel<T> {
     }
 
     T *batch_size_data = ctx.Output<phi::DenseTensor>("BatchSize")
-                             ->mutable_data<T>(ctx.GetPlace());
+                             ->template mutable_data<T>(ctx.GetPlace());
     T *batch_sum_data = ctx.Output<phi::DenseTensor>("BatchSum")
-                            ->mutable_data<T>(ctx.GetPlace());
+                            ->template mutable_data<T>(ctx.GetPlace());
     T *batch_square_sum_data = ctx.Output<phi::DenseTensor>("BatchSquareSum")
-                                   ->mutable_data<T>(ctx.GetPlace());
+                                   ->template mutable_data<T>(ctx.GetPlace());
     KernelUpdateParam<<<GET_BLOCKS(C), PADDLE_CUDA_NUM_THREADS, 0, stream>>>(
         C,
         d_batch_size,

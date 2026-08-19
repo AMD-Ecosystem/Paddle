@@ -81,6 +81,7 @@
 #include "paddle/fluid/platform/device/gpu/nccl_helper.h"
 #include "paddle/phi/core/distributed/comm_context_manager.h"
 #include "paddle/phi/core/distributed/nccl_comm_context.h"
+COMMON_DECLARE_bool(dynamic_static_unified_comm);
 #endif
 #include "paddle/fluid/framework/new_executor/collect_shape_manager.h"
 #include "paddle/fluid/framework/new_executor/nan_inf_utils.h"
@@ -592,6 +593,7 @@ void PirInterpreter::UpdateNcclOpNum() {
       "pd_op.barrier_grad",
       "pd_op.alltoall_grad",
       "pd_op.global_gather_grad",
+      "pd_op.c_concat_grad",
       "pd_op.distributed_fused_lamb_grad",
       "pd_op.margin_cross_entropy_grad",
       "pd_op.sync_batch_norm_grad",
@@ -875,6 +877,18 @@ void PirInterpreter::BuildInstruction() {
         while_instr_ptr->CheckGCEarly([this](InstructionBase* instr) {
           std::unordered_map<pir::Value, std::vector<int>> inputs;
           GetInputIds(instr->Operation(), *this->value_exe_info_, &inputs);
+          auto HasUserInLoopBody = [instr](pir::Value value) {
+            for (auto it = value.use_begin(); it != value.use_end(); ++it) {
+              auto user_parent_op = it->owner()->GetParentOp();
+              while (user_parent_op) {
+                if (user_parent_op == instr->Operation()) {
+                  return true;
+                }
+                user_parent_op = user_parent_op->GetParentOp();
+              }
+            }
+            return false;
+          };
           for (const auto& kv : inputs) {
             if (kv.first ==
                 instr->Operation()->operand_source(0 /*cond var*/)) {
@@ -882,6 +896,9 @@ void PirInterpreter::BuildInstruction() {
               continue;
             }
             if (kv.first.isa<pir::BlockArgument>()) {
+              continue;
+            }
+            if (HasUserInLoopBody(kv.first)) {
               continue;
             }
             auto var_id = this->value_exe_info_->GetVarId(kv.first);
@@ -962,7 +979,9 @@ void PirInterpreter::BuildInstruction() {
               op_idx++, place_, &op, *(value_exe_info_.get())));
     } else if (paddle::dialect::IsCustomEngineOp(&op)) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
-      CREATE_INSTR(CustomEngineInstruction);
+      vec_instruction_base_.emplace_back(
+          std::make_unique<CustomEngineInstruction>(
+              op_idx++, place_, &op, value_exe_info_.get(), execution_config_));
 #else
       PADDLE_THROW(common::errors::PreconditionNotMet(
           "Program has CustomEngineOp and must compile Paddle use "
@@ -1194,11 +1213,17 @@ void PirInterpreter::RecordStreamForGC(InstructionBase* instr) {
         op->attribute<::pir::BoolAttribute>("use_calc_stream").data() ==
             false) {
       int ring_id = op->attribute<::pir::Int32Attribute>("ring_id").data();
-      const auto& comm_context_manager =
-          phi::distributed::CommContextManager::GetInstance();
-      stream = static_cast<phi::distributed::NCCLCommContext*>(
-                   comm_context_manager.Get(std::to_string(ring_id)))
-                   ->GetStream();
+      if (FLAGS_dynamic_static_unified_comm) {
+        const auto& comm_context_manager =
+            phi::distributed::CommContextManager::GetInstance();
+        stream = static_cast<phi::distributed::NCCLCommContext*>(
+                     comm_context_manager.Get(std::to_string(ring_id)))
+                     ->GetStream();
+      } else {
+        stream = platform::NCCLCommContext::Instance()
+                     .Get(ring_id, instr->DeviceContext().GetPlace())
+                     ->stream();
+      }
     }
   }
 #endif
@@ -1913,7 +1938,8 @@ void PirInterpreter::RunInstructionBase(InstructionBase* instr_node) {
       std::string op_name = instr_node->Name();
       ::pir::Operation* op = instr_node->Operation();
       if (!calculate_stream_timer_->IsStarted() && op_name != "pd_op.feed" &&
-          !op->HasAttribute("ring_id")) {
+          !op->HasAttribute("ring_id") && op_name != "pd_op.shadow_feed" &&
+          op_name != "pd_op.full" && op_name != "pd_op.full_int_array") {
         VLOG(3) << "Start calculated stream timer from op: " << op_name;
         calculate_stream_timer_->Start();
       }
@@ -1933,15 +1959,15 @@ void PirInterpreter::RunInstructionBase(InstructionBase* instr_node) {
             << "Before: " << cur_place << " "
             << instr_node->DebugStringEx(scope_, value_exe_info_.get());
 
-    if (FLAGS_enable_collect_shape) {
-      CollectShapeManager::Instance().CollectShapeInfo(
-          instr_node, value_exe_info_.get(), scope_);
-    }
-
     if (execution_config_.used_for_inference) {
       for (auto& hook : pir_input_hookfuncs_) {
         hook(instr_node, value_exe_info_.get(), scope_);
       }
+    }
+
+    if (FLAGS_enable_collect_shape) {
+      CollectShapeManager::Instance().CollectShapeInfo(
+          instr_node, value_exe_info_.get(), scope_);
     }
 
     if (!instr_node->IsArtificial()) {
@@ -1959,6 +1985,7 @@ void PirInterpreter::RunInstructionBase(InstructionBase* instr_node) {
                 << "): context wait and get last error";
 #endif
       }
+
       if (FLAGS_check_nan_inf) {
         CheckTensorHasNanOrInf(instr_node, scope_, value_exe_info_.get());
       }
@@ -1984,6 +2011,7 @@ void PirInterpreter::RunInstructionBase(InstructionBase* instr_node) {
     }
 
     VLOG(5) << "after run kernel";
+
     instr_node->RecordEvent(cur_place);
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
     if (enable_job_schedule_profiler_) {

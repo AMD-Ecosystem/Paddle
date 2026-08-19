@@ -283,7 +283,7 @@ option(WITH_MULTINODE_TESTING "Test multinode apis and ops" OFF)
 option(WITH_MKL "Compile PaddlePaddle with MKL support." ${AVX_FOUND})
 option(WITH_SYSTEM_BLAS "Use system blas library" OFF)
 option(WITH_DISTRIBUTE "Compile with distributed support" OFF)
-option(WITH_BRPC_RDMA "Use brpc rdma as the rpc protocal" OFF)
+option(WITH_BRPC_RDMA "Use brpc rdma as the rpc protocol" OFF)
 option(ON_INFER "Turn on inference optimization and inference-lib generation"
        ON)
 option(WITH_CPP_DIST "Install PaddlePaddle C++ distribution" OFF)
@@ -313,6 +313,7 @@ option(
   OFF)
 option(WITH_CINN "Compile PaddlePaddle with CINN" OFF)
 option(WITH_NCCL "Compile PaddlePaddle with NCCL support" ON)
+option(WITH_FLAGCX "Compile PaddlePaddle with FLAGCX support" OFF)
 option(WITH_RCCL "Compile PaddlePaddle with RCCL support" ON)
 option(WITH_XPU_BKCL "Compile PaddlePaddle with BAIDU KUNLUN XPU BKCL" OFF)
 option(WITH_CRYPTO "Compile PaddlePaddle with crypto support" ON)
@@ -334,7 +335,7 @@ option(WITH_POCKETFFT "Compile with pocketfft support" ON)
 option(WITH_RECORD_BUILDTIME
        "Compile PaddlePaddle with record all targets build time" OFF)
 option(WITH_CUSTOM_DEVICE "Compile with custom device support" OFF)
-option(WITH_ARM_BRPC "Supprot Brpc in Arm" OFF)
+option(WITH_ARM_BRPC "Support Brpc in Arm" OFF)
 option(WITH_FLPS "FL PS mode" OFF)
 option(WITH_RPC "Compile with rpc support" ${WITH_DISTRIBUTE})
 option(WITH_CUDNN_FRONTEND
@@ -538,6 +539,11 @@ else()
   endif()
 endif()
 
+if(WITH_FLAGCX)
+  add_definitions("-DPADDLE_WITH_FLAGCX")
+  include(flagcx)
+endif()
+
 if(WITH_HETERPS AND WITH_PSLIB)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
 endif()
@@ -711,7 +717,7 @@ set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O3 -g -DNDEBUG")
 add_definitions(-DPADDLE_DLL_EXPORT)
 
 if(ON_INFER)
-  # you can trun off the paddle fluid and inference lib by set ON_INFER=OFF
+  # you can turn off the paddle fluid and inference lib by set ON_INFER=OFF
   message(
     STATUS "On inference mode, will take place some specific optimization.")
   include(inference_lib)

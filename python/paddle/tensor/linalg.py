@@ -22,6 +22,7 @@ import paddle
 from paddle import _C_ops
 from paddle.base.libpaddle import DataType
 from paddle.common_ops_import import VarDesc
+from paddle.tensor.math import broadcast_shape
 from paddle.utils.inplace_utils import inplace_apis_in_dygraph_only
 
 from ..base.data_feeder import (
@@ -2747,7 +2748,7 @@ def mv(x: Tensor, vec: Tensor, name: str | None = None) -> Tensor:
             For more information, please refer to :ref:`api_guide_Name`. Default is None.
 
     Returns:
-        Tensor: The tensor which is producted by x and vec.
+        Tensor: The tensor which is produced by x and vec.
 
     Examples:
         .. code-block:: python
@@ -2930,7 +2931,7 @@ def svd(
     Let :math:`X` be the input matrix or a batch of input matrices, the output should satisfies:
 
     .. math::
-        X = U * diag(S) * VT
+        X = U * diag(S) * V^{H}
 
     Args:
         x (Tensor): The input tensor. Its shape should be `[..., N, M]`,
@@ -3010,7 +3011,7 @@ def svdvals(x: Tensor, name: str | None = None) -> Tensor:
     produced by singular value decomposition:
 
     .. math::
-        X = U * diag(S) * VH
+        X = U * diag(S) * V^{H}
 
     Args:
         x (Tensor): The input tensor. Its shape should be `[..., M, N]`, where
@@ -3091,12 +3092,12 @@ def svd_lowrank(
     If :math:`X` is the input matrix or a batch of input matrices, the output should satisfies:
 
     .. math::
-        X \approx U * diag(S) * V^{T}
+        X \approx U * diag(S) * V^{H}
 
     When :math:`M` is given, the output should satisfies:
 
     .. math::
-        X - M \approx U * diag(S) * V^{T}
+        X - M \approx U * diag(S) * V^{H}
 
     Args:
         x (Tensor): The input tensor. Its shape should be `[..., N, M]`, where `...` is
@@ -3387,7 +3388,7 @@ def qr(
     Args:
         x (Tensor): The input tensor. Its shape should be `[..., M, N]`,
             where ... is zero or more batch dimensions. M and N can be arbitrary
-            positive number. The data type of x should be float32 or float64.
+            positive number. The data type of x supports float, double, complex64, complex128.
         mode (str, optional): A flag to control the behavior of qr.
             Suppose x's shape is `[..., M, N]` and denoting `K = min(M, N)`:
             If mode = "reduced", qr op will return reduced Q and R matrices,
@@ -3429,7 +3430,9 @@ def qr(
         else:
             return q, r
     else:
-        check_variable_and_dtype(x, 'dtype', ['float32', 'float64'], 'qr')
+        check_variable_and_dtype(
+            x, 'dtype', ['float32', 'float64', 'complex64', 'complex128'], 'qr'
+        )
         check_type(mode, 'mode', str, 'qr')
         helper = LayerHelper('qr', **locals())
         q = helper.create_variable_for_type_inference(dtype=x.dtype)
@@ -3571,6 +3574,90 @@ def lu(
         return lu, p, info
     else:
         return lu, p
+
+
+def lu_solve(
+    b: Tensor,
+    lu: Tensor,
+    pivots: Tensor,
+    trans: Literal['N', 'T', 'C'] = 'N',
+    name: str | None = None,
+):
+    r"""
+    Computes the solution x to the system of linear equations :math:`Ax = b` ,
+    given LU decomposition :math:`A` and column vector :math:`b`.
+
+    Args:
+        b (Tensor): Column vector `b` in the above equation. It has shape :math:`(*, m, k)`, where :math:`*` is batch dimensions, with data type float32, float64.
+        lu (Tensor): LU decomposition. It has shape :math:`(*, m, m)`, where :math:`*` is batch dimensions, that can be decomposed into an upper triangular matrix U and a lower triangular matrix L, with data type float32, float64.
+        pivots (Tensor): Permutation matrix P of LU decomposition. It has shape :math:`(*, m)`, where :math:`*` is batch dimensions, that can be converted to a permutation matrix P, with data type int32.
+        trans (str, optional): The transpose of the matrix A. It can be "N" , "T" or "C", "N" means :math:`Ax=b`, "T" means :math:`A^Tx=b`, "C" means :math:`A^Hx=b`, default is "N".
+        name (str|None, optional): Name for the operation (optional, default is None).
+            For more information, please refer to :ref:`api_guide_Name`.
+
+    Returns:
+        Tensor, the same data type as the `b` and `lu`.
+
+    Examples:
+        >>> import paddle
+        >>> import numpy as np
+
+        >>> A = paddle.to_tensor([[3, 1], [1, 2]], dtype="float64")
+        >>> b = paddle.to_tensor([[9, 8], [9, 8]], dtype="float64")
+        >>> lu, p = paddle.linalg.lu(A)
+        >>> x = paddle.lu_solve(b, lu, p)
+        >>> paddle.allclose(A @ x, b)
+
+        >>> print(x)
+        Tensor(shape=[2, 2], dtype=float64, place=Place(cpu), stop_gradient=True,
+        [[1.80000000, 1.60000000],
+        [3.60000000, 3.20000000]])
+    """
+    if b.ndim < 2:
+        raise ValueError(
+            f'`b` dimension must be gather than 2, but got {len(b.shape)}'
+        )
+    if lu.ndim < 2:
+        raise ValueError(
+            f'`lu` dimension must be gather than 2, but got {len(lu.shape)}'
+        )
+    if pivots.ndim < 1:
+        raise ValueError(
+            f'`pivots` dimension must be gather than 1, but got {len(pivots.shape)}'
+        )
+    if b.shape[-2] != lu.shape[-2]:
+        raise ValueError(
+            f'the rows of `b` must be equal to the rows of `lu`, but got {b.shape[-2]} and {lu.shape[-2]}'
+        )
+    if lu.shape[-1] != lu.shape[-2]:
+        raise ValueError(
+            f'`lu` shape[-1] must be equal to `lu` shape[-2], but got {lu.shape[-1]} and {lu.shape[-2]}'
+        )
+    if pivots.shape[-1] != lu.shape[-1]:
+        raise ValueError(
+            f'`pivots` shape[-1] must be equal to `lu` shape[-1], but got {pivots.shape[-1]} and {lu.shape[-1]}'
+        )
+    temp_shape = broadcast_shape(b.shape[:-2], lu.shape[:-2])
+    batch_shape = broadcast_shape(temp_shape, pivots.shape[:-1])
+    b = (
+        b
+        if b.shape[:-2] == batch_shape
+        else paddle.broadcast_to(b, batch_shape + list(b.shape[-2:]))
+    )
+    trans = trans if trans == "N" else "T"
+    pivots = (
+        pivots
+        if pivots.shape[:-1] == batch_shape
+        else paddle.broadcast_to(pivots, batch_shape + list(pivots.shape[-1:]))
+    )
+    lu = (
+        lu
+        if lu.shape[:-2] == batch_shape
+        else paddle.broadcast_to(lu, batch_shape + list(lu.shape[-2:]))
+    )
+    pivots.stop_gradient = True
+    out = _C_ops.lu_solve(b, lu, pivots, trans)
+    return out
 
 
 def lu_unpack(
