@@ -15,8 +15,6 @@
 #include "paddle/phi/kernels/logsumexp_kernel.h"
 #include "paddle/phi/kernels/gpu/logsumexp_function.cu.h"
 
-#include "paddle/phi/common/bfloat16.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/activation_kernel.h"
 #include "paddle/phi/kernels/elementwise_add_kernel.h"
@@ -37,12 +35,12 @@ struct ComputeType {
 };
 
 template <>
-struct ComputeType<phi::dtype::float16> {
+struct ComputeType<phi::float16> {
   using type = float;
 };
 
 template <>
-struct ComputeType<phi::dtype::bfloat16> {
+struct ComputeType<phi::bfloat16> {
   using type = float;
 };
 
@@ -71,7 +69,7 @@ void LogsumexpFallbackKernel(const Context& dev_ctx,
 
   max_x.Resize(keeped_outdim);
   DenseTensor temp_x = Subtract<T, Context>(dev_ctx, *in_x, max_x);
-  phi::funcs::ReduceKernel<T, T, kps::AddFunctor, kps::ExpFunctor<T>>(
+  funcs::ReduceKernel<T, T, kps::AddFunctor, kps::ExpFunctor<T>>(
       dev_ctx, temp_x, out_y, kps::ExpFunctor<T>(), axis_vec);
 
   DenseTensor log_out;
@@ -154,7 +152,7 @@ void LogsumexpKernel(const Context& dev_ctx,
     } else {
       transpose_x.Resize(common::make_ddim(transpose_shape));
       dev_ctx.template Alloc<T>(&transpose_x);
-      phi::funcs::TransposeGPUKernelDriver<T>(dev_ctx, x, perm, &transpose_x);
+      funcs::TransposeGPUKernelDriver<T>(dev_ctx, x, perm, &transpose_x);
     }
     dev_ctx.template Alloc<T>(out);
     using compute_type = typename ComputeType<T>::type;
@@ -182,5 +180,5 @@ PD_REGISTER_KERNEL(logsumexp,
                    phi::LogsumexpKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "paddle/phi/kernels/gpu/global_gather_kernel.h"
 #include "paddle/phi/core/distributed/utils.h"
 #include "paddle/phi/core/kernel_registry.h"
 #if defined(PADDLE_WITH_NCCL) || defined(PADDLE_WITH_RCCL)
@@ -99,7 +100,7 @@ struct GlobalGatherFunctor<phi::GPUContext, T> {
     for (auto i = 0; i < local_count_len; ++i) {
       fwd_count += cpu_local_count_data[i];
     }
-    phi::DDim out_dims = common::make_ddim({fwd_count, in_feat});
+    DDim out_dims = common::make_ddim({fwd_count, in_feat});
     int64_t *expert_ptr = new int64_t[n_expert * nranks];
     expert_ptr[0] = 0;
     auto tot_experts = n_expert * nranks;
@@ -163,7 +164,7 @@ PD_REGISTER_KERNEL(global_gather,
                    double,
                    int,
                    int64_t,
-                   phi::dtype::float16) {
+                   phi::float16) {
   kernel->InputAt(1).SetDataType(phi::DataType::INT64);
   kernel->InputAt(2).SetDataType(phi::DataType::INT64);
 }

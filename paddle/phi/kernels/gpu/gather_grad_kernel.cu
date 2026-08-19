@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "paddle/phi/common/bfloat16.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/cast_kernel.h"
 #include "paddle/phi/kernels/full_kernel.h"
@@ -46,17 +44,17 @@ void GatherGradKernel(const Context& dev_ctx,
 
   if (axis_v != 0) {
     if (index_type == DataType::INT32) {
-      phi::funcs::GatherV2GradCUDAFunction<T, int32_t>(
+      funcs::GatherV2GradCUDAFunction<T, int32_t>(
           &out_grad, &index, axis_v, x_grad, dev_ctx);
     } else if (index_type == DataType::INT64) {
-      phi::funcs::GatherV2GradCUDAFunction<T, int64_t>(
+      funcs::GatherV2GradCUDAFunction<T, int64_t>(
           &out_grad, &index, axis_v, x_grad, dev_ctx);
     }
     return;
   }
 
   dev_ctx.template Alloc<T>(x_grad);
-  phi::funcs::set_constant(dev_ctx, x_grad, static_cast<float>(0));
+  funcs::set_constant(dev_ctx, x_grad, static_cast<float>(0));
   if (out_grad.numel() == 0) {
     return;
   }
@@ -65,10 +63,10 @@ void GatherGradKernel(const Context& dev_ctx,
     if (index_type == DataType::INT32) {
       DenseTensor index_int64 =
           phi::Cast<int32_t, Context>(dev_ctx, index, DataType::INT64);
-      phi::funcs::GPUScatterAdd<T, int64_t>(
+      funcs::GPUScatterAdd<T, int64_t>(
           dev_ctx, out_grad, index_int64, x_grad, axis_v);
     } else if (index_type == DataType::INT64) {
-      phi::funcs::GPUScatterAdd<T, int64_t>(
+      funcs::GPUScatterAdd<T, int64_t>(
           dev_ctx, out_grad, index, x_grad, axis_v);
     } else {
       PADDLE_THROW(common::errors::InvalidArgument(
@@ -77,10 +75,9 @@ void GatherGradKernel(const Context& dev_ctx,
     }
   } else {
     if (index_type == DataType::INT32) {
-      phi::funcs::GPUScatterAssign<T, int>(
-          dev_ctx, out_grad, index, x_grad, false);
+      funcs::GPUScatterAssign<T, int>(dev_ctx, out_grad, index, x_grad, false);
     } else if (index_type == DataType::INT64) {
-      phi::funcs::GPUScatterAssign<T, int64_t>(
+      funcs::GPUScatterAssign<T, int64_t>(
           dev_ctx, out_grad, index, x_grad, false);
     } else {
       PADDLE_THROW(common::errors::InvalidArgument(
@@ -100,7 +97,7 @@ PD_REGISTER_KERNEL(gather_grad,
                    double,
                    int64_t,
                    int,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::float16,
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}

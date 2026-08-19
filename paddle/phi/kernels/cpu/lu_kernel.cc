@@ -78,7 +78,7 @@ void LUKernel(const Context& dev_ctx,
     auto out_data_item = &out_data[b * m * n];
     int* info_data_item = &info_data[b];
     int* ipiv_data_item = &ipiv_data[b * std::min(m, n)];
-    phi::funcs::lapackLu<T>(
+    funcs::lapackLu<T>(
         m, n, out_data_item, lda, ipiv_data_item, info_data_item);
   }
   *out = Transpose2DTo6D<Context, T>(dev_ctx, *out);
@@ -92,8 +92,8 @@ PD_REGISTER_KERNEL(lu,
                    phi::LUKernel,
                    float,
                    double,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {
+                   phi::complex64,
+                   phi::complex128) {
   kernel->OutputAt(1).SetDataType(phi::DataType::INT32);
   kernel->OutputAt(2).SetDataType(phi::DataType::INT32);
 }

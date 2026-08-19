@@ -27,7 +27,13 @@ void ConcatKernel(const Context& dev_ctx,
                   const std::vector<const DenseTensor*>& x,
                   const Scalar& axis_scalar,
                   DenseTensor* out) {
-  using XPUType = typename XPUTypeTrait<T>::Type;
+  // handle complex64 by treating data as raw 64-bit units
+  using Complex64 = phi::complex64;
+  using DefaultXPUType = typename XPUTypeTrait<T>::Type;
+  using XPUType = typename std::conditional<std::is_same<T, Complex64>::value,
+                                            int64_t,
+                                            DefaultXPUType>::type;
+
   int64_t axis = axis_scalar.to<int64_t>();
   PADDLE_ENFORCE_NE(
       x[0],
@@ -126,12 +132,13 @@ PD_REGISTER_KERNEL(concat,
                    ALL_LAYOUT,
                    phi::ConcatKernel,
                    float,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
+                   phi::float16,
+                   phi::bfloat16,
                    double,
                    bool,
                    uint8_t,
                    int8_t,
                    int16_t,
                    int32_t,
-                   int64_t) {}
+                   int64_t,
+                   phi::complex64) {}

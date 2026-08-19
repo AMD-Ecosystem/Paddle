@@ -33,7 +33,7 @@ void MultiplyGradKernel(const Context& dev_ctx,
                         DenseTensor* dy) {
   funcs::ElementwiseGradPreProcess(dout, dx);
   auto* out = &dout;  // out is not necessary
-  phi::funcs::ElemwiseGradCompute<Context, T, MulGradDX<T>, MulGradDY<T>>(
+  funcs::ElemwiseGradCompute<Context, T, MulGradDX<T>, MulGradDY<T>>(
       dev_ctx, x, y, *out, dout, axis, dx, dy, MulGradDX<T>(), MulGradDY<T>());
 }
 
@@ -48,9 +48,9 @@ PD_REGISTER_KERNEL(multiply_grad,
                    int,
                    int64_t,
                    bool,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}
 
 PD_REGISTER_KERNEL(multiply_double_grad,
                    CPU,
@@ -61,9 +61,9 @@ PD_REGISTER_KERNEL(multiply_double_grad,
                    int,
                    int64_t,
                    bool,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}
 
 PD_REGISTER_KERNEL(multiply_triple_grad,
                    CPU,
@@ -74,6 +74,6 @@ PD_REGISTER_KERNEL(multiply_triple_grad,
                    int,
                    int64_t,
                    bool,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}

@@ -19,8 +19,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "paddle/phi/common/bfloat16.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/core/enforce.h"
 
 #define CUDNN_FRONTEND_UNUSED(X) ((void)X)
@@ -299,7 +297,9 @@ __global__ void cu_seqlens_to_actual_seqlens(size_t b,
                                              int32_t const *const kv_cu_seqlens,
                                              int32_t *q_seqlens,
                                              int32_t *kv_seqlens) {
-  size_t tid = blockIdx.x * blockDim.x + threadIdx.x;
+  size_t tid =
+      static_cast<size_t>(blockIdx.x) * static_cast<size_t>(blockDim.x) +
+      static_cast<size_t>(threadIdx.x);
   if (tid < b) {
     q_seqlens[tid] = q_cu_seqlens[tid + 1] - q_cu_seqlens[tid];
     kv_seqlens[tid] = kv_cu_seqlens[tid + 1] - kv_cu_seqlens[tid];
@@ -313,7 +313,9 @@ __global__ void fill_cu_seqlen_with_constant(scalar_t *cu_seqlens_q,
                                              scalar_t q_seqlen,
                                              scalar_t kv_seqlen,
                                              size_t n) {
-  int tid = threadIdx.x + blockIdx.x * blockDim.x;
+  int64_t tid =
+      static_cast<int64_t>(threadIdx.x) +
+      static_cast<int64_t>(blockIdx.x) * static_cast<int64_t>(blockDim.x);
   if (tid < n) {
     cu_seqlens_q[tid] = q_seqlen;
     cu_seqlens_kv[tid] = kv_seqlen;

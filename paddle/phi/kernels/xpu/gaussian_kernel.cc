@@ -49,6 +49,31 @@ void GaussianKernel(const Context& dev_ctx,
   PADDLE_ENFORCE_XDNN_SUCCESS(r, "normal");
 }
 
+template <typename T, typename Context>
+void GaussianInplaceKernel(const Context& dev_ctx,
+                           const DenseTensor& x,
+                           float mean,
+                           float std,
+                           int seed,
+                           DenseTensor* out) {
+  T* data = dev_ctx.template Alloc<T>(out);
+
+  if (out->numel() == 0) {
+    return;
+  }
+
+  using XPUType = typename XPUTypeTrait<T>::Type;
+  int64_t real_seed = seed != 0 ? seed : dev_ctx.GetGenerator()->Random64();
+
+  int r = xpu::normal_<XPUType>(dev_ctx.x_context(),
+                                reinterpret_cast<XPUType*>(data),
+                                mean,
+                                std,
+                                out->numel(),
+                                real_seed);
+  PADDLE_ENFORCE_XDNN_SUCCESS(r, "normal");
+}
+
 }  // namespace phi
 
 PD_REGISTER_KERNEL(gaussian,
@@ -56,5 +81,13 @@ PD_REGISTER_KERNEL(gaussian,
                    ALL_LAYOUT,
                    phi::GaussianKernel,
                    float,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}
+
+PD_REGISTER_KERNEL(gaussian_inplace,
+                   XPU,
+                   ALL_LAYOUT,
+                   phi::GaussianInplaceKernel,
+                   float,
+                   phi::float16,
+                   phi::bfloat16) {}

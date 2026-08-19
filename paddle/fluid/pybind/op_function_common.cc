@@ -98,26 +98,36 @@ bool PyObject_CheckLong(PyObject* obj) {
 }
 
 int32_t PyObject_ToInt32(PyObject* obj) {
-  int32_t res = 0;
+  int64_t res = 0;
   if ((PyLong_Check(obj) && !PyBool_Check(obj)) ||  // NOLINT
       PyObject_CheckVarType(obj) ||                 // NOLINT
       PyObject_CheckDataType(obj) ||                // NOLINT
       (PyObject_CheckTensor(obj) &&
        reinterpret_cast<TensorObject*>(obj)->tensor.numel() == 1)) {
-    res = static_cast<int32_t>(PyLong_AsLong(obj));
-    return res;
-  }
-  std::string type_name =
-      std::string(reinterpret_cast<PyTypeObject*>(obj->ob_type)->tp_name);
-  if (type_name.find("numpy.int") != std::string::npos) {
-    auto num_obj = PyNumber_Long(obj);
-    res = static_cast<int32_t>(PyLong_AsLong(num_obj));
-    Py_DECREF(num_obj);
+    res = PyLong_AsLongLong(obj);
   } else {
-    PADDLE_THROW(
-        common::errors::InvalidType("Cannot convert %s to long", type_name));
+    std::string type_name =
+        std::string(reinterpret_cast<PyTypeObject*>(obj->ob_type)->tp_name);
+    if (type_name.find("numpy.int") != std::string::npos) {
+      auto num_obj = PyNumber_Long(obj);
+      res = PyLong_AsLongLong(num_obj);
+      Py_DECREF(num_obj);
+    } else {
+      PADDLE_THROW(
+          common::errors::InvalidType("Cannot convert %s to int32", type_name));
+    }
   }
-  return res;
+
+  if (res > std::numeric_limits<int32_t>::max() ||
+      res < std::numeric_limits<int32_t>::min()) {
+    PADDLE_THROW(common::errors::OutOfRange(
+        "Integer value %ld exceeds int32 range [%d, %d]",
+        res,
+        std::numeric_limits<int32_t>::min(),
+        std::numeric_limits<int32_t>::max()));
+  }
+
+  return static_cast<int32_t>(res);
 }
 
 uint32_t PyObject_ToUInt32(PyObject* obj) {
@@ -1288,8 +1298,6 @@ void ConstructAttrMapForLegacyRunProgram(
       {"x_names", CastPyArg2AttrStrings},
       {"out_grad_names", CastPyArg2AttrStrings},
       {"x_grad_names", CastPyArg2AttrStrings},
-      {"cuda_graph_capture_mode", CastPyArg2AttrString},
-      {"cuda_graph_pool_id", CastPyArg2AttrLong},
       {"in_pir_pt_mode", CastPyArg2AttrBoolean},
       {"use_interpretorcore", CastPyArg2AttrBoolean},
       {"global_block", CastPyArg2AttrBlock},
@@ -1534,8 +1542,9 @@ void BindOpFunctionCommon(PyObject* module) {
     return;
   }
 }
-// for parse argruments from args and kwargs
-//  Get Item From PyObject* args Or PyObject* kwargs
+
+// For parse argruments from args and kwargs
+// Get item from PyObject* args or PyObject* kwargs
 PyObject* GetItemFromArgsOrKWArgs(PyObject* args,
                                   int pos,
                                   PyObject* kwargs,
@@ -1544,24 +1553,25 @@ PyObject* GetItemFromArgsOrKWArgs(PyObject* args,
                                   int* remaining_kwargs,
                                   bool dispensable) {
   // get item from args first if pos < nargs
-  if (nargs > pos) {
+  if (pos < nargs) {
     PyObject* arg = PyTuple_GetItem(args, pos);
     if (arg) {
       return arg;
     }
-  }
-  // get item from kwargs if pos is out of args range and kwargs has unused
-  // items
-  if (kwargs && *remaining_kwargs > 0) {
-    PyObject* arg = nullptr;
-    for (std::string keyword : keywords) {
-      arg = PyDict_GetItemString(kwargs, keyword.c_str());
-      if (arg) {
-        *remaining_kwargs = *remaining_kwargs - 1;
-        return arg;
+  } else {
+    // get item from kwargs if kwargs has unused items
+    if (kwargs && *remaining_kwargs > 0) {
+      PyObject* arg = nullptr;
+      for (const std::string& keyword : keywords) {
+        arg = PyDict_GetItemString(kwargs, keyword.c_str());
+        if (arg) {
+          *remaining_kwargs = *remaining_kwargs - 1;
+          return arg;
+        }
       }
     }
   }
+
   if (!dispensable) {
     PADDLE_THROW(common::errors::InvalidArgument(
         "Argument '%s' (position %d) must be provided", keywords[0], pos));

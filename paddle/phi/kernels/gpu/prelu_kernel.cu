@@ -70,7 +70,7 @@ void PReluKernel(const Context& dev_ctx,
     std::vector<const DenseTensor*> ins = {&x};
     std::vector<DenseTensor*> outs = {out};
     auto func = PreluScalarDirectCUDAFunctor<T>(alpha_ptr);
-    phi::funcs::ElementwiseKernel<T>(dev_ctx, ins, &outs, func);
+    funcs::ElementwiseKernel<T>(dev_ctx, ins, &outs, func);
   }
 }
 
@@ -81,6 +81,6 @@ PD_REGISTER_KERNEL(prelu,
                    ALL_LAYOUT,
                    phi::PReluKernel,
                    float,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
+                   phi::float16,
+                   phi::bfloat16,
                    double) {}

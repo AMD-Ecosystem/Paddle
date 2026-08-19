@@ -22,12 +22,12 @@ limitations under the License. */
 
 #include "paddle/common/exception.h"
 #include "paddle/common/macros.h"
+#include "paddle/phi/api/ext/native_meta_tensor.h"
 #include "paddle/phi/api/include/tensor.h"
 #include "paddle/phi/core/distributed/type_defs.h"
 #include "paddle/utils/any.h"
 #include "paddle/utils/none.h"
 #include "paddle/utils/optional.h"
-
 #ifdef PADDLE_WITH_TENSORRT
 #include "NvInfer.h"
 #endif
@@ -159,6 +159,7 @@ class PADDLE_API CustomOpKernelContext {
   std::vector<Tensor*>* AllMutablePlainOutput();
   std::unordered_map<size_t, size_t> GetInplaceIndexMap() const;
   std::unordered_map<size_t, size_t> GetInplaceReverseIndexMap() const;
+  void ValidateAndAssignOutputs(const std::vector<Tensor>& outs);
 
  private:
   // TODO(chenweihang): replaced be SmallVector
@@ -174,6 +175,9 @@ class PADDLE_API CustomOpKernelContext {
 
   std::vector<std::pair<size_t, size_t>> input_range_;
   std::vector<std::pair<size_t, size_t>> output_range_;
+
+  std::vector<std::string> inputs_names_;
+  std::vector<std::string> outputs_names_;
 };
 
 ////////////////////// Kernel Function (PD_KERNEL) ////////////////////////
@@ -400,17 +404,7 @@ struct KernelFuncImpl<Return (*)(Args...), impl_fn> {
                     "If return std::vector<Tensor> in Custom OpKernel, "
                     "you cannot pass output by kernel function argument.");
       auto outs = impl_fn(args...);
-      auto* orig_outs = ctx->AllMutablePlainOutput();
-      PD_CHECK(orig_outs->size() == outs.size(),
-               "The number of element in custom operator outputs is wrong, "
-               "expected contains ",
-               orig_outs->size(),
-               " Tensors, but actually contains ",
-               outs.size(),
-               " Tensors.");
-      for (size_t i = 0; i < outs.size(); ++i) {
-        AssignTensorImpl(outs.at(i), orig_outs->at(i));
-      }
+      ctx->ValidateAndAssignOutputs(outs);
     }
   };
 
@@ -1001,6 +995,12 @@ using InferSpmdFunc = phi::distributed::SpmdInfo (*)(
     const std::vector<CustomSpmdInferTensorArg>& inputs,
     const std::vector<CustomSpmdInferAttrArg>& attrs);
 
+using PythonOperatorFunctionType =
+    std::function<std::vector<Tensor>(std::vector<Tensor>&)>;
+using PythonOperatorInferMetaFunctionType =
+    std::function<std::vector<phi::NativeMetaTensor>(
+        const std::vector<phi::NativeMetaTensor>&)>;
+
 class PADDLE_API OpMetaInfo {
  public:
   explicit OpMetaInfo(const std::string& op_name) : name_(op_name) {}
@@ -1031,6 +1031,11 @@ class PADDLE_API OpMetaInfo {
   // format: PD_INFER_SPMD_RULE(...)
   OpMetaInfo& SetInferSpmdFn(InferSpmdFunc&& func);
 
+  // PythonOperator
+  OpMetaInfo& SetPythonOperatorFunction(PythonOperatorFunctionType&& func);
+  OpMetaInfo& SetPythonOperatorInferMetaFunction(
+      PythonOperatorInferMetaFunctionType&& func);
+
   bool IsGradOp() const;
 
   bool IsDoubleGradOp() const;
@@ -1058,6 +1063,9 @@ class PADDLE_API OpMetaInfo {
   InferShapeFunc infer_shape_fn_{nullptr};
   InferDtypeFunc infer_dtype_fn_{nullptr};
   InferSpmdFunc infer_spmd_fn_{nullptr};
+  // 3. pyop function info
+  PythonOperatorFunctionType pyop_func_{nullptr};
+  PythonOperatorInferMetaFunctionType pyop_func_infer_meta_{nullptr};
 #ifdef PADDLE_WITH_TENSORRT
   TrtGetOutputDimsFunc trt_infer_shape_fn_{nullptr};
   std::vector<std::string> trt_supports_format_config_;
@@ -1082,6 +1090,12 @@ class OpMetaInfoHelper {
   static const InferShapeFunc& GetInferShapeFn(const paddle::OpMetaInfo& info);
   static const InferDtypeFunc& GetInferDtypeFn(const paddle::OpMetaInfo& info);
   static const InferSpmdFunc& GetInferSpmdFn(const paddle::OpMetaInfo& info);
+
+  // Python Op
+  static const PythonOperatorFunctionType& GetPythonOperatorFunction(
+      const paddle::OpMetaInfo& info);
+  static const PythonOperatorInferMetaFunctionType&
+  GetPythonOperatorInferMetaFunction(const paddle::OpMetaInfo& info);
 
 #ifdef PADDLE_WITH_TENSORRT
   static const TrtGetOutputDimsFunc& GetTrtInferShapeFn(
@@ -1123,6 +1137,10 @@ class PADDLE_API OpMetaInfoBuilder {
   OpMetaInfoBuilder& SetInferShapeFn(InferShapeFunc func);
   OpMetaInfoBuilder& SetInferDtypeFn(InferDtypeFunc func);
   OpMetaInfoBuilder& SetInferSpmdFn(InferSpmdFunc func);
+
+  OpMetaInfoBuilder& SetPythonOperatorFunction(PythonOperatorFunctionType func);
+  OpMetaInfoBuilder& SetPythonOperatorInferMetaFunction(
+      PythonOperatorInferMetaFunctionType func);
 
 #ifdef PADDLE_WITH_TENSORRT
   OpMetaInfoBuilder& SetTrtInferShapeFn(TrtGetOutputDimsFunc func);

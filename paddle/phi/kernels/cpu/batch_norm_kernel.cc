@@ -87,7 +87,7 @@ void BatchNormKernel(const Context& dev_ctx,
           x_dims.size()));
   const int N = static_cast<int>(x_dims[0]);
   const int C = static_cast<int>(
-      data_layout == DataLayout::kNCHW ? x_dims[1] : x_dims[x_dims.size() - 1]);
+      data_layout == DataLayout::NCHW ? x_dims[1] : x_dims[x_dims.size() - 1]);
   const int sample_size = static_cast<int>(x.numel() / N / C);
 
   // alloc memory
@@ -103,8 +103,8 @@ void BatchNormKernel(const Context& dev_ctx,
 
   // input dimension is 2 and the format is NCHW. The input can be regarded
   // as NHWC format
-  if (x_dims.size() == 2 && data_layout == DataLayout::kNCHW) {
-    data_layout = DataLayout::kNHWC;
+  if (x_dims.size() == 2 && data_layout == DataLayout::NCHW) {
+    data_layout = DataLayout::NHWC;
   }
 
   if (!global_stats) {
@@ -132,7 +132,7 @@ void BatchNormKernel(const Context& dev_ctx,
     }
 
     switch (data_layout) {
-      case DataLayout::kNCHW: {
+      case DataLayout::NCHW: {
         ConstEigenArrayMap<T> x_arr(x.data<T>(), sample_size, N * C);
         for (int nc = 0; nc < N * C; ++nc) {
           saved_mean_e(nc % C) += x_arr.col(nc).sum();
@@ -145,7 +145,7 @@ void BatchNormKernel(const Context& dev_ctx,
         saved_variance_e /= N * sample_size;
         break;
       }
-      case DataLayout::kNHWC: {
+      case DataLayout::NHWC: {
         ConstEigenArrayMap<T> x_arr(x.data<T>(), C, N * sample_size);
         for (int i = 0; i < N * sample_size; ++i) {
           saved_mean_e += x_arr.col(i);
@@ -170,6 +170,47 @@ void BatchNormKernel(const Context& dev_ctx,
         running_mean_arr * momentum + saved_mean_e * (1. - momentum);
     running_var_arr =
         running_var_arr * momentum + saved_variance_e * (1. - momentum);
+  } else {
+    const auto* est_mean = &mean;
+    const auto* est_var = &variance;
+    PADDLE_ENFORCE_EQ(
+        est_mean->dims().size(),
+        1UL,
+        common::errors::InvalidArgument(
+            "The size of mean's dimensions must equal to 1."
+            "But received: the size of mean's dimensions mean is [%d],"
+            "the dimensions of mean is [%s].",
+            est_mean->dims().size(),
+            est_mean->dims()));
+    PADDLE_ENFORCE_EQ(
+        est_var->dims().size(),
+        1UL,
+        common::errors::InvalidArgument(
+            "The size of variance's dimensions must equal to 1."
+            "But received: the size of variance's dimensions is [%d],"
+            "the dimensions of variance is [%s].",
+            est_var->dims().size(),
+            est_var->dims()));
+    PADDLE_ENFORCE_EQ(
+        est_mean->dims()[0],
+        C,
+        common::errors::InvalidArgument(
+            "The first dimension of mean must equal to the number of "
+            "Channels, which is [%d]. But received: the first dimension "
+            "of mean is [%d], the dimensions of mean is [%s].",
+            C,
+            est_mean->dims()[0],
+            est_mean->dims()));
+    PADDLE_ENFORCE_EQ(
+        est_var->dims()[0],
+        C,
+        common::errors::InvalidArgument(
+            "The first dimension of variance must equal to the number "
+            "of Channels, which is [%d]. But received: the first dimension of "
+            "variance is [%d], the dimensions of variance is [%s].",
+            C,
+            est_var->dims()[0],
+            est_var->dims()));
   }
 
   // use SavedMean and SavedVariance to do normalize
@@ -212,7 +253,7 @@ void BatchNormKernel(const Context& dev_ctx,
   }
 
   switch (data_layout) {
-    case DataLayout::kNCHW: {
+    case DataLayout::NCHW: {
       EigenArrayMap<T> y_arr(dev_ctx.template Alloc<T>(y), sample_size, N * C);
       ConstEigenArrayMap<T> x_arr(x.data<T>(), sample_size, N * C);
       for (int nc = 0; nc < N * C; ++nc) {
@@ -220,7 +261,7 @@ void BatchNormKernel(const Context& dev_ctx,
       }
       break;
     }
-    case DataLayout::kNHWC: {
+    case DataLayout::NHWC: {
       EigenArrayMap<T>(dev_ctx.template Alloc<T>(y), C, N * sample_size) =
           (ConstEigenArrayMap<T>(x.data<T>(), C, N * sample_size).colwise() *
            new_scale)

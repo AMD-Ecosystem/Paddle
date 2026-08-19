@@ -46,7 +46,9 @@ struct CalcReducedAttnScoresParams : public FlashAttnParamsBase {
                             /*_causal=*/false,
                             q_dtype,
                             paddle::optional<DenseTensor>{},
-                            paddle::optional<DenseTensor>{}) {}
+                            paddle::optional<DenseTensor>{},
+                            /*_unpadded_lse=*/false,
+                            /*_total_q*/ 0) {}
 };
 #endif
 
@@ -71,7 +73,7 @@ void CalcReducedAttnScoresKernel(const Context& dev_ctx,
 
   if (!reduced_scores->IsInitialized())
     dev_ctx.template Alloc<float>(reduced_scores);
-  phi::funcs::SetConstant<Context, float> set_zero;
+  funcs::SetConstant<Context, float> set_zero;
   set_zero(dev_ctx, reduced_scores, 0.0f);
   // q, k, v [batch_size, seq_len, num_heads, head_dim]
   const int64_t batch_size = q.dims()[0];
@@ -135,5 +137,5 @@ PD_REGISTER_KERNEL(calc_reduced_attn_scores,
                    GPU,
                    ALL_LAYOUT,
                    phi::CalcReducedAttnScoresKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}

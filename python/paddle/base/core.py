@@ -302,8 +302,10 @@ try:
         _get_amp_op_list,
         _get_current_stream,
         _get_eager_deletion_vars,
+        _get_legacy_default_stream,
         _get_phi_kernel_name,
         _get_registered_phi_kernels,
+        _get_stream_from_external,
         _get_use_default_grad_op_desc_maker_ops,
         _has_grad,
         _is_compiled_with_heterps,
@@ -403,11 +405,7 @@ def set_paddle_custom_device_lib_path(lib_path):
 
 # set paddle lib path
 def set_paddle_lib_path():
-    site_dirs = (
-        site.getsitepackages()
-        if hasattr(site, 'getsitepackages')
-        else [x for x in sys.path if 'site-packages' in x]
-    )
+    site_dirs = site.getsitepackages()
     for site_dir in site_dirs:
         lib_dir = os.path.sep.join([site_dir, 'paddle', 'libs'])
         if os.path.exists(lib_dir):

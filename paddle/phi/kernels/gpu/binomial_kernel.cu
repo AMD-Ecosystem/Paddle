@@ -180,7 +180,10 @@ void BinomialKernel(const Context& dev_ctx,
   const T* count_data = count.data<T>();
   const T* prob_data = prob.data<T>();
   int64_t* out_data = dev_ctx.template Alloc<int64_t>(out);
-  const int size = count.numel();
+  // TODO(large-tensor): downstream functors may still use int; guard until
+  // upgraded.
+  int64_t size = count.numel();
+
   const int kMaxBlockDim = 256;
 
   int block_size = std::min(kMaxBlockDim, dev_ctx.GetMaxThreadsPerBlock());
@@ -204,7 +207,7 @@ PD_REGISTER_KERNEL(binomial,
                    phi::BinomialKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->OutputAt(0).SetDataType(phi::DataType::INT64);
 }

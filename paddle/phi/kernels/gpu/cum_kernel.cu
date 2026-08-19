@@ -18,21 +18,12 @@
 #include <thrust/device_vector.h>
 #include <thrust/reverse.h>
 #include <thrust/scan.h>
-#ifdef __NVCC__
-#include <cub/cub.cuh>
-#endif
-#ifdef __HIPCC__
-#include <hipcub/hipcub.hpp>
-namespace cub = hipcub;
-#endif
-
 #include "paddle/common/hostdevice.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/common/amp_type_traits.h"
-#include "paddle/phi/common/bfloat16.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/common/memory_utils.h"
 #include "paddle/phi/core/kernel_registry.h"
+#include "paddle/phi/kernels/funcs/cub.h"
 
 namespace phi {
 
@@ -45,7 +36,7 @@ __global__ void MatrixRowReverse(const T* matrix_data,
   for (int64_t bx = blockIdx.x; bx < grid_size; bx += gridDim.x) {
     for (int64_t block_offset = 0; block_offset < reverse_size;
          block_offset += item_per_block) {
-      int64_t reverse_offset = block_offset + threadIdx.x;
+      int64_t reverse_offset = block_offset + static_cast<int64_t>(threadIdx.x);
       int64_t src_offset = bx * reverse_size + reverse_offset;
       int64_t dst_offset =
           bx * reverse_size + (reverse_size - reverse_offset - 1);
@@ -71,8 +62,8 @@ __global__ void MatrixTranspose(T* odata,
   for (; block_i < wblocks * hblocks; block_i += gridDim.x) {
     int64_t block_y = block_i / wblocks;
     int64_t block_x = block_i % wblocks;
-    int64_t x = block_x * TILE_DIM + threadIdx.x;
-    int64_t y = block_y * TILE_DIM + threadIdx.y;
+    int64_t x = block_x * TILE_DIM + static_cast<int64_t>(threadIdx.x);
+    int64_t y = block_y * TILE_DIM + static_cast<int64_t>(threadIdx.y);
 
     for (int j = 0; j < TILE_DIM; j += BLOCK_ROWS) {
       if (x < width && (y + j) < height) {
@@ -461,11 +452,11 @@ void CumsumKernel(const Context& dev_ctx,
                   bool exclusive,
                   bool reverse,
                   DenseTensor* out) {
-  using Op = typename std::conditional<
-      std::is_same<T, phi::dtype::complex<float>>::value ||
-          std::is_same<T, phi::dtype::complex<double>>::value,
-      ComplexSum,
-      cub::Sum>::type;
+  using Op =
+      typename std::conditional<std::is_same<T, phi::complex64>::value ||
+                                    std::is_same<T, phi::complex128>::value,
+                                ComplexSum,
+                                cub::Sum>::type;
   auto op = Op();
   ScanKernel<T, Context, Op>(
       dev_ctx, x, axis.to<int>(), flatten, exclusive, reverse, op, out);
@@ -493,7 +484,7 @@ PD_REGISTER_KERNEL(cumsum,
                    ALL_LAYOUT,
                    phi::CumsumKernel,
                    float,
-                   phi::dtype::float16,
+                   phi::float16,
                    double,
                    int16_t,
                    int,
@@ -513,10 +504,10 @@ PD_REGISTER_KERNEL(cumsum,
                    int16_t,
                    int,
                    int64_t,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::float16,
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}
 
 PD_REGISTER_KERNEL(logcumsumexp,
                    GPU,
@@ -524,6 +515,6 @@ PD_REGISTER_KERNEL(logcumsumexp,
                    phi::LogcumsumexpKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}
 #endif

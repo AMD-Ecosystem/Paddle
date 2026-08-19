@@ -99,7 +99,7 @@ phi::KernelKey PoolOpGetKernelTypeForVar(
     auto dl = common::StringToDataLayout(data_format);
     // Some models may have intentionally set "AnyLayout" for pool
     // op. Treat this as NCHW (default data_format value)
-    if (dl != phi::DataLayout::kAnyLayout) {
+    if (dl != phi::DataLayout::ANY) {
       return phi::KernelKey(tensor.place(), dl, expected_kernel_type.dtype());
     }
   }
@@ -117,7 +117,7 @@ PD_REGISTER_KERNEL(pool2d,
                    float,
                    int8_t,
                    uint8_t,
-                   phi::dtype::bfloat16) {
+                   phi::bfloat16) {
   kernel->get_kerneltype_forvar_fn_ = phi::PoolOpGetKernelTypeForVar;
   kernel->check_if_onednn_kernel_support_ = phi::Pool2dCheckIfOneDNNSupport;
 }

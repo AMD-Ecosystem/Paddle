@@ -22,7 +22,6 @@
 #include "paddle/phi/kernels/funcs/selected_rows_functor.h"
 
 #include "paddle/phi/backends/cpu/cpu_context.h"
-#include "paddle/phi/common/bfloat16.h"
 #include "paddle/phi/core/kernel_registry.h"
 
 namespace phi {
@@ -64,13 +63,12 @@ void LookupTableKernel(const Context &dev_ctx,
     if (padding_idx != kNoPadding && ids[i] == padding_idx) {
       memset(output + i * row_width, 0, row_width * sizeof(T));
     } else {
-      PADDLE_ENFORCE_GE(
-          ids[i],
-          0,
-          common::errors::InvalidArgument(
-              "Variable value (input) of OP(fluid.layers.embedding) "
-              "expected >= 0. But received %ld",
-              ids[i]));
+      PADDLE_ENFORCE_GE(ids[i],
+                        0,
+                        common::errors::InvalidArgument(
+                            "Variable value (input) of OP(lookup_table) "
+                            "expected >= 0. But received %ld",
+                            ids[i]));
       if (is_test) {
         auto id_index = table_t.GetIndexFromId(ids[i]);
 
@@ -92,13 +90,12 @@ void LookupTableKernel(const Context &dev_ctx,
         }
       } else {
         auto id_index = table_t.Index(ids[i]);
-        PADDLE_ENFORCE_GE(
-            ids[i],
-            0,
-            common::errors::InvalidArgument(
-                "Variable value (input) of OP(fluid.layers.embedding) "
-                "expected >= 0. But received %ld",
-                ids[i]));
+        PADDLE_ENFORCE_GE(ids[i],
+                          0,
+                          common::errors::InvalidArgument(
+                              "Variable value (input) of OP(lookup_table) "
+                              "expected >= 0. But received %ld",
+                              ids[i]));
         PADDLE_ENFORCE_GE(
             id_index,
             0,
@@ -132,4 +129,4 @@ PD_REGISTER_KERNEL(lookup_table_sr,
                    double,
                    int8_t,
                    int16_t,
-                   phi::dtype::bfloat16) {}
+                   phi::bfloat16) {}

@@ -48,7 +48,8 @@ __global__ void bernoulli_cuda_kernel(
   hiprand_init(seed, thread_idx, offset, &state);
 #endif
 
-  size_t total_thread = gridDim.x * blockDim.x;
+  size_t total_thread =
+      static_cast<size_t>(gridDim.x) * static_cast<size_t>(blockDim.x);
   for (size_t i = 4 * thread_idx; i < size; i += total_thread * 4) {
     funcs::uniform_distribution<float> dist;
     float4 rand = dist(&state);
@@ -95,7 +96,7 @@ PD_REGISTER_KERNEL(bernoulli,
                    GPU,
                    ALL_LAYOUT,
                    phi::BernoulliKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
+                   phi::float16,
+                   phi::bfloat16,
                    float,
                    double) {}

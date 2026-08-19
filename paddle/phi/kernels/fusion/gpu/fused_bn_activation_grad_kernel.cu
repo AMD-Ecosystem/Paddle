@@ -68,7 +68,7 @@ void FusedBatchNormActGradKernel(const Context &dev_ctx,
                     common::errors::PreconditionNotMet(
                         "The Input dim size should be between 2 and 5"));
   int N, C, H, W, D;
-  const phi::DataLayout data_layout = phi::DataLayout::kNHWC;
+  const phi::DataLayout data_layout = phi::DataLayout::NHWC;
   phi::funcs::ExtractNCWHD(x_dims, data_layout, &N, &C, &H, &W, &D);
 
   // init output
@@ -226,7 +226,7 @@ PD_REGISTER_KERNEL(fused_batch_norm_act_grad,
                    phi::fusion::FusedBatchNormActGradKernel,
                    float,
                    double,
-                   phi::dtype::float16) {
+                   phi::float16) {
   if (kernel_key.dtype() == phi::DataType::FLOAT16) {
     kernel->OutputAt(1).SetDataType(phi::DataType::FLOAT32);
     kernel->OutputAt(2).SetDataType(phi::DataType::FLOAT32);

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "paddle/phi/kernels/gpu/lookup_table_kernel.h"
 #include "paddle/phi/backends/gpu/gpu_primitives.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/common/memory_utils.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/core/mixed_vector.h"
@@ -35,25 +35,26 @@ __global__ void LookupTable(T *output,
                             const int64_t D,
                             const int64_t padding_idx) {
   int idx = threadIdx.x;
-  int idy = blockIdx.x + threadIdx.y * GridDimX;
+  int64_t idy = static_cast<int64_t>(blockIdx.x) +
+                static_cast<int64_t>(threadIdx.y) * GridDimX;
 
   while (idy < K) {
     int64_t id = ids[idy];
     PADDLE_ENFORCE(
         id >= 0,
-        "Variable value (input) of OP(fluid.layers.embedding) "
+        "Variable value (input) of OP(lookup_table) "
         "expected >= 0 and < %ld, but got %ld. Please check input value.",
         N,
         id);
     PADDLE_ENFORCE(
         id < N,
-        "Variable value (input) of OP(fluid.layers.embedding) "
+        "Variable value (input) of OP(lookup_table) "
         "expected >= 0 and < %ld, but got %ld. Please check input value.",
         N,
         id);
     T *out = output + idy * D;
     const T *tab = table + id * D;
-    for (int i = idx; i < D; i += BlockDimX) {
+    for (int64_t i = idx; i < D; i += BlockDimX) {
       if (PaddingFlag) {
         if (id == padding_idx)
           out[i] = static_cast<T>(0);
@@ -128,6 +129,6 @@ PD_REGISTER_KERNEL(lookup_table,
                    phi::LookupTableCUDAKernel,
                    float,
                    double,
-                   phi::dtype::float16,
+                   phi::float16,
                    int8_t,
                    int16_t) {}

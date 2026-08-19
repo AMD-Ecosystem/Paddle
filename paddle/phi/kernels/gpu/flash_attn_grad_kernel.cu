@@ -18,7 +18,6 @@
 #include "paddle/common/enforce.h"
 #include "paddle/common/flags.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
-#include "paddle/phi/common/bfloat16.h"
 #include "paddle/phi/core/dense_tensor.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/core/tensor_utils.h"
@@ -249,6 +248,7 @@ void FlashAttnUnpaddedGradBaseKernel(
   const int64_t head_size = dims[2];
   const int64_t total_k = k.dims()[0];
   const int64_t num_heads_k = k.dims()[1];
+  const int64_t total_q = dims[0];
 
   bool is_mha = (num_heads == num_heads_k);
 
@@ -311,7 +311,9 @@ void FlashAttnUnpaddedGradBaseKernel(
                            q.dtype(),
                            attn_mask,
                            nullptr,  // startend_row_indices,
-                           seed_offset.data<int64_t>());
+                           seed_offset.data<int64_t>(),
+                           /*unpadded_lse*/ true,
+                           total_q);
 
   VLOG(10) << "FlashAttn bwd seed: " << params.seed
            << ", offset: " << params.offset;
@@ -374,7 +376,13 @@ void FlashAttnUnpaddedGradBaseKernel(
       max_seqlen_k * kdk->strides()[0],
       max_seqlen_k * kdv->strides()[0],
       max_seqlen_q * dout.strides()[0],
-      varlen_padded);
+#ifdef PADDLE_WITH_CUDA
+      varlen_padded,
+      params.total_q
+#else
+      varlen_padded
+#endif
+  );
   CheckFlashAttnStatus(succ);
   if (!is_mha) {
     if (dk) {
@@ -522,8 +530,7 @@ void FlashAttnVarlenQKVPackedGradKernel(
   {
     std::vector<const DenseTensor*> inputs{};
     std::vector<DenseTensor*> outputs{dqkv};
-    phi::funcs::ElementwiseKernel<T>(
-        dev_ctx, inputs, &outputs, ZeroFunctor<T>());
+    funcs::ElementwiseKernel<T>(dev_ctx, inputs, &outputs, ZeroFunctor<T>());
   }
   DenseTensor dq, dk, dv;
   sliceFlattenView(*dqkv, &dq, 1, 0, head_groupnum - 2);
@@ -626,11 +633,10 @@ void FlashAttnGradBaseKernel(
   const float softmax_scale = 1.0f / std::sqrt(head_size);
   const float softmax_unscale = std::sqrt(head_size);
 
-  int version =
-      FLAGS_flash_attn_version == 3 && !FLAGS_cudnn_deterministic &&
-              (head_size == 64 || head_size == 128 || head_size == 256)
-          ? FLAGS_flash_attn_version
-          : 2;
+  int version = FLAGS_flash_attn_version == 3 && FLAGS_cudnn_deterministic &&
+                        head_size > 128
+                    ? 2
+                    : FLAGS_flash_attn_version;
   FlashAttnBwdParamsV2 params =
       FlashAttnBwdParamsV2(dev_ctx,
                            version,
@@ -646,7 +652,9 @@ void FlashAttnGradBaseKernel(
                            q.dtype(),
                            attn_mask,
                            startend_row_indices,
-                           seed_offset.data<int64_t>());
+                           seed_offset.data<int64_t>(),
+                           /*unpadded_lse*/ false,
+                           /*total_q*/ 0);
 
   VLOG(10) << "[FlashAttn Backward" << version << "] q.shape=[" << q.dims()
            << "], k.shape=[" << k.dims() << "], v.shape=[" << v.dims() << "]";
@@ -1053,8 +1061,8 @@ PD_REGISTER_KERNEL(flash_attn_unpadded_grad,
                    GPU,
                    ALL_LAYOUT,
                    phi::FlashAttnUnpaddedGradKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(7).SetBackend(phi::Backend::CPU);  // seed_offset
 }
 
@@ -1062,8 +1070,8 @@ PD_REGISTER_KERNEL(flash_attn_varlen_qkvpacked_grad,
                    GPU,
                    ALL_LAYOUT,
                    phi::FlashAttnVarlenQKVPackedGradKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(5).SetBackend(phi::Backend::CPU);  // seed_offset
 }
 
@@ -1071,8 +1079,8 @@ PD_REGISTER_KERNEL(flash_attn_grad,
                    GPU,
                    ALL_LAYOUT,
                    phi::FlashAttnGradKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(5).SetBackend(phi::Backend::CPU);  // seed_offset
 }
 
@@ -1080,8 +1088,8 @@ PD_REGISTER_KERNEL(flash_attn_qkvpacked_grad,
                    GPU,
                    ALL_LAYOUT,
                    phi::FlashAttnQKVPackedGradKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(3).SetBackend(phi::Backend::CPU);  // seed_offset
 }
 
@@ -1089,7 +1097,7 @@ PD_REGISTER_KERNEL(flashmask_attention_grad,
                    GPU,
                    ALL_LAYOUT,
                    phi::FlashMaskGradKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(6).SetBackend(phi::Backend::CPU);  // seed_offset
 }

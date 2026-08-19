@@ -15,7 +15,6 @@
 #include "paddle/phi/kernels/set_value_grad_kernel.h"
 
 #include "paddle/phi/backends/cpu/cpu_context.h"
-#include "paddle/phi/common/complex.h"
 #include "paddle/phi/common/int_array.h"
 #include "paddle/phi/core/dense_tensor.h"
 #include "paddle/phi/core/kernel_registry.h"
@@ -128,7 +127,7 @@ void SetValueGradImpl(const Context& dev_ctx,
   }
 
   auto& place = *dev_ctx.eigen_device();
-  phi::funcs::SetConstant<Context, T> set_zero;
+  funcs::SetConstant<Context, T> set_zero;
 
   if (x_grad) {
     // Set gradient of `Input`
@@ -298,7 +297,7 @@ void SetValueGradKernel(const Context& dev_ctx,
           Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, value_grad);
         }
       } else {
-        auto reduce_dim = phi::funcs::GetReduceDims(out_grad, *value_grad);
+        auto reduce_dim = funcs::GetReduceDims(out_grad, *value_grad);
         SumKernel<T, Context>(
             dev_ctx, out_grad, reduce_dim, out_grad.dtype(), false, value_grad);
       }
@@ -372,10 +371,10 @@ PD_REGISTER_KERNEL(set_value_grad,
                    int16_t,
                    uint8_t,
                    int8_t,
-                   phi::dtype::bfloat16,
-                   phi::dtype::float16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::bfloat16,
+                   phi::float16,
+                   phi::complex64,
+                   phi::complex128) {}
 
 PD_REGISTER_KERNEL(set_value_with_scalar_grad,
                    CPU,
@@ -389,7 +388,7 @@ PD_REGISTER_KERNEL(set_value_with_scalar_grad,
                    int16_t,
                    uint8_t,
                    int8_t,
-                   phi::dtype::bfloat16,
-                   phi::dtype::float16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::bfloat16,
+                   phi::float16,
+                   phi::complex64,
+                   phi::complex128) {}

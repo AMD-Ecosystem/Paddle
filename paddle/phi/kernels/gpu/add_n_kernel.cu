@@ -147,7 +147,7 @@ void AddNKernel(const Context &dev_ctx,
 
   int start = in_place ? 1 : 0;
   if (!in_place) {
-    phi::funcs::SetConstant<phi::GPUContext, T> constant_functor;
+    funcs::SetConstant<phi::GPUContext, T> constant_functor;
     constant_functor(dev_ctx, out, static_cast<T>(0));
   }
 
@@ -325,11 +325,11 @@ PD_REGISTER_KERNEL(add_n,
                    float,
                    double,
                    int,
-                   phi::dtype::bfloat16,
-                   phi::dtype::float16,
+                   phi::bfloat16,
+                   phi::float16,
                    int64_t,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::complex64,
+                   phi::complex128) {}
 
 PD_REGISTER_KERNEL(add_n_array,
                    GPU,
@@ -338,8 +338,8 @@ PD_REGISTER_KERNEL(add_n_array,
                    float,
                    double,
                    int,
-                   phi::dtype::bfloat16,
-                   phi::dtype::float16,
+                   phi::bfloat16,
+                   phi::float16,
                    int64_t,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::complex64,
+                   phi::complex128) {}

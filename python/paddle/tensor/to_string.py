@@ -136,6 +136,20 @@ def _format_item(np_var, max_width=0, signed=False):
             item_str = f'{np_var:.0f}.'
         else:
             item_str = f'{np_var:.{DEFAULT_PRINT_OPTIONS.precision}f}'
+    elif np_var.dtype == np.complex64 or np_var.dtype == np.complex128:
+        re = np.real(np_var)
+        im = np.imag(np_var)
+        prec = DEFAULT_PRINT_OPTIONS.precision
+        if DEFAULT_PRINT_OPTIONS.sci_mode:
+            if im >= 0:
+                item_str = f'({re:.{prec}e}+{im:.{prec}e}j)'
+            else:
+                item_str = f'({re:.{prec}e}{im:.{prec}e}j)'
+        else:
+            if im >= 0:
+                item_str = f'({re:.{prec}f}+{im:.{prec}f}j)'
+            else:
+                item_str = f'({re:.{prec}f}{im:.{prec}f}j)'
     else:
         item_str = f'{np_var}'
 
@@ -293,12 +307,11 @@ def mask_xpu_bf16_tensor(np_tensor):
 
 def _format_dense_tensor(tensor, indent):
     dtype = tensor.dtype
-    if (
-        dtype == paddle.bfloat16
-        or dtype == core.VarDesc.VarType.BF16
-        or dtype == core.VarDesc.VarType.FP8_E4M3FN
-        or dtype == core.VarDesc.VarType.FP8_E5M2
-    ):
+    if dtype in {
+        paddle.bfloat16,
+        paddle.float8_e4m3fn,
+        paddle.float8_e5m2,
+    }:
         if not tensor.place.is_cpu_place():
             paddle.device.synchronize()
         tensor = tensor.astype('float32')
@@ -312,7 +325,9 @@ def _format_dense_tensor(tensor, indent):
     ):
         np_tensor = mask_xpu_bf16_tensor(np_tensor)
 
-    summary = tensor.numel() > DEFAULT_PRINT_OPTIONS.threshold
+    summary = (
+        np.prod(tensor.shape, dtype="int64") > DEFAULT_PRINT_OPTIONS.threshold
+    )
 
     max_width, signed = _get_max_width(_to_summary(np_tensor))
 
@@ -329,7 +344,7 @@ def selected_rows_tensor_to_string(tensor, dtype, prefix='Tensor'):
         data = _format_dense_tensor(tensor, indent)
         return _template.format(
             prefix=prefix,
-            shape=tensor.shape,
+            shape=list(tensor.shape),
             dtype=dtype,
             place=tensor._place_str,
             stop_gradient=tensor.stop_gradient,
@@ -353,7 +368,7 @@ def sparse_tensor_to_string(tensor, prefix='Tensor'):
         )
         return _template.format(
             prefix=prefix,
-            shape=tensor.shape,
+            shape=list(tensor.shape),
             dtype=tensor.dtype,
             place=tensor._place_str,
             stop_gradient=tensor.stop_gradient,
@@ -378,7 +393,7 @@ def sparse_tensor_to_string(tensor, prefix='Tensor'):
 
         return _template.format(
             prefix=prefix,
-            shape=tensor.shape,
+            shape=list(tensor.shape),
             dtype=tensor.dtype,
             place=tensor._place_str,
             stop_gradient=tensor.stop_gradient,
@@ -401,7 +416,7 @@ def dist_tensor_to_string(tensor, prefix='Tensor'):
         _template = "{prefix}(shape={shape}, dtype={dtype}, place={place}, stop_gradient={stop_gradient}, process_mesh={process_mesh}, placements={placements}, GlobalDenseTensor Not initialized)"
         return _template.format(
             prefix=prefix,
-            shape=tensor.shape,
+            shape=list(tensor.shape),
             dtype=dtype,
             place=tensor._place_str,
             stop_gradient=tensor.stop_gradient,
@@ -422,7 +437,7 @@ def dist_tensor_to_string(tensor, prefix='Tensor'):
         _template = "{prefix}(shape={shape}, dtype={dtype}, place={place}, stop_gradient={stop_gradient}, process_mesh={process_mesh}, placements={placements}, GlobalDenseTensor=\n{indent}{data})"
         return _template.format(
             prefix=prefix,
-            shape=tensor.shape,
+            shape=list(tensor.shape),
             dtype=dtype,
             place=tensor._place_str,
             stop_gradient=tensor.stop_gradient,
@@ -457,7 +472,7 @@ def tensor_to_string(tensor, prefix='Tensor'):
         data = _format_dense_tensor(tensor, indent)
         return _template.format(
             prefix=prefix,
-            shape=tensor.shape,
+            shape=list(tensor.shape),
             dtype=dtype,
             place=tensor._place_str,
             stop_gradient=tensor.stop_gradient,

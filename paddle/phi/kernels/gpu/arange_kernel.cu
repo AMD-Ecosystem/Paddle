@@ -17,8 +17,6 @@
 #include "paddle/common/errors.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/common/amp_type_traits.h"
-#include "paddle/phi/common/bfloat16.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/core/enforce.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/core/tensor_utils.h"
@@ -46,7 +44,7 @@ void ArangeTensorKernel(const Context& dev_ctx,
   MPType step_value = static_cast<MPType>(GetValue<T, Context>(dev_ctx, step));
 
   int64_t size = 0;
-  phi::funcs::GetSize(start_value, end_value, step_value, &size);
+  funcs::GetSize(start_value, end_value, step_value, &size);
   out->Resize(common::make_ddim({size}));
   T* out_data = dev_ctx.template Alloc<T>(out);
 
@@ -71,7 +69,7 @@ void ArangeNullaryKernel(const Context& dev_ctx,
   MPType end_value_mpt = static_cast<MPType>(end_value);
   MPType step_value_mpt = static_cast<MPType>(step_value);
   int64_t size = 0;
-  phi::funcs::GetSize(start_value_mpt, end_value_mpt, step_value_mpt, &size);
+  funcs::GetSize(start_value_mpt, end_value_mpt, step_value_mpt, &size);
   out->Resize(common::make_ddim({size}));
   T* out_data = dev_ctx.template Alloc<T>(out);
 
@@ -112,8 +110,8 @@ PD_REGISTER_KERNEL(arange_tensor,
                    double,
                    int64_t,
                    int,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(0).SetBackend(phi::Backend::ALL_BACKEND);
   kernel->InputAt(1).SetBackend(phi::Backend::ALL_BACKEND);
   kernel->InputAt(2).SetBackend(phi::Backend::ALL_BACKEND);
@@ -127,5 +125,5 @@ PD_REGISTER_KERNEL(arange,
                    double,
                    int64_t,
                    int,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}

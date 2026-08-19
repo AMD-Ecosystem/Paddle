@@ -30,14 +30,14 @@ void DropoutGradRawKernel(const Context& dev_ctx,
                           DenseTensor* x_grad) {
   bool upscale_in_train = (mode == "upscale_in_train");
   dev_ctx.template Alloc<T>(x_grad);
-  phi::funcs::DropoutGradGPUKernelDriver<T>(dev_ctx,
-                                            is_test,
-                                            p.to<float>(),
-                                            upscale_in_train,
-                                            out_grad,
-                                            mask,
-                                            x_grad,
-                                            false);
+  funcs::DropoutGradGPUKernelDriver<T>(dev_ctx,
+                                       is_test,
+                                       p.to<float>(),
+                                       upscale_in_train,
+                                       out_grad,
+                                       mask,
+                                       x_grad,
+                                       false);
 }
 
 template <typename T, typename Context>
@@ -51,14 +51,14 @@ void DropoutNdGradKernel(const Context& dev_ctx,
                          DenseTensor* x_grad) {
   bool upscale_in_train = (mode == "upscale_in_train");
   dev_ctx.template Alloc<T>(x_grad);
-  phi::funcs::DropoutGradGPUKernelDriver<T>(dev_ctx,
-                                            is_test,
-                                            p.to<float>(),
-                                            upscale_in_train,
-                                            out_grad,
-                                            mask,
-                                            x_grad,
-                                            true);
+  funcs::DropoutGradGPUKernelDriver<T>(dev_ctx,
+                                       is_test,
+                                       p.to<float>(),
+                                       upscale_in_train,
+                                       out_grad,
+                                       mask,
+                                       x_grad,
+                                       true);
 }
 
 }  // namespace phi
@@ -69,8 +69,8 @@ PD_REGISTER_KERNEL(dropout_grad,
                    phi::DropoutGradRawKernel,
                    float,
                    double,
-                   phi::dtype::bfloat16,
-                   phi::dtype::float16) {}
+                   phi::bfloat16,
+                   phi::float16) {}
 
 PD_REGISTER_KERNEL(dropout_nd_grad,
                    GPU,
@@ -78,5 +78,5 @@ PD_REGISTER_KERNEL(dropout_nd_grad,
                    phi::DropoutNdGradKernel,
                    float,
                    double,
-                   phi::dtype::bfloat16,
-                   phi::dtype::float16) {}
+                   phi::bfloat16,
+                   phi::float16) {}

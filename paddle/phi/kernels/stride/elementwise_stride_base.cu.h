@@ -164,7 +164,10 @@ void BinaryStrideBroadcastKernel(const Context &dev_ctx,
   config.add_const_input(*(ins[0]));
   config.add_const_input(*(ins[1]));
   DenseTensorIterator iter = config.build();
-  const int &numel = iter.numel();
+  // TODO(large-tensor): downstream functors may still use int; guard until
+  // upgraded.
+  const int64_t &numel = iter.numel();
+
   funcs::OffsetCalculator offset_calc = funcs::make_offset_calculator<3>(iter);
   constexpr int unroll_factor = sizeof(OutT) >= 4 ? 2 : 4;
   auto stream = dev_ctx.stream();
@@ -229,7 +232,10 @@ void BinaryStrideElementwiseKernel(const Context &dev_ctx,
   config.add_const_input(*(ins[0]));
   config.add_const_input(*(ins[1]));
   DenseTensorIterator iter = config.build();
-  const int &numel = iter.numel();
+  // TODO(large-tensor): downstream functors may still use int; guard until
+  // upgraded.
+  const int64_t &numel = iter.numel();
+
   funcs::OffsetCalculator offset_calc = funcs::make_offset_calculator<3>(iter);
   constexpr int unroll_factor = sizeof(OutT) >= 4 ? 2 : 4;
   auto stream = dev_ctx.stream();
@@ -293,7 +299,10 @@ void UnaryStrideElementwiseKernel(const Context &dev_ctx,
   config.add_output(*((*outs)[0]));
   config.add_const_input(*(ins[0]));
   DenseTensorIterator iter = config.build();
-  const int &numel = iter.numel();
+  // TODO(large-tensor): downstream functors may still use int; guard until
+  // upgraded.
+  const int64_t &numel = iter.numel();
+
   funcs::OffsetCalculator offset_calc = funcs::make_offset_calculator<2>(iter);
   constexpr int unroll_factor = sizeof(OutT) >= 4 ? 2 : 4;
   auto stream = dev_ctx.stream();
@@ -312,6 +321,31 @@ void UnaryStrideElementwiseKernel(const Context &dev_ctx,
                                        vec_size,
                                        func,
                                        offset_calc);
+}
+
+template <typename T, typename Context, typename Functor>
+void LaunchUnaryElementwiseStrideKernel(const Context &dev_ctx,
+                                        const DenseTensor &x,
+                                        Functor func,
+                                        DenseTensor *out) {
+  std::vector<const DenseTensor *> inputs = {&x};
+  std::vector<DenseTensor *> outputs = {out};
+  dev_ctx.template Alloc<T>(out);
+  UnaryStrideElementwiseKernel<T, Context>(dev_ctx, inputs, &outputs, func);
+}
+
+template <typename T, typename Context, typename Functor>
+void LaunchBinaryElementwiseStrideKernel(const Context &dev_ctx,
+                                         const DenseTensor &x,
+                                         const DenseTensor &y,
+                                         Functor func,
+                                         int axis,
+                                         DenseTensor *out) {
+  std::vector<const DenseTensor *> inputs = {&x, &y};
+  std::vector<DenseTensor *> outputs = {out};
+  dev_ctx.template Alloc<T>(out);
+  BinaryStrideBroadcastKernel<T, Context>(
+      dev_ctx, inputs, &outputs, func, axis);
 }
 
 template <typename Context>

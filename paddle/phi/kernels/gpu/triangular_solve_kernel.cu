@@ -71,7 +71,7 @@ void TriangularSolveKernel(const Context& dev_ctx,
     batch_size *= x_bst_dims_vec[i];
   }
 
-  auto blas = phi::funcs::GetBlas<GPUContext, T>(dev_ctx);
+  auto blas = funcs::GetBlas<GPUContext, T>(dev_ctx);
   if (batch_size <= 8 && M >= 64) {
     for (int64_t i = 0; i < batch_size; i++) {
       blas.TRSM(CblasLeft,
@@ -205,8 +205,8 @@ PD_REGISTER_KERNEL(triangular_solve,
                    phi::TriangularSolveKernel,
                    float,
                    double,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::complex64,
+                   phi::complex128) {}
 #else  // PADDLE_WITH_HIP
 // blas_impl.hip.h not support CUBlas<T>::TRSM for complex
 PD_REGISTER_KERNEL(triangular_solve,

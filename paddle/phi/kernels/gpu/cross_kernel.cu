@@ -29,7 +29,7 @@ __global__ void Cross(const T* x,
                       T* out,
                       const int64_t stride,
                       const int64_t N,
-                      phi::funcs::IndexCalculator<int64_t> index_calculator) {
+                      funcs::IndexCalculator<int64_t> index_calculator) {
   CUDA_KERNEL_LOOP_TYPE(i, N, int64_t) {
     int64_t offset = index_calculator(i);
 
@@ -154,7 +154,7 @@ void CrossKernel(const Context& dev_ctx,
   backends::gpu::GpuLaunchConfig config =
       backends::gpu::GetGpuLaunchConfig1D(dev_ctx, numel / 3);
 
-  auto index_calculator = phi::funcs::IndexCalculator<int64_t>(
+  auto index_calculator = funcs::IndexCalculator<int64_t>(
       merged_dims.size() - 1, cal_dims, left_strides, full_strides);
   Cross<<<config.block_per_grid,
           config.thread_per_block,
@@ -172,11 +172,11 @@ PD_REGISTER_KERNEL(cross,
                    GPU,
                    ALL_LAYOUT,
                    phi::CrossKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
+                   phi::float16,
+                   phi::bfloat16,
                    float,
                    double,
                    int,
                    int64_t,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::complex64,
+                   phi::complex128) {}

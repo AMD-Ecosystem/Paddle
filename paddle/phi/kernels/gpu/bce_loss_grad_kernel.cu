@@ -20,7 +20,6 @@
 #include "paddle/common/hostdevice.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/common/amp_type_traits.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/funcs/elementwise_base.h"
 
@@ -50,7 +49,7 @@ void BCELossGradKernel(const Context& dev_ctx,
   std::vector<const DenseTensor*> ins = {&input, &label, &out_grad};
   std::vector<DenseTensor*> outs = {input_grad};
   auto functor = BCELossGradFunctor<T>();
-  phi::funcs::ElementwiseKernel<T>(dev_ctx, ins, &outs, functor);
+  funcs::ElementwiseKernel<T>(dev_ctx, ins, &outs, functor);
 }
 
 }  // namespace phi
@@ -61,4 +60,4 @@ PD_REGISTER_KERNEL(bce_loss_grad,
                    phi::BCELossGradKernel,
                    float,
                    double,
-                   phi::dtype::float16) {}
+                   phi::float16) {}

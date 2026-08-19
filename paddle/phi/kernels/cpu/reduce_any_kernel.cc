@@ -17,7 +17,6 @@
 #include <type_traits>
 
 #include "paddle/phi/backends/cpu/cpu_context.h"
-#include "paddle/phi/common/complex.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/cpu/reduce.h"
 #include "paddle/phi/kernels/funcs/reduce_functor.h"
@@ -32,7 +31,7 @@ void AnyRawKernel(const Context& dev_ctx,
                   bool reduce_all,
                   DenseTensor* out) {
   reduce_all = recompute_reduce_all(x, dims, reduce_all);
-  phi::BoolReduceKernel<CPUContext, T, phi::funcs::AnyFunctor<T>>(
+  phi::BoolReduceKernel<CPUContext, T, funcs::AnyFunctor<T>>(
       dev_ctx, x, dims, keep_dim, reduce_all, out);
 }
 

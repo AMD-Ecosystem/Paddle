@@ -70,8 +70,8 @@ void MarginCrossEntropyGradKernel(const Context& dev_ctx,
                                   DenseTensor* logits_grad) {
   const auto softmax_dims = softmax.dims();
   const int axis = softmax_dims.size() - 1;
-  const int64_t N = phi::funcs::SizeToAxis(axis, softmax_dims);
-  const int64_t D = phi::funcs::SizeFromAxis(axis, softmax_dims);
+  const int64_t N = funcs::SizeToAxis(axis, softmax_dims);
+  const int64_t D = funcs::SizeFromAxis(axis, softmax_dims);
 
   if (return_softmax) {
     phi::Copy<Context>(
@@ -133,5 +133,5 @@ PD_REGISTER_KERNEL(margin_cross_entropy_grad,
                    phi::MarginCrossEntropyGradKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}

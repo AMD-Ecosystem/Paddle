@@ -43,7 +43,7 @@ void TraceKernel(const Context& dev_ctx,
     phi::SumKernel<T, Context>(
         dev_ctx, diag, reduce_dims, diag.dtype(), false, out);
   } else {
-    phi::funcs::SetConstant<Context, T> functor;
+    funcs::SetConstant<Context, T> functor;
     functor(dev_ctx, out, static_cast<T>(0));
   }
 }
@@ -58,7 +58,7 @@ PD_REGISTER_KERNEL(trace,
                    double,
                    int,
                    int64_t,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::float16,
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}

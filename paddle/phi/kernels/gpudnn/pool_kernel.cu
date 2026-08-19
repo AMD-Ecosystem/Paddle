@@ -107,10 +107,10 @@ void PoolRawGPUDNNKernel(const Context& dev_ctx,
 
   DenseTensor transformed_input(input->type());
   DenseTensor transformed_output(output->type());
-  GPUDNNDataLayout layout;
+  DataLayout layout;
 
   if (data_format == str_NDHWC) {
-    layout = GPUDNNDataLayout::kNCDHW;
+    layout = DataLayout::NCDHW;
     std::vector<int> axis{0, 4, 1, 2, 3};
 
     // input
@@ -139,7 +139,7 @@ void PoolRawGPUDNNKernel(const Context& dev_ctx,
 #ifdef PADDLE_WITH_HIP
     // MIOPEN not support NHWC data layout
   } else if (data_format == str_NHWC) {
-    layout = GPUDNNDataLayout::kNCHW;
+    layout = DataLayout::NCHW;
 
     std::vector<int> axis{0, 3, 1, 2};
 
@@ -330,7 +330,7 @@ void Pool3dGPUDNNKernel(const Context& dev_ctx,
 
 }  // namespace phi
 
-using phi::dtype::float16;
+using phi::float16;
 
 #ifdef PADDLE_WITH_HIP
 // MIOPEN do not support double

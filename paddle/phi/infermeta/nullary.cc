@@ -97,7 +97,6 @@ void RangeInferMeta(const Scalar& start,
     out->set_dims({-1});
   } else {
     auto GetArangeSize = [](auto start, auto end, auto step) -> int64_t {
-      using ElementType = std::decay_t<decltype(start)>;
       PADDLE_ENFORCE_NE(step,
                         0,
                         ::common::errors::InvalidArgument(
@@ -196,7 +195,7 @@ void CreateInferMetaBase(const std::vector<int64_t>& shape,
 
 void DataInferMeta(const std::string& name,
                    const phi::IntArray& shape,
-                   phi::DataType data_type,
+                   DataType data_type,
                    MetaTensor* out) {
   auto out_dims = common::make_ddim(shape.GetData());
   out->set_dims(out_dims);
@@ -323,6 +322,20 @@ void RandintInferMeta(
   }
   out->set_dims(common::make_ddim(tensor_shape));
   out->set_dtype(dtype);
+}
+
+void RandomInferMeta(const MetaTensor& x, MetaTensor* out) {
+  PADDLE_ENFORCE_NOT_NULL(
+      out, errors::InvalidArgument("Output(Out) of RandomOp is null."));
+  auto shape_vector = common::vectorize(x.dims());
+
+  std::vector<int64_t> tensor_shape;
+  tensor_shape.reserve(shape_vector.size());
+  for (auto dim : shape_vector) {
+    tensor_shape.push_back(static_cast<int64_t>(dim));
+  }
+  out->set_dims(common::make_ddim(tensor_shape));
+  out->set_dtype(x.dtype());
 }
 
 void PRecvInferMeta(const int peer,
@@ -506,7 +519,7 @@ void TriuIndicesInferMeta(
 void ReadFileInferMeta(const std::string& filename, MetaTensor* out) {
   auto out_dims = std::vector<int>(1, -1);
   out->set_dims(phi::make_ddim(out_dims));
-  out->set_dtype(phi::DataType::UINT8);
+  out->set_dtype(DataType::UINT8);
 }
 
 }  // namespace phi

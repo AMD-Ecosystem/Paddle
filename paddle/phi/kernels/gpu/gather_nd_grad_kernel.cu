@@ -15,7 +15,6 @@
 #include "paddle/phi/kernels/gather_nd_grad_kernel.h"
 
 #include "paddle/phi/backends/gpu/gpu_context.h"
-#include "paddle/phi/common/bfloat16.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/funcs/eigen/common.h"
 #include "paddle/phi/kernels/funcs/scatter.cu.h"
@@ -48,9 +47,9 @@ void GatherNdGradKernel(const Context &dev_ctx,
                         phi::DataType::INT64));
 
   if (index_type == phi::DataType::INT32) {
-    phi::funcs::GPUScatterNdAdd<T, int>(dev_ctx, out_grad, index, x_grad);
+    funcs::GPUScatterNdAdd<T, int>(dev_ctx, out_grad, index, x_grad);
   } else if (index_type == phi::DataType::INT64) {
-    phi::funcs::GPUScatterNdAdd<T, int64_t>(dev_ctx, out_grad, index, x_grad);
+    funcs::GPUScatterNdAdd<T, int64_t>(dev_ctx, out_grad, index, x_grad);
   }
 }
 
@@ -68,7 +67,7 @@ PD_REGISTER_KERNEL(gather_nd_grad,
                    int8_t,
                    int16_t,
                    bool,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::float16,
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}

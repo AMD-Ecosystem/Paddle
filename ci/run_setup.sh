@@ -24,6 +24,13 @@ echo "::group::Installing zstd"
 apt install zstd -y
 echo "::endgroup::"
 
+if [ `uname -s` == "Darwin" ]; then
+    # install deps for libuv
+    echo "::group::Installing autoconf automake libtool"
+    brew install autoconf automake libtool
+    echo "::endgroup::"
+fi
+
 if [ "$CI_name" == "cpu" ] || [ "$CI_name" == "coverage" ] || [ "$CI_name" == "xpu" ] || [ "$CI_name" == "distribute" ] || [ "$CI_name" == "build" ]; then
     if [ "$CI_name" == "xpu" ]; then
         echo "::group::Installing ninja-build"
@@ -227,7 +234,7 @@ EOF
     export WITH_CINN=${WITH_CINN:-OFF}
     export WITH_DISTRIBUTE=${distributed_flag}
     export WITH_MKL=${WITH_MKL:-ON}
-    export WITH_AVX=${WITH_AVX:-OFF}
+    export WITH_AVX=${WITH_AVX:-ON}
     export CUDA_ARCH_NAME=${CUDA_ARCH_NAME:-All}
     export NEW_RELEASE_PYPI=${NEW_RELEASE_PYPI:-OFF}
     export NEW_RELEASE_ALL=${NEW_RELEASE_ALL:-OFF}

@@ -203,17 +203,17 @@ void GesvdjBatched<double>(const phi::GPUContext& dev_ctx,
 }
 
 template <>
-void GesvdjBatched<phi::dtype::complex<float>>(const phi::GPUContext& dev_ctx,
-                                               int batchSize,
-                                               int m,
-                                               int n,
-                                               int k,
-                                               phi::dtype::complex<float>* A,
-                                               phi::dtype::complex<float>* U,
-                                               phi::dtype::complex<float>* V,
-                                               float* S,
-                                               int* info,
-                                               int thin_UV) {
+void GesvdjBatched<phi::complex64>(const phi::GPUContext& dev_ctx,
+                                   int batchSize,
+                                   int m,
+                                   int n,
+                                   int k,
+                                   phi::complex64* A,
+                                   phi::complex64* U,
+                                   phi::complex64* V,
+                                   float* S,
+                                   int* info,
+                                   int thin_UV) {
   /* compute singular vectors */
   const cusolverEigMode_t jobz =
       CUSOLVER_EIG_MODE_VECTOR; /* compute singular vectors */
@@ -242,10 +242,10 @@ void GesvdjBatched<phi::dtype::complex<float>>(const phi::GPUContext& dev_ctx,
       gesvdj_params));
   auto workspace = phi::memory_utils::Alloc(
       dev_ctx.GetPlace(),
-      lwork * sizeof(phi::dtype::complex<float>),
+      lwork * sizeof(phi::complex64),
       phi::Stream(reinterpret_cast<phi::StreamId>(dev_ctx.stream())));
-  phi::dtype::complex<float>* workspace_ptr =
-      reinterpret_cast<phi::dtype::complex<float>*>(workspace->ptr());
+  phi::complex64* workspace_ptr =
+      reinterpret_cast<phi::complex64*>(workspace->ptr());
   int stride_A = lda * n;
   int stride_U = ldu * (thin_UV ? k : m);
   int stride_V = ldt * (thin_UV ? k : n);
@@ -286,17 +286,17 @@ void GesvdjBatched<phi::dtype::complex<float>>(const phi::GPUContext& dev_ctx,
 }
 
 template <>
-void GesvdjBatched<phi::dtype::complex<double>>(const phi::GPUContext& dev_ctx,
-                                                int batchSize,
-                                                int m,
-                                                int n,
-                                                int k,
-                                                phi::dtype::complex<double>* A,
-                                                phi::dtype::complex<double>* U,
-                                                phi::dtype::complex<double>* V,
-                                                double* S,
-                                                int* info,
-                                                int thin_UV) {
+void GesvdjBatched<phi::complex128>(const phi::GPUContext& dev_ctx,
+                                    int batchSize,
+                                    int m,
+                                    int n,
+                                    int k,
+                                    phi::complex128* A,
+                                    phi::complex128* U,
+                                    phi::complex128* V,
+                                    double* S,
+                                    int* info,
+                                    int thin_UV) {
   /* compute singular vectors */
   const cusolverEigMode_t jobz =
       CUSOLVER_EIG_MODE_VECTOR; /* compute singular vectors */
@@ -325,10 +325,10 @@ void GesvdjBatched<phi::dtype::complex<double>>(const phi::GPUContext& dev_ctx,
       gesvdj_params));
   auto workspace = phi::memory_utils::Alloc(
       dev_ctx.GetPlace(),
-      lwork * sizeof(phi::dtype::complex<double>),
+      lwork * sizeof(phi::complex128),
       phi::Stream(reinterpret_cast<phi::StreamId>(dev_ctx.stream())));
-  phi::dtype::complex<double>* workspace_ptr =
-      reinterpret_cast<phi::dtype::complex<double>*>(workspace->ptr());
+  phi::complex128* workspace_ptr =
+      reinterpret_cast<phi::complex128*>(workspace->ptr());
   int stride_A = lda * n;
   int stride_U = ldu * (thin_UV ? k : m);
   int stride_V = ldt * (thin_UV ? k : n);
@@ -382,13 +382,22 @@ void SvdKernel(const Context& dev_ctx,
     return;
   }
   auto& dims = X.dims();
-  int batch_count = 1;
+  int64_t batch_count64 = 1;
   for (int i = 0; i < dims.size() - 2; i++) {
-    batch_count *= dims[i];
+    batch_count64 *= dims[i];
   }
+  // TODO(large-tensor): cusolver batch_count not support int64
+  PADDLE_ENFORCE_LE_INT_MAX(batch_count64, "batch_count");
+  int batch_count = static_cast<int>(batch_count64);
+
   int rank = dims.size();
-  int m = dims[rank - 2];
-  int n = dims[rank - 1];
+  int64_t m = dims[rank - 2];
+  int64_t n = dims[rank - 1];
+  // TODO(large-tensor): cusolver m/n not support int64
+  PADDLE_ENFORCE_LE_INT_MAX(m, "m");
+  PADDLE_ENFORCE_LE_INT_MAX(n, "n");
+  int m_int = static_cast<int>(m);
+  int n_int = static_cast<int>(n);
 
   auto* u_data = dev_ctx.template Alloc<T>(U);
   auto* vh_data = dev_ctx.template Alloc<T>(VH);
@@ -404,9 +413,9 @@ void SvdKernel(const Context& dev_ctx,
 
   GesvdjBatched<T>(dev_ctx,
                    batch_count,
-                   n,
-                   m,
-                   std::min(m, n),
+                   n_int,
+                   m_int,
+                   std::min(m_int, n_int),
                    dev_ctx.template Alloc<T>(&x_tmp),
                    vh_data,
                    u_data,
@@ -428,7 +437,7 @@ PD_REGISTER_KERNEL(svd,  // cuda_only
                    phi::SvdKernel,
                    float,
                    double,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::complex64,
+                   phi::complex128) {}
 
 #endif  // not PADDLE_WITH_HIP

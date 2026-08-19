@@ -80,7 +80,7 @@ void CEmbeddingGradKernel(const Context& dev_ctx,
   const auto& index_type = ids.dtype();
   if (FLAGS_embedding_deterministic == 1) {
     if (index_type == phi::DataType::INT32) {
-      phi::funcs::LaunchEmbeddingGradDeterministicKernel<T, int32_t>(
+      funcs::LaunchEmbeddingGradDeterministicKernel<T, int32_t>(
           dev_ctx,
           ids.data<int32_t>(),
           d_output,
@@ -91,7 +91,7 @@ void CEmbeddingGradKernel(const Context& dev_ctx,
           start_index);
       return;
     } else if (index_type == phi::DataType::INT64) {
-      phi::funcs::LaunchEmbeddingGradDeterministicKernel<T, int64_t>(
+      funcs::LaunchEmbeddingGradDeterministicKernel<T, int64_t>(
           dev_ctx,
           ids.data<int64_t>(),
           d_output,
@@ -148,10 +148,10 @@ PD_REGISTER_KERNEL(c_embedding_grad,
                    phi::CEmbeddingGradKernel,
                    float,
                    double,
-                   phi::dtype::bfloat16,
-                   phi::dtype::float16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::bfloat16,
+                   phi::float16,
+                   phi::complex64,
+                   phi::complex128) {}
 #else
 PD_REGISTER_KERNEL(c_embedding_grad,
                    GPU,
@@ -159,7 +159,7 @@ PD_REGISTER_KERNEL(c_embedding_grad,
                    phi::CEmbeddingGradKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::float16,
+                   phi::complex64,
+                   phi::complex128) {}
 #endif

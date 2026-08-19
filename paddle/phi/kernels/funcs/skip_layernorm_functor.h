@@ -17,19 +17,13 @@ limitations under the License. */
 #ifdef PADDLE_WITH_CUDA
 #include <cuda.h>
 #include <cuda_runtime.h>
-
-#include <cub/cub.cuh>  // NOLINT
 #endif
 #ifdef PADDLE_WITH_HIP
 #include <hip/hip_runtime.h>
-
-#include <hipcub/hipcub.hpp>
-namespace cub = hipcub;
 #endif
-
 #include "paddle/phi/backends/gpu/gpu_context.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/core/device_context.h"
+#include "paddle/phi/kernels/funcs/cub.h"
 
 namespace phi {
 namespace funcs {
@@ -39,7 +33,7 @@ struct CUDATypeTraits;
 
 template <>
 struct CUDATypeTraits<half> {
-  typedef phi::dtype::float16 TYPE;
+  typedef phi::float16 TYPE;
 };
 
 template <>

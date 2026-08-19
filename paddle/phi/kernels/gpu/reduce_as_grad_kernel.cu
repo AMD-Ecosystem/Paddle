@@ -28,7 +28,7 @@ void ReduceAsGradKernel(const Context& dev_ctx,
                         const DenseTensor& target,
                         const DenseTensor& out_grad,
                         DenseTensor* x_grad) {
-  auto reduce_dim = phi::funcs::GetReduceDims(x, target);
+  auto reduce_dim = funcs::GetReduceDims(x, target);
   dev_ctx.Alloc(x_grad, x.dtype());
 
   if (reduce_dim.size() == 0) {
@@ -62,14 +62,14 @@ PD_REGISTER_KERNEL(reduce_as_grad,
                    bool,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
+                   phi::float16,
+                   phi::bfloat16,
                    int16_t,
                    int,
                    int64_t,
                    uint8_t,
                    int8_t,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {
+                   phi::complex64,
+                   phi::complex128) {
   kernel->OutputAt(0).SetDataType(phi::DataType::UNDEFINED);
 }

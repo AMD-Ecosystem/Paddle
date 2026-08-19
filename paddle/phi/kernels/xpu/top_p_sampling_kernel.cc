@@ -26,7 +26,7 @@ PHI_DEFINE_EXPORTED_bool(xpu_top_p_sampling_use_fp16,
                          false,
                          "use fp16 to improve the inference performance of "
                          "top_p_sampling xpu kernel");
-PHI_DEFINE_EXPORTED_bool(
+PHI_DEFINE_EXPORTED_int32(
     xpu_top_p_sampling_heuristic_threshold,
     20,
     "threshold of heuristic method used for xpu_top_p_sampling, default 20; if "
@@ -42,7 +42,7 @@ void TopPSamplingKernel(const Context& dev_ctx,
                         const DenseTensor& ps,
                         const paddle::optional<DenseTensor>& threshold,
                         const paddle::optional<DenseTensor>& topp_seed,
-                        int random_seed,
+                        int64_t random_seed,
                         int k,
                         const std::string& mode,
                         DenseTensor* out,
@@ -96,7 +96,7 @@ void TopPSamplingKernel(const Context& dev_ctx,
   int heuristic_threshold = FLAGS_xpu_top_p_sampling_heuristic_threshold;
 
   if ((!FLAGS_xpu_top_p_sampling_use_fp16) ||
-      std::is_same<T, phi::dtype::float16>::value) {
+      std::is_same<T, phi::float16>::value) {
     r = xpu::faster_top_p_sampling<XPUType, int>(dev_ctx.x_context(),
                                                  x_ptr,
                                                  ps_ptr,
@@ -109,7 +109,7 @@ void TopPSamplingKernel(const Context& dev_ctx,
                                                  heuristic_threshold);
     PADDLE_ENFORCE_XDNN_SUCCESS(r, "top_p_sampling");
   } else {
-    using XPUTypeFP16 = typename XPUTypeTrait<phi::dtype::float16>::Type;
+    using XPUTypeFP16 = typename XPUTypeTrait<phi::float16>::Type;
     XPUTypeFP16* x_fp16_ptr = RAII_GUARD.alloc<XPUTypeFP16>(x.numel());
     XPUTypeFP16* ps_fp16_ptr = RAII_GUARD.alloc<XPUTypeFP16>(ps.numel());
     XPUTypeFP16* out_fp16_ptr = RAII_GUARD.alloc<XPUTypeFP16>(out->numel());
@@ -153,4 +153,4 @@ PD_REGISTER_KERNEL(top_p_sampling,
                    ALL_LAYOUT,
                    phi::TopPSamplingKernel,
                    float,
-                   phi::dtype::float16) {}
+                   phi::float16) {}

@@ -3,7 +3,7 @@ add_subdirectory(store)
 add_subdirectory(auto_parallel)
 add_subdirectory(collective)
 
-set(DISTRIBUTED_COMMON_SRCS comm_context_manager.cc)
+set(DISTRIBUTED_COMMON_SRCS comm_context_manager.cc utils.cc)
 
 if(WITH_NCCL OR WITH_RCCL)
   list(APPEND DISTRIBUTED_COMMON_SRCS comm_task_manager.cc)
@@ -25,7 +25,10 @@ if(WITH_XPU_BKCL)
 endif()
 
 if(WITH_FLAGCX)
-  list(APPEND DISTRIBUTED_COMMON_SRCS flagcx_comm_context.cc flagcx_tools.cc)
+  list(APPEND DISTRIBUTED_COMMON_SRCS flagcx_tools.cc)
+  if(NOT WITH_XPU)
+    list(APPEND DISTRIBUTED_COMMON_SRCS flagcx_comm_context.cc)
+  endif()
 endif()
 
 collect_srcs(core_srcs SRCS ${DISTRIBUTED_COMMON_SRCS})

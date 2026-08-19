@@ -42,10 +42,9 @@ struct is_other_float
 // check if complex type
 template <typename T>
 struct is_complex64_or_complex128
-    : std::integral_constant<
-          bool,
-          std::is_same<T, phi::dtype::complex<float>>::value ||
-              std::is_same<T, phi::dtype::complex<double>>::value> {};
+    : std::integral_constant<bool,
+                             std::is_same<T, phi::complex64>::value ||
+                                 std::is_same<T, phi::complex128>::value> {};
 
 namespace phi {
 using Tensor = DenseTensor;
@@ -61,9 +60,9 @@ and other special float),
 */
 
 /* IsfiniteFunctor */
-template <typename DeviceContext, typename T, typename Enable = void>
+template <typename Context, typename T, typename Enable = void>
 struct IsfiniteFunctor {
-  void operator()(const DeviceContext& dev_ctx,
+  void operator()(const Context& dev_ctx,
                   const DenseTensor& in,
                   DenseTensor* output);
 };
@@ -140,9 +139,9 @@ struct IsfiniteFunctor<
 };
 
 /* IsnanFunctor */
-template <typename DeviceContext, typename T, typename Enable = void>
+template <typename Context, typename T, typename Enable = void>
 struct IsnanFunctor {
-  void operator()(const DeviceContext& dev_ctx,
+  void operator()(const Context& dev_ctx,
                   const DenseTensor& in,
                   DenseTensor* output);
 };
@@ -218,9 +217,9 @@ struct IsnanFunctor<
 };
 
 /* IsinfFunctor */
-template <typename DeviceContext, typename T, typename Enable = void>
+template <typename Context, typename T, typename Enable = void>
 struct IsinfFunctor {
-  void operator()(const DeviceContext& dev_ctx,
+  void operator()(const Context& dev_ctx,
                   const DenseTensor& in,
                   DenseTensor* output);
 };
@@ -302,8 +301,28 @@ __global__ void IsfiniteCUDAKernel(
     const T* in_data,
     IndexType num,
     bool* out_data,
-    typename std::enable_if<std::is_floating_point<T>::value>::type* = 0) {
-  IndexType idx = threadIdx.x + blockIdx.x * blockDim.x;
+    typename std::enable_if<std::is_floating_point<T>::value &&
+                            !std::is_same<T, phi::bfloat16>::value &&
+                            !std::is_same<T, phi::float16>::value>::type* = 0) {
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
+  for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
+    const T& a = in_data[i];
+    out_data[i] = isfinite(a);
+  }
+}
+
+template <typename T, typename IndexType>
+__global__ void IsfiniteCUDAKernel(
+    const T* in_data,
+    IndexType num,
+    bool* out_data,
+    typename std::enable_if<std::is_same<T, phi::bfloat16>::value ||
+                            std::is_same<T, phi::float16>::value>::type* = 0) {
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
   for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
     const T& a = in_data[i];
     out_data[i] = isfinite(a);
@@ -316,7 +335,9 @@ __global__ void IsfiniteCUDAKernel(
     IndexType num,
     bool* out_data,
     typename std::enable_if<std::is_integral<T>::value>::type* = 0) {
-  IndexType idx = threadIdx.x + blockIdx.x * blockDim.x;
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
   for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
     out_data[i] = true;
   }
@@ -328,7 +349,9 @@ __global__ void IsfiniteCUDAKernel(
     IndexType num,
     bool* out_data,
     typename std::enable_if<is_complex64_or_complex128<T>::value>::type* = 0) {
-  IndexType idx = threadIdx.x + blockIdx.x * blockDim.x;
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
   for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
     const T& a = in_data[i];
     out_data[i] = isfinite(a.real) && isfinite(a.imag);
@@ -341,8 +364,28 @@ __global__ void IsnanCUDAKernel(
     const T* in_data,
     IndexType num,
     bool* out_data,
-    typename std::enable_if<std::is_floating_point<T>::value>::type* = 0) {
-  IndexType idx = threadIdx.x + blockIdx.x * blockDim.x;
+    typename std::enable_if<std::is_floating_point<T>::value &&
+                            !std::is_same<T, phi::bfloat16>::value &&
+                            !std::is_same<T, phi::float16>::value>::type* = 0) {
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
+  for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
+    const T& a = in_data[i];
+    out_data[i] = isnan(a);
+  }
+}
+
+template <typename T, typename IndexType>
+__global__ void IsnanCUDAKernel(
+    const T* in_data,
+    IndexType num,
+    bool* out_data,
+    typename std::enable_if<std::is_same<T, phi::bfloat16>::value ||
+                            std::is_same<T, phi::float16>::value>::type* = 0) {
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
   for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
     const T& a = in_data[i];
     out_data[i] = isnan(a);
@@ -355,7 +398,9 @@ __global__ void IsnanCUDAKernel(
     IndexType num,
     bool* out_data,
     typename std::enable_if<std::is_integral<T>::value>::type* = 0) {
-  IndexType idx = threadIdx.x + blockIdx.x * blockDim.x;
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
   for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
     out_data[i] = false;
   }
@@ -367,7 +412,9 @@ __global__ void IsnanCUDAKernel(
     IndexType num,
     bool* out_data,
     typename std::enable_if<is_complex64_or_complex128<T>::value>::type* = 0) {
-  IndexType idx = threadIdx.x + blockIdx.x * blockDim.x;
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
   for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
     const T& a = in_data[i];
     out_data[i] = isnan(a.real) || isnan(a.imag);
@@ -380,8 +427,28 @@ __global__ void IsinfCUDAKernel(
     const T* in_data,
     IndexType num,
     bool* out_data,
-    typename std::enable_if<std::is_floating_point<T>::value>::type* = 0) {
-  IndexType idx = threadIdx.x + blockIdx.x * blockDim.x;
+    typename std::enable_if<std::is_floating_point<T>::value &&
+                            !std::is_same<T, phi::bfloat16>::value &&
+                            !std::is_same<T, phi::float16>::value>::type* = 0) {
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
+  for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
+    const T& a = in_data[i];
+    out_data[i] = isinf(a);
+  }
+}
+
+template <typename T, typename IndexType>
+__global__ void IsinfCUDAKernel(
+    const T* in_data,
+    IndexType num,
+    bool* out_data,
+    typename std::enable_if<std::is_same<T, phi::bfloat16>::value ||
+                            std::is_same<T, phi::float16>::value>::type* = 0) {
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
   for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
     const T& a = in_data[i];
     out_data[i] = isinf(a);
@@ -394,7 +461,9 @@ __global__ void IsinfCUDAKernel(
     IndexType num,
     bool* out_data,
     typename std::enable_if<std::is_integral<T>::value>::type* = 0) {
-  IndexType idx = threadIdx.x + blockIdx.x * blockDim.x;
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
   for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
     out_data[i] = false;
   }
@@ -406,7 +475,9 @@ __global__ void IsinfCUDAKernel(
     IndexType num,
     bool* out_data,
     typename std::enable_if<is_complex64_or_complex128<T>::value>::type* = 0) {
-  IndexType idx = threadIdx.x + blockIdx.x * blockDim.x;
+  IndexType idx =
+      static_cast<IndexType>(threadIdx.x) +
+      static_cast<IndexType>(blockIdx.x) * static_cast<IndexType>(blockDim.x);
   for (IndexType i = idx; i < num; i += blockDim.x * gridDim.x) {
     const T& a = in_data[i];
     out_data[i] = isinf(a.real) || isinf(a.imag);

@@ -123,11 +123,11 @@ void PoolGradRawGPUDNNKernel(const Context& dev_ctx,
 
   dev_ctx.template Alloc<T>(input_grad);
   DenseTensor transformed_input_grad(input_grad->type());
-  GPUDNNDataLayout layout;
+  DataLayout layout;
   const std::string str_NCHW = "NCHW", str_NHWC = "NHWC";
   const std::string str_NCDHW = "NCDHW", str_NDHWC = "NDHWC";
   if (data_format == str_NDHWC) {
-    layout = GPUDNNDataLayout::kNCDHW;
+    layout = DataLayout::NCDHW;
     std::vector<int> axis{0, 4, 1, 2, 3};
 
     // input
@@ -170,7 +170,7 @@ void PoolGradRawGPUDNNKernel(const Context& dev_ctx,
 #ifdef PADDLE_WITH_HIP
     // MIOPEN not support NHWC data layout
   } else if (data_format == str_NHWC) {
-    layout = GPUDNNDataLayout::kNCHW;
+    layout = DataLayout::NCHW;
 
     std::vector<int> axis{0, 3, 1, 2};
 
@@ -413,7 +413,7 @@ void Pool3dGradGPUDNNKernel(const Context& dev_ctx,
 
 }  // namespace phi
 
-using phi::dtype::float16;
+using phi::float16;
 
 #ifdef PADDLE_WITH_HIP
 // MIOPEN do not support double

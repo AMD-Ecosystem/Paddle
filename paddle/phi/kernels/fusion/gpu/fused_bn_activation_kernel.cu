@@ -85,7 +85,7 @@ void FusedBatchNormActKernel(const Context &dev_ctx,
   dev_ctx.template Alloc<T>(y);
 
   int N, C, H, W, D;
-  const DataLayout data_layout = phi::DataLayout::kNHWC;
+  const DataLayout data_layout = phi::DataLayout::NHWC;
   phi::funcs::ExtractNCWHD(x_dims, data_layout, &N, &C, &H, &W, &D);
 
   if ((N * H * W * D) == 1) {
@@ -224,7 +224,7 @@ PD_REGISTER_KERNEL(fused_batch_norm_act,
                    phi::fusion::FusedBatchNormActKernel,
                    float,
                    double,
-                   phi::dtype::float16) {
+                   phi::float16) {
   if (kernel_key.dtype() == phi::DataType::FLOAT16) {
     kernel->OutputAt(1).SetDataType(phi::DataType::FLOAT32);
     kernel->OutputAt(2).SetDataType(phi::DataType::FLOAT32);

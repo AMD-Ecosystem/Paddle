@@ -55,7 +55,7 @@ struct EmbeddingCPUFunctor {
             ids[i],
             row_number,
             common::errors::InvalidArgument(
-                "Variable value (input) of OP(fluid.layers.embedding) "
+                "Variable value (input) of OP(embedding) "
                 "expected >= 0 and < %ld, but got %ld. Please check input "
                 "value.",
                 row_number,
@@ -64,7 +64,7 @@ struct EmbeddingCPUFunctor {
             ids[i],
             0,
             common::errors::InvalidArgument(
-                "Variable value (input) of OP(fluid.layers.embedding) "
+                "Variable value (input) of OP(embedding) "
                 "expected >= 0 and < %ld, but got %ld. Please check input "
                 "value.",
                 row_number,
@@ -124,7 +124,7 @@ PD_REGISTER_KERNEL(embedding,
                    float,
                    double,
                    int8_t,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::float16,
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}

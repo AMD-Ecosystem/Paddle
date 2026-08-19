@@ -14,15 +14,12 @@
 
 #include <string>
 #include <vector>
-
+#include "paddle/phi/backends/cpu/cpu_context.h"
 #include "paddle/phi/core/dense_tensor.h"
 #include "paddle/phi/core/enforce.h"
+#include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/funcs/blas/blas.h"
 #include "paddle/phi/kernels/funcs/eigen/common.h"
-
-#include "paddle/phi/backends/cpu/cpu_context.h"
-#include "paddle/phi/common/bfloat16.h"
-#include "paddle/phi/core/kernel_registry.h"
 
 namespace phi {
 
@@ -75,7 +72,7 @@ void LookupTableGradKernel(const Context &dev_ctx,
           ids_data[i],
           N,
           common::errors::InvalidArgument(
-              "Variable value (input) of OP(fluid.layers.embedding) "
+              "Variable value (input) of OP(lookup_table_grad) "
               "expected >= 0 and < %ld, but got %ld. Please check input "
               "value.",
               N,
@@ -84,7 +81,7 @@ void LookupTableGradKernel(const Context &dev_ctx,
           ids_data[i],
           0,
           common::errors::InvalidArgument(
-              "Variable value (input) of OP(fluid.layers.embedding) "
+              "Variable value (input) of OP(lookup_table_grad) "
               "expected >= 0 and < %ld, but got %ld. Please check input "
               "value.",
               N,
@@ -163,7 +160,7 @@ PD_REGISTER_KERNEL(lookup_table_grad,
                    phi::LookupTableGradKernel,
                    float,
                    double,
-                   phi::dtype::bfloat16) {}
+                   phi::bfloat16) {}
 
 PD_REGISTER_KERNEL(lookup_table_sparse_grad,
                    CPU,
@@ -171,4 +168,4 @@ PD_REGISTER_KERNEL(lookup_table_sparse_grad,
                    phi::LookupTableSparseGradKernel,
                    float,
                    double,
-                   phi::dtype::bfloat16) {}
+                   phi::bfloat16) {}

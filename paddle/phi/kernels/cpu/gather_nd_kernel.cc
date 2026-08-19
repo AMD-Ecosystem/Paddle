@@ -56,9 +56,9 @@ void GatherNdKernel(const Context &dev_ctx,
                         phi::DataType::INT32,
                         phi::DataType::INT64));
   if (index_type == phi::DataType::INT32) {
-    phi::funcs::CPUGatherNd<T, int>(dev_ctx, x, index, out);
+    funcs::CPUGatherNd<T, int>(dev_ctx, x, index, out);
   } else if (index_type == phi::DataType::INT64) {
-    phi::funcs::CPUGatherNd<T, int64_t>(dev_ctx, x, index, out);
+    funcs::CPUGatherNd<T, int64_t>(dev_ctx, x, index, out);
   }
 }
 
@@ -76,5 +76,5 @@ PD_REGISTER_KERNEL(gather_nd,
                    int64_t,
                    int16_t,
                    uint8_t,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::complex64,
+                   phi::complex128) {}

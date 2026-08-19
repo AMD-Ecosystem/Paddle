@@ -15,14 +15,7 @@
 #include <algorithm>
 #include <type_traits>
 
-#ifdef __NVCC__
-#include <cub/cub.cuh>
-#endif
-#ifdef __HIPCC__
-#include <hipcub/hipcub.hpp>
-namespace cub = hipcub;
-#endif
-
+#include "paddle/phi/kernels/funcs/cub.h"
 #if defined(PADDLE_WITH_CUDA)
 #include <cuda_fp16.h>
 #endif
@@ -30,7 +23,6 @@ namespace cub = hipcub;
 #include "paddle/common/errors.h"
 #include "paddle/phi/backends/gpu/gpu_device_function.h"
 #include "paddle/phi/backends/gpu/gpu_launch_config.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/core/enforce.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/core/tensor_utils.h"
@@ -39,7 +31,7 @@ namespace cub = hipcub;
 namespace phi {
 namespace fusion {
 
-using float16 = phi::dtype::float16;
+using float16 = phi::float16;
 
 template <typename T>
 static __device__ __forceinline__ T Relu(T x) {
@@ -477,4 +469,4 @@ PD_REGISTER_KERNEL(fused_fc_elementwise_layernorm,
                    phi::fusion::FusedFCElementwiseLayerNormKernel,
                    float,
                    double,
-                   phi::dtype::float16) {}
+                   phi::float16) {}

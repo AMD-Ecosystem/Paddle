@@ -48,11 +48,9 @@ void TakeAlongAxisKernel(const Context& dev_ctx,
 
   const auto& index_type = index.dtype();
   if (index_type == DataType::INT32) {
-    phi::funcs::gpu_gather_kernel<T, int32_t>(
-        x, axis, index, *out, true, dev_ctx);
+    funcs::gpu_gather_kernel<T, int32_t>(x, axis, index, *out, true, dev_ctx);
   } else if (index_type == DataType::INT64) {
-    phi::funcs::gpu_gather_kernel<T, int64_t>(
-        x, axis, index, *out, true, dev_ctx);
+    funcs::gpu_gather_kernel<T, int64_t>(x, axis, index, *out, true, dev_ctx);
   } else {
     PADDLE_THROW(common::errors::InvalidArgument(
         "The data type of input index is expected "
@@ -73,5 +71,5 @@ PD_REGISTER_KERNEL(take_along_axis,
                    int,
                    int16_t,
                    uint8_t,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}

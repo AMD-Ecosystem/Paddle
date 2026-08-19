@@ -14,7 +14,6 @@
 
 #include "paddle/phi/kernels/set_value_grad_kernel.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
-#include "paddle/phi/common/complex.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/infermeta/unary.h"
 #include "paddle/phi/kernels/funcs/common_shape.h"
@@ -54,7 +53,7 @@ void SetValueGradKernel(const Context& dev_ctx,
   if (ellipsis_flag) {
     if (x_grad) {
       dev_ctx.template Alloc<T>(x_grad);
-      phi::funcs::set_constant(dev_ctx, x_grad, static_cast<float>(0.0));
+      funcs::set_constant(dev_ctx, x_grad, static_cast<float>(0.0));
     }
     if (value_grad) {
       if (value_grad->numel() == out_grad.numel()) {
@@ -67,7 +66,7 @@ void SetValueGradKernel(const Context& dev_ctx,
           Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, value_grad);
         }
       } else {
-        auto reduce_dim = phi::funcs::GetReduceDims(out_grad, *value_grad);
+        auto reduce_dim = funcs::GetReduceDims(out_grad, *value_grad);
         SumKernel<T, Context>(
             dev_ctx, out_grad, reduce_dim, out_grad.dtype(), false, value_grad);
       }
@@ -122,8 +121,7 @@ void SetValueGradKernel(const Context& dev_ctx,
         value_grad_orig.Resize(value_grad->dims());
         Copy(dev_ctx, value_grad_orig, dev_ctx.GetPlace(), false, value_grad);
       } else {
-        auto reduce_dim =
-            phi::funcs::GetReduceDims(value_grad_orig, *value_grad);
+        auto reduce_dim = funcs::GetReduceDims(value_grad_orig, *value_grad);
         SumKernel<T, Context>(dev_ctx,
                               value_grad_orig,
                               reduce_dim,
@@ -182,10 +180,10 @@ PD_REGISTER_KERNEL(set_value_grad,
                    int16_t,
                    uint8_t,
                    int8_t,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::float16,
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}
 
 PD_REGISTER_KERNEL(set_value_with_scalar_grad,
                    GPU,
@@ -199,7 +197,7 @@ PD_REGISTER_KERNEL(set_value_with_scalar_grad,
                    int16_t,
                    uint8_t,
                    int8_t,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::float16,
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}

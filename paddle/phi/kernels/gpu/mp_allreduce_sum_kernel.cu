@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "paddle/phi/kernels/mp_allreduce_sum_kernel.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/all_reduce_kernel.h"
 
@@ -35,8 +36,8 @@ PD_REGISTER_KERNEL(mp_allreduce_sum,
                    double,
                    int,
                    int64_t,
-                   phi::dtype::bfloat16,
-                   phi::dtype::float16) {}
+                   phi::bfloat16,
+                   phi::float16) {}
 #else
 PD_REGISTER_KERNEL(mp_allreduce_sum,
                    GPU,
@@ -46,5 +47,5 @@ PD_REGISTER_KERNEL(mp_allreduce_sum,
                    double,
                    int,
                    int64_t,
-                   phi::dtype::float16) {}
+                   phi::float16) {}
 #endif

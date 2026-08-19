@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import inspect
 import warnings
@@ -33,6 +34,7 @@ from paddle.base.libpaddle import Place
 from paddle.profiler.utils import in_profiler_mode
 from paddle.utils import deprecated
 from paddle.utils.dlpack import DLDeviceType
+from paddle.utils.download import check_and_create_dir
 
 from .. import core, framework, unique_name
 from ..framework import (
@@ -45,6 +47,10 @@ from .base import switch_to_static_graph
 from .math_op_patch import monkey_patch_math_tensor
 
 if TYPE_CHECKING:
+    from enum import IntEnum
+
+    from typing_extensions import CapsuleType
+
     from paddle import Tensor
     from paddle._typing import DTypeLike, PlaceLike, TensorIndex
 
@@ -128,6 +134,8 @@ def monkey_patch_tensor():
             'strides',
             'offset',
             '__cuda_array_interface__',
+            'itemsize',
+            'is_cuda',
         ]
         param_keys = ['stop_gradient', 'trainable']
         if isinstance(self, EagerParamBase):
@@ -280,6 +288,8 @@ def monkey_patch_tensor():
         self: Tensor,
         grad_tensor: Tensor | None = None,
         retain_graph: bool = False,
+        *,
+        dump_backward_graph_path: str | None = None,
     ) -> None:
         """
         Run backward of current Graph which starts from current Tensor.
@@ -297,6 +307,9 @@ def monkey_patch_tensor():
                 like to add more ops to the built graph after calling this method( :code:`backward` ), set the parameter
                 :code:`retain_graph` to True, then the grads will be retained. Thus, setting it to False is much more memory-efficient.
                 Defaults to False.
+            dump_backward_graph_path(str, optional): Specifies the directory path for storing the debug file.
+                If this parameter is specified, the backward-related graph (in dot format)
+                and the debugging call stack information will be generated in this directory.
 
         Returns:
             None
@@ -310,37 +323,26 @@ def monkey_patch_tensor():
                 ...     y = paddle.pow(x, 4.0)
                 ...     y.backward()
                 ...     print("{}: {}".format(i, x.grad))
-                0: Tensor(shape=[], dtype=float32, place=Place(cpu), stop_gradient=False,
-                500.)
-                1: Tensor(shape=[], dtype=float32, place=Place(cpu), stop_gradient=False,
-                1000.)
-                2: Tensor(shape=[], dtype=float32, place=Place(cpu), stop_gradient=False,
-                1500.)
-                3: Tensor(shape=[], dtype=float32, place=Place(cpu), stop_gradient=False,
-                2000.)
-                4: Tensor(shape=[], dtype=float32, place=Place(cpu), stop_gradient=False,
-                2500.)
+                0: 500.0
+                1: 1000.0
+                2: 1500.0
+                3: 2000.0
+                4: 2500.0
 
                 >>> x.clear_grad()
                 >>> print("{}".format(x.grad))
-                Tensor(shape=[], dtype=float32, place=Place(cpu), stop_gradient=False,
-                0.)
+                0.0
 
                 >>> grad_tensor=paddle.to_tensor(2.)
                 >>> for i in range(5):
                 ...     y = paddle.pow(x, 4.0)
                 ...     y.backward(grad_tensor)
                 ...     print("{}: {}".format(i, x.grad))
-                0: Tensor(shape=[], dtype=float32, place=Place(cpu), stop_gradient=False,
-                1000.)
-                1: Tensor(shape=[], dtype=float32, place=Place(cpu), stop_gradient=False,
-                2000.)
-                2: Tensor(shape=[], dtype=float32, place=Place(cpu), stop_gradient=False,
-                3000.)
-                3: Tensor(shape=[], dtype=float32, place=Place(cpu), stop_gradient=False,
-                4000.)
-                4: Tensor(shape=[], dtype=float32, place=Place(cpu), stop_gradient=False,
-                5000.)
+                0: 1000.0
+                1: 2000.0
+                2: 3000.0
+                3: 4000.0
+                4: 5000.0
         """
         if framework.in_dygraph_mode():
             if in_profiler_mode():
@@ -364,8 +366,10 @@ def monkey_patch_tensor():
             if _grad_scalar:
                 # When using amp with Fleet DistributedStrategy, we do loss scaling implicitly.
                 self = _grad_scalar.scale(self)
-
-            core.eager.run_backward([self], grad_tensor, retain_graph)
+            check_and_create_dir(dump_backward_graph_path)
+            core.eager.run_backward(
+                [self], grad_tensor, retain_graph, dump_backward_graph_path
+            )
 
             if in_profiler_mode():
                 record_event.end()
@@ -590,6 +594,7 @@ def monkey_patch_tensor():
         device: PlaceLike | None = None,
         dtype: DTypeLike | None = None,
         blocking: bool | None = None,
+        copy_tensor: bool | None = None,
     ) -> Tensor:
         if device is None and dtype is None and blocking is None:
             return self
@@ -652,7 +657,7 @@ def monkey_patch_tensor():
                 "blocking value error, must be the True, False or None"
             )
 
-        def transform(t, device, dtype, blocking):
+        def transform(t, device, dtype, blocking, copy_tensor):
             if device is None:
                 device = t.place
             if dtype is None:
@@ -679,6 +684,7 @@ def monkey_patch_tensor():
                     t_used = t._copy_to(paddle.CPUPlace(), blocking)
                     # Release memory of t
                     t._clear()
+                    copy_tensor = False
                 else:
                     # Tensor still in GPU
                     t_used = t
@@ -691,20 +697,25 @@ def monkey_patch_tensor():
                     place=t_used.place
                 ):
                     t_casted = t_used.cast(dtype=dtype)
+                    copy_tensor = False
             else:
                 t_casted = t_used
 
             # 3. Copy casted Tensor(in CPU or GPU) to device if needed
             if device is not None and not t_casted.place._equals(device):
                 new_t = t_casted._copy_to(device, blocking)
+                copy_tensor = False
             else:
                 new_t = t_casted
             new_t.stop_gradient = t.stop_gradient
-            return new_t
+            if copy_tensor:
+                return copy.deepcopy(new_t)
+            else:
+                return new_t
 
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", category=UserWarning)
-            return transform(self, device, dtype, blocking)
+            return transform(self, device, dtype, blocking, copy_tensor)
 
     @overload
     def to(
@@ -776,6 +787,17 @@ def monkey_patch_tensor():
         device = None
         dtype = None
         blocking = None
+
+        if "non_blocking" in kwargs:
+            non_blocking = kwargs.pop("non_blocking")
+        else:
+            non_blocking = False
+
+        if "copy" in kwargs:
+            copy_tensor = kwargs.pop("copy")
+        else:
+            copy_tensor = False
+
         size_args = len(args)
         size_kwargs = len(kwargs)
 
@@ -850,7 +872,8 @@ def monkey_patch_tensor():
                 device, dtype = get_device_dtype_from_tensor(
                     kwargs.get("other", None)
                 )
-        return self._to(device, dtype, blocking)
+        blocking = False if not blocking or non_blocking else True
+        return self._to(device, dtype, blocking, copy_tensor)
 
     def clear_grad(self: Tensor) -> None:
         """
@@ -1138,12 +1161,24 @@ def monkey_patch_tensor():
     def cuda(
         self: Tensor, device_id: int | None = None, blocking: bool = True
     ) -> Tensor:
+        device_type = paddle.device.get_all_device_type()
+        if len(
+            device_type
+        ) > 0 and paddle.device.is_compiled_with_custom_device(device_type[-1]):
+            res_place_class = core.CustomPlace
+        elif paddle.device.is_compiled_with_xpu():
+            res_place_class = core.XPUPlace
+        elif paddle.device.is_compiled_with_cuda():
+            res_place_class = core.CUDAPlace
+        else:
+            raise ValueError("No available device found.")
+
         if device_id is None:
             res_place = framework._current_expected_place()
-            if not isinstance(res_place, core.CUDAPlace):
-                res_place = core.CUDAPlace(0)
+            if not isinstance(res_place, res_place_class):
+                res_place = res_place_class(0)
         elif isinstance(device_id, int):
-            res_place = core.CUDAPlace(device_id)
+            res_place = res_place_class(device_id)
         else:
             raise ValueError("device_id must be int|None")
 
@@ -1154,6 +1189,10 @@ def monkey_patch_tensor():
             res.stop_gradient = self.stop_gradient
             res.persistable = self.persistable
             return res
+
+    @property
+    def is_cuda(self: Tensor) -> bool:
+        return self.place.is_gpu_place()
 
     @framework.dygraph_only
     def pin_memory(self: Tensor, blocking: bool = True) -> Tensor:
@@ -1231,7 +1270,9 @@ def monkey_patch_tensor():
         **Notes**:
             **This API is ONLY available in Dygraph mode**
 
-        Convert the current DenseTensor to SparseTensor in COO format.
+        Convert the current DenseTensor to SparseTensor in COO format. When the input is already a SparseCooTensor, this function will directly return
+        the input itself without performing any conversion.
+
 
         Returns:
             Tensor: A SparseCooTensor
@@ -1249,6 +1290,8 @@ def monkey_patch_tensor():
                                 [1, 3, 2, 3]],
                        values=[1., 2., 3., 4.])
         """
+        if self.is_sparse_coo():
+            return self
 
         return _C_ops.sparse_to_sparse_coo(self, sparse_dim)
 
@@ -1345,6 +1388,32 @@ def monkey_patch_tensor():
             raise ValueError(f"Unsupported tensor place: {place}")
 
     @property
+    def device(self: Tensor) -> str:
+        """
+        Return the device descriptor string indicating where the tensor is located.
+
+        Returns:
+            str: A string representing the device where the tensor resides.
+                 Possible formats include:
+                 - 'cpu' for CPU tensors
+                 - 'cuda:{device_id}' for GPU tensors (e.g., 'cuda:0')
+                 - 'xpu:{device_id}' for XPU tensors (e.g., 'xpu:0')
+                 - '{device_type}:{device_id}' for custom device tensors
+
+        Examples:
+            .. code-block:: python
+
+                >>> import paddle
+
+                >>> # CPU tensor
+                >>> cpu_tensor = paddle.to_tensor([1, 2, 3]).to("cpu")
+                >>> print(cpu_tensor.device)
+                'cpu'
+        """
+        place = self.place
+        return paddle.device(place)
+
+    @property
     def __cuda_array_interface__(self):
         """Array view description for cuda tensors.
 
@@ -1417,38 +1486,168 @@ def monkey_patch_tensor():
             "version": 2,
         }
 
-    def __dlpack__(self, stream=None):
+    def __dlpack__(
+        self,
+        *,
+        stream: int | None = None,
+        max_version: tuple[int, int] | None = None,
+        dl_device: tuple[IntEnum, int] | None = None,
+        copy: bool | None = None,
+    ) -> CapsuleType:
         """
         Creates a DLPack capsule of the current tensor to be exported to other libraries.
         Args:
-            stream (int | None): An optional Python integer representing a pointer
-                                to a CUDA stream. Synchronizes the tensor with this
-                                stream before exporting.
-                                If None or -1, no synchronization is performed.
-                                If 0, the default stream is used.
+            stream (int | None, optional): An optional Python integer representing a pointer
+                to a CUDA stream. Synchronizes the tensor with this stream before exporting.
+                If None or -1, no synchronization is performed. If 0, the default stream is used.
+            max_version (tuple[int, int] | None): An optional Python tuple with
+                2 integers, representing the maximum version the caller supports. If
+                None (default), we will fallback to DLPack 0.8.
+            dl_device (tuple[IntEnum, int] | None, optional): The DLPack device type. Default is
+                None, meaning the exported capsule should be on the same device as self is. When
+                specified, the format must be a 2-tuple, following that of the return value of
+                array.__dlpack_device__().
+            copy (bool | None, optional): Whether or not to copy the input. If True, the output
+                tensor always copied. If False, the output tensor must never copied, and raise a
+                BufferError in case a copy is deemed necessary. If None, the output tensor must
+                reuse the existing memory buffer if possible and copy otherwise. Default: None.
         """
 
         if self.is_sparse():
-            raise AttributeError(
-                "Can't get __dlpack__ from a Tensor that requires gradients, "
-                "use tensor.detach() if gradients are not required."
+            raise BufferError(
+                "Can't get __dlpack__ from a Tensor from sparse storage."
             )
 
         if not self.stop_gradient:
-            raise RuntimeError(
+            raise BufferError(
                 "Can't get __dlpack__ from Tensor that requires gradients. "
                 "If gradients aren't required, use tensor.detach() to get a tensor without gradient."
             )
 
-        if stream is not None:
-            if self.place.is_gpu_place():
-                current_stream = paddle.device.cuda.current_stream()
-                if stream != current_stream:
-                    event = paddle.device.cuda.Event()
-                    event.record(current_stream)
-                    current_stream.synchronize()
+        if stream is not None and not isinstance(stream, int):
+            raise TypeError("stream must be an integer or None.")
+        elif self.place.is_gpu_place() and stream != -1:
+            is_rocm = paddle.is_compiled_with_rocm()
+            is_cuda = paddle.is_compiled_with_cuda()
+            if not (is_rocm or is_cuda):
+                raise RuntimeError(
+                    "DLPack with stream synchronization is only supported "
+                    "when Paddle is compiled with CUDA or ROCm."
+                )
+            if is_cuda and stream == 0:
+                raise ValueError(
+                    "For CUDA, stream=0 is ambiguityous, please use None for default stream."
+                )
+            if is_cuda and stream == 2:
+                raise ValueError(
+                    "For CUDA, stream=2 means per-thread default stream, which is not supported."
+                )
+            if is_rocm and stream in {1, 2}:
+                raise ValueError("For ROCm, stream=1 or 2 is not supported.")
+            if (
+                stream is None
+                # For CUDA, stream=1 means default stream
+                or (is_cuda and stream == 1)
+                # For ROCm, stream=0 means default stream
+                or (is_rocm and stream == 0)
+            ):
+                consumer_stream = paddle.device.Stream(
+                    stream_base=core._get_legacy_default_stream(
+                        paddle.framework._current_expected_place_().get_device_id()
+                    )
+                )
+            else:
+                assert stream > 2, "stream should be a valid stream pointer."
+                consumer_stream = paddle.device.get_stream_from_external(stream)
 
-        return paddle.to_dlpack(self)
+            current_stream = paddle.device.current_stream()
+
+            def is_same_stream(
+                lhs: paddle.device.Stream, rhs: paddle.device.Stream
+            ) -> bool:
+                return (
+                    lhs.stream_base.raw_stream == rhs.stream_base.raw_stream
+                ) and (lhs.device == rhs.device)
+
+            if not is_same_stream(consumer_stream, current_stream):
+                event = paddle.device.Event()
+                event.record(current_stream)
+                consumer_stream.wait_event(event)
+        elif self.place.is_cpu_place():
+            assert stream is None, "CPU tensor stream must be None."
+
+        if max_version is None or max_version[0] < 1:
+            return self.get_tensor()._to_dlpack(dl_device=dl_device, copy=copy)
+
+        return self.get_tensor()._to_dlpack_versioned(
+            dl_device=dl_device, copy=copy
+        )
+
+    def get_device(self: Tensor) -> int:
+        """
+        Return the device id where the Tensor is located.
+
+        Returns:
+            int: The device id of the Tensor. Returns -1 for CPU tensors; for GPU tensors,
+                 returns the CUDA device id (e.g., 0 for `gpu:0`).
+
+        Examples:
+            .. code-block:: python
+
+                >>> import paddle
+                >>> x = paddle.to_tensor([1, 2, 3], place=paddle.CPUPlace())
+                >>> x.get_device()
+                -1
+
+                >>> # doctest: +REQUIRES(env:GPU)
+                >>> y = paddle.to_tensor([1, 2, 3], place=paddle.CUDAPlace(0))
+                >>> y.get_device()
+                0
+        """
+        if self.place.is_cpu_place():
+            return -1
+        else:
+            return self.place.gpu_device_id()
+
+    def __tvm_ffi_env_stream__(self) -> int:
+        """
+        Returns the raw stream pointer of the current tensor's device context.
+        This is used for TVM FFI environment integration.
+        """
+        if self.place.is_gpu_place():
+            return paddle.base.libpaddle._get_current_raw_stream(
+                self.place.gpu_device_id()
+            )
+        else:
+            # TODO: Add XPU and custom device support.
+            raise RuntimeError(
+                "Currently, the __tvm_ffi_env_stream__ method is only supported for GPU tensors."
+            )
+
+    def _get_c_dlpack_exchange_api():
+        """
+        Returns the C DLPack exchange API pointer for the current tensor.
+        This is used for interoperability with other libraries that support DLPack.
+
+        In tvm ffi 0.1.3 or below, this API returns the pointer directly.
+        In newer versions, it returns a python capsule containing the pointer.
+        """
+        try:
+            import tvm_ffi
+
+            tvm_ffi_version = tuple(
+                int(x) for x in tvm_ffi.__version__.split(".")
+            )
+            # We assume version format is like '0.1.3'.
+            # All supported releases are '0.1.0', '0.1.1', '0.1.2', '0.1.3'.
+            # We simply assume user will not use beta/rc versions here.
+            # TODO(dev): We should cleanup this after tvm ffi 0.1.3 is not supported.
+            if tvm_ffi_version <= (0, 1, 3):
+                return core.dlpack_exchange_api_ptr()
+        except Exception:
+            pass
+        # For tvm ffi 0.1.4 only, in tvm ffi 0.1.5+, replaced by `__dlpack_c_exchange_api__`
+        return core.dlpack_exchange_api_pycapsule()
 
     if not hasattr(core, "eager"):
         return
@@ -1462,6 +1661,7 @@ def monkey_patch_tensor():
         ("backward", backward),
         ("clear_grad", clear_grad),
         ("inplace_version", inplace_version),
+        ("is_cuda", is_cuda),
         ("gradient", gradient),
         ("apply_", apply_),
         ("apply", apply),
@@ -1496,6 +1696,12 @@ def monkey_patch_tensor():
         ("__cuda_array_interface__", __cuda_array_interface__),
         ("__dlpack__", __dlpack__),
         ("__dlpack_device__", __dlpack_device__),
+        ("get_device", get_device),
+        ("__tvm_ffi_env_stream__", __tvm_ffi_env_stream__),
+        # For TVM FFI 0.1.0-0.1.4, replaced by `__dlpack_c_exchange_api__` in TVM FFI 0.1.5+
+        ("__c_dlpack_exchange_api__", _get_c_dlpack_exchange_api()),
+        ("__dlpack_c_exchange_api__", core.dlpack_exchange_api_pycapsule()),
+        ("device", device),
     ):
         setattr(core.eager.Tensor, method_name, method)
 

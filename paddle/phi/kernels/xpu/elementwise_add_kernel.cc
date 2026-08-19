@@ -35,14 +35,14 @@ void AddKernel(const Context& dev_ctx,
                const DenseTensor& x,
                const DenseTensor& y,
                DenseTensor* out) {
-  if (out->numel() == 0) {
-    dev_ctx.template Alloc<T>(out);
-    return;
-  }
   if (x.dtype() == phi::DataType::FLOAT32 &&
       (y.dtype() == phi::DataType::BFLOAT16 ||
        y.dtype() == phi::DataType::FLOAT16)) {
     // special case for "float32 + bfloat16", or "float32 + float16"
+    if (out->numel() == 0) {
+      dev_ctx.template Alloc<float>(out);
+      return;
+    }
     auto dev_version =
         phi::backends::xpu::get_xpu_version(dev_ctx.GetPlace().GetDeviceId());
     if (dev_version >= phi::backends::xpu::XPUVersion::XPU3 &&
@@ -82,6 +82,10 @@ void AddKernel(const Context& dev_ctx,
       XPUElementwise<Type, XPUType>(dev_ctx, x, casted_y, -1, out, f);
     }
   } else {
+    if (out->numel() == 0) {
+      dev_ctx.template Alloc<T>(out);
+      return;
+    }
     using XPUType = typename XPUTypeTrait<T>::Type;
 
     auto f = [](xpu::Context* xpu_ctx,
@@ -118,12 +122,11 @@ void GradAddXPUKernel(const Context& dev_ctx,
 
 #ifdef PADDLE_WITH_XPU_FFT
 template <>
-void AddKernel<phi::dtype::complex<float>, XPUContext>(
-    const XPUContext& dev_ctx,
-    const DenseTensor& x,
-    const DenseTensor& y,
-    DenseTensor* out) {
-  using T = phi::dtype::complex<float>;
+void AddKernel<phi::complex64, XPUContext>(const XPUContext& dev_ctx,
+                                           const DenseTensor& x,
+                                           const DenseTensor& y,
+                                           DenseTensor* out) {
+  using T = phi::complex64;
   if (out->numel() == 0) {
     dev_ctx.template Alloc<T>(out);
     return;
@@ -158,22 +161,18 @@ void AddKernel<phi::dtype::complex<float>, XPUContext>(
 
 }  // namespace phi
 
-PD_REGISTER_KERNEL(grad_add,
-                   XPU,
-                   ALL_LAYOUT,
-                   phi::GradAddXPUKernel,
-                   phi::dtype::float16,
-                   float) {}
+PD_REGISTER_KERNEL(
+    grad_add, XPU, ALL_LAYOUT, phi::GradAddXPUKernel, phi::float16, float) {}
 
 PD_REGISTER_KERNEL(add,
                    XPU,
                    ALL_LAYOUT,
                    phi::AddKernel,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
+                   phi::float16,
+                   phi::bfloat16,
 #ifdef PADDLE_WITH_XPU_FFT
-                   phi::dtype::complex<float>,
+                   phi::complex64,
 #endif
                    float,
                    int,

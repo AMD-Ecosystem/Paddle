@@ -30,12 +30,13 @@ limitations under the License. */
 #include <vector>
 
 #include "paddle/phi/backends/context_pool.h"
+
+#ifdef PADDLE_WITH_XPU
+#include "paddle/phi/backends/xpu/xpu_context.h"
+#endif
+
 #include "paddle/phi/backends/cpu/cpu_context.h"
-#include "paddle/phi/common/bfloat16.h"
 #include "paddle/phi/common/data_type.h"
-#include "paddle/phi/common/float16.h"
-#include "paddle/phi/common/float8_e4m3fn.h"
-#include "paddle/phi/common/float8_e5m2.h"
 #include "paddle/phi/kernels/funcs/eigen/common.h"
 #include "paddle/phi/kernels/funcs/math_function_impl.h"
 #include "unsupported/Eigen/CXX11/Tensor"
@@ -46,12 +47,12 @@ limitations under the License. */
 
 namespace phi::funcs {
 
-using float16 = phi::dtype::float16;
+using float16 = phi::float16;
 
-template struct SetConstant<phi::CPUContext, phi::dtype::float8_e4m3fn>;
-template struct SetConstant<phi::CPUContext, phi::dtype::float8_e5m2>;
-template struct SetConstant<phi::CPUContext, phi::dtype::float16>;
-template struct SetConstant<phi::CPUContext, phi::dtype::bfloat16>;
+template struct SetConstant<phi::CPUContext, phi::float8_e4m3fn>;
+template struct SetConstant<phi::CPUContext, phi::float8_e5m2>;
+template struct SetConstant<phi::CPUContext, phi::float16>;
+template struct SetConstant<phi::CPUContext, phi::bfloat16>;
 template struct SetConstant<phi::CPUContext, float>;
 template struct SetConstant<phi::CPUContext, double>;
 template struct SetConstant<phi::CPUContext, int16_t>;
@@ -59,13 +60,16 @@ template struct SetConstant<phi::CPUContext, int>;
 template struct SetConstant<phi::CPUContext, int64_t>;
 template struct SetConstant<phi::CPUContext, bool>;
 template struct SetConstant<phi::CPUContext, uint8_t>;
+template struct SetConstant<phi::CPUContext, uint16_t>;
+template struct SetConstant<phi::CPUContext, uint32_t>;
+template struct SetConstant<phi::CPUContext, uint64_t>;
 template struct SetConstant<phi::CPUContext, int8_t>;
-template struct SetConstant<phi::CPUContext, phi::dtype::complex<float>>;
-template struct SetConstant<phi::CPUContext, phi::dtype::complex<double>>;
+template struct SetConstant<phi::CPUContext, phi::complex64>;
+template struct SetConstant<phi::CPUContext, phi::complex128>;
 
 #ifdef PADDLE_WITH_XPU
-template struct SetConstant<phi::XPUContext, phi::dtype::float16>;
-template struct SetConstant<phi::XPUContext, phi::dtype::bfloat16>;
+template struct SetConstant<phi::XPUContext, phi::float16>;
+template struct SetConstant<phi::XPUContext, phi::bfloat16>;
 template struct SetConstant<phi::XPUContext, float>;
 template struct SetConstant<phi::XPUContext, double>;
 template struct SetConstant<phi::XPUContext, uint8_t>;
@@ -74,31 +78,30 @@ template struct SetConstant<phi::XPUContext, int16_t>;
 template struct SetConstant<phi::XPUContext, int>;
 template struct SetConstant<phi::XPUContext, int64_t>;
 template struct SetConstant<phi::XPUContext, bool>;
-template struct SetConstant<phi::XPUContext, phi::dtype::complex<float>>;
-template struct SetConstant<phi::XPUContext, phi::dtype::complex<double>>;
-#endif
+template struct SetConstant<phi::XPUContext, phi::complex64>;
+template struct SetConstant<phi::XPUContext, phi::complex128>;
+#endif  // PADDLE_WITH_XPU
 
-#define DEFINE_CPU_TRANS(RANK)                                          \
-  template struct PADDLE_API                                            \
-      Transpose<phi::CPUContext, phi::dtype::float16, RANK>;            \
-  template struct PADDLE_API                                            \
-      Transpose<phi::CPUContext, phi::dtype::bfloat16, RANK>;           \
-  template struct PADDLE_API                                            \
-      Transpose<phi::CPUContext, phi::dtype::float8_e4m3fn, RANK>;      \
-  template struct PADDLE_API                                            \
-      Transpose<phi::CPUContext, phi::dtype::float8_e5m2, RANK>;        \
-  template struct PADDLE_API Transpose<phi::CPUContext, float, RANK>;   \
-  template struct PADDLE_API Transpose<phi::CPUContext, double, RANK>;  \
-  template struct PADDLE_API Transpose<phi::CPUContext, int, RANK>;     \
-  template struct PADDLE_API Transpose<phi::CPUContext, int64_t, RANK>; \
-  template struct PADDLE_API Transpose<phi::CPUContext, bool, RANK>;    \
-  template struct PADDLE_API Transpose<phi::CPUContext, int16_t, RANK>; \
-  template struct PADDLE_API Transpose<phi::CPUContext, uint8_t, RANK>; \
-  template struct PADDLE_API Transpose<phi::CPUContext, int8_t, RANK>;  \
-  template struct PADDLE_API                                            \
-      Transpose<phi::CPUContext, phi::dtype::complex<float>, RANK>;     \
-  template struct PADDLE_API                                            \
-      Transpose<phi::CPUContext, phi::dtype::complex<double>, RANK>;
+#define DEFINE_CPU_TRANS(RANK)                                                 \
+  template struct PADDLE_API Transpose<phi::CPUContext, phi::float16, RANK>;   \
+  template struct PADDLE_API Transpose<phi::CPUContext, phi::bfloat16, RANK>;  \
+  template struct PADDLE_API                                                   \
+      Transpose<phi::CPUContext, phi::float8_e4m3fn, RANK>;                    \
+  template struct PADDLE_API                                                   \
+      Transpose<phi::CPUContext, phi::float8_e5m2, RANK>;                      \
+  template struct PADDLE_API Transpose<phi::CPUContext, float, RANK>;          \
+  template struct PADDLE_API Transpose<phi::CPUContext, double, RANK>;         \
+  template struct PADDLE_API Transpose<phi::CPUContext, int, RANK>;            \
+  template struct PADDLE_API Transpose<phi::CPUContext, int64_t, RANK>;        \
+  template struct PADDLE_API Transpose<phi::CPUContext, bool, RANK>;           \
+  template struct PADDLE_API Transpose<phi::CPUContext, int16_t, RANK>;        \
+  template struct PADDLE_API Transpose<phi::CPUContext, uint8_t, RANK>;        \
+  template struct PADDLE_API Transpose<phi::CPUContext, uint16_t, RANK>;       \
+  template struct PADDLE_API Transpose<phi::CPUContext, uint32_t, RANK>;       \
+  template struct PADDLE_API Transpose<phi::CPUContext, uint64_t, RANK>;       \
+  template struct PADDLE_API Transpose<phi::CPUContext, int8_t, RANK>;         \
+  template struct PADDLE_API Transpose<phi::CPUContext, phi::complex64, RANK>; \
+  template struct PADDLE_API Transpose<phi::CPUContext, phi::complex128, RANK>;
 
 DEFINE_CPU_TRANS(1);
 DEFINE_CPU_TRANS(2);
@@ -106,6 +109,22 @@ DEFINE_CPU_TRANS(3);
 DEFINE_CPU_TRANS(4);
 DEFINE_CPU_TRANS(5);
 DEFINE_CPU_TRANS(6);
+
+#ifdef PADDLE_WITH_XPU
+#define DEFINE_XPU_TRANS(RANK)                                          \
+  template struct PADDLE_API Transpose<phi::XPUContext, bool, RANK>;    \
+  template struct PADDLE_API Transpose<phi::XPUContext, float, RANK>;   \
+  template struct PADDLE_API Transpose<phi::XPUContext, int, RANK>;     \
+  template struct PADDLE_API Transpose<phi::XPUContext, int64_t, RANK>; \
+  template struct PADDLE_API Transpose<phi::XPUContext, phi::complex64, RANK>;
+
+DEFINE_XPU_TRANS(1);
+DEFINE_XPU_TRANS(2);
+DEFINE_XPU_TRANS(3);
+DEFINE_XPU_TRANS(4);
+DEFINE_XPU_TRANS(5);
+DEFINE_XPU_TRANS(6);
+#endif  // PADDLE_WITH_XPU
 
 template <typename DeviceContext, typename T>
 void TransposeNormal<DeviceContext, T>::operator()(
@@ -138,10 +157,10 @@ void TransposeNormal<DeviceContext, T>::operator()(
 // define transpose normal
 #define DEFINE_CPU_TRANS_NORMAL(TYPE) \
   template struct TransposeNormal<phi::CPUContext, TYPE>
-DEFINE_CPU_TRANS_NORMAL(phi::dtype::float8_e4m3fn);
-DEFINE_CPU_TRANS_NORMAL(phi::dtype::float8_e5m2);
-DEFINE_CPU_TRANS_NORMAL(phi::dtype::float16);
-DEFINE_CPU_TRANS_NORMAL(phi::dtype::bfloat16);
+DEFINE_CPU_TRANS_NORMAL(phi::float8_e4m3fn);
+DEFINE_CPU_TRANS_NORMAL(phi::float8_e5m2);
+DEFINE_CPU_TRANS_NORMAL(phi::float16);
+DEFINE_CPU_TRANS_NORMAL(phi::bfloat16);
 DEFINE_CPU_TRANS_NORMAL(float);
 DEFINE_CPU_TRANS_NORMAL(double);
 DEFINE_CPU_TRANS_NORMAL(int);
@@ -149,9 +168,22 @@ DEFINE_CPU_TRANS_NORMAL(int64_t);
 DEFINE_CPU_TRANS_NORMAL(bool);
 DEFINE_CPU_TRANS_NORMAL(int16_t);
 DEFINE_CPU_TRANS_NORMAL(uint8_t);
+DEFINE_CPU_TRANS_NORMAL(uint16_t);
+DEFINE_CPU_TRANS_NORMAL(uint32_t);
+DEFINE_CPU_TRANS_NORMAL(uint64_t);
 DEFINE_CPU_TRANS_NORMAL(int8_t);
-DEFINE_CPU_TRANS_NORMAL(phi::dtype::complex<float>);
-DEFINE_CPU_TRANS_NORMAL(phi::dtype::complex<double>);
+DEFINE_CPU_TRANS_NORMAL(phi::complex64);
+DEFINE_CPU_TRANS_NORMAL(phi::complex128);
+
+#ifdef PADDLE_WITH_XPU
+#define DEFINE_XPU_TRANS_NORMAL(TYPE) \
+  template struct TransposeNormal<phi::XPUContext, TYPE>
+DEFINE_XPU_TRANS_NORMAL(bool);
+DEFINE_XPU_TRANS_NORMAL(float);
+DEFINE_XPU_TRANS_NORMAL(int);
+DEFINE_XPU_TRANS_NORMAL(int64_t);
+DEFINE_XPU_TRANS_NORMAL(phi::complex64);
+#endif  // PADDLE_WITH_XPU
 
 struct TensorSetConstantCPU {
   TensorSetConstantCPU(phi::DenseTensor* tensor, float value)

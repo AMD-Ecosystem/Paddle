@@ -94,8 +94,8 @@ void CSoftmaxWithMultiLabelCrossEntropyGradKernel(
   }
   const auto softmax_dims = softmax->dims();
   const int axis = softmax_dims.size() - 1;
-  const int64_t N = phi::funcs::SizeToAxis<int64_t>(axis, softmax_dims);
-  const int64_t D = phi::funcs::SizeFromAxis<int64_t>(axis, softmax_dims);
+  const int64_t N = funcs::SizeToAxis<int64_t>(axis, softmax_dims);
+  const int64_t D = funcs::SizeFromAxis<int64_t>(axis, softmax_dims);
 
   const auto label_dims = labels->dims();
   const int64_t C = label_dims[axis];
@@ -158,4 +158,4 @@ PD_REGISTER_KERNEL(c_softmax_with_multi_label_cross_entropy_grad,
                    phi::CSoftmaxWithMultiLabelCrossEntropyGradKernel,
                    float,
                    double,
-                   phi::dtype::float16) {}
+                   phi::float16) {}

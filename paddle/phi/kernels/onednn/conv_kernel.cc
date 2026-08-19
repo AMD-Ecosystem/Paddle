@@ -133,7 +133,7 @@ KernelKey ConvGetKernelTypeForVar(const GetKernelTypeForVarContext* ctx) {
     auto dl = common::StringToDataLayout(data_format);
     // Some models may have intentionally set "AnyLayout" for conv
     // op. Treat this as NCHW (default data_format value)
-    if (dl != phi::DataLayout::kAnyLayout) {
+    if (dl != phi::DataLayout::ANY) {
       return phi::KernelKey(tensor.place(), dl, expected_kernel_type.dtype());
     }
   }
@@ -148,7 +148,7 @@ PD_REGISTER_KERNEL(conv2d,
                    ONEDNN,
                    phi::ConvKernel,
                    float,
-                   phi::dtype::bfloat16,
+                   phi::bfloat16,
                    uint8_t,
                    int8_t) {
   kernel->get_kerneltype_forvar_fn_ = phi::ConvGetKernelTypeForVar;
@@ -159,7 +159,7 @@ PD_REGISTER_KERNEL(depthwise_conv2d,
                    ONEDNN,
                    phi::DepthwiseConvKernel,
                    float,
-                   phi::dtype::bfloat16,
+                   phi::bfloat16,
                    uint8_t,
                    int8_t) {
   kernel->get_kerneltype_forvar_fn_ = phi::ConvGetKernelTypeForVar;

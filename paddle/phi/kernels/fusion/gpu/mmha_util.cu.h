@@ -59,17 +59,14 @@
 #include <hip/hip_bf16.h>
 #include <hip/hip_fp16.h>
 #include <hip/hip_runtime.h>
-#include <hipcub/hipcub.hpp>
-namespace cub = hipcub;
 #define __nv_bfloat16 __hip_bfloat16
 #define __nv_bfloat162 __hip_bfloat162
 #else
 #include <cuda_fp16.h>
 #include <float.h>
-#include <cub/cub.cuh>
 #endif
-
 #include "paddle/phi/common/datatype_traits.h"
+#include "paddle/phi/kernels/funcs/cub.h"
 #include "paddle/phi/kernels/funcs/math_function.h"
 
 #ifdef PADDLE_WITH_HIP
@@ -96,7 +93,7 @@ struct kernel_dtype_is_same<_Tp, _Tp> : public true_type {};
 
 namespace phi {
 template <>
-class PDDataTypeTraits<phi::dtype::bfloat16> {
+class PDDataTypeTraits<phi::bfloat16> {
  public:
   using DataType = __hip_bfloat16;
 };

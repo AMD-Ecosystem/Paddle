@@ -75,8 +75,7 @@ void FlashAttnUnpaddedBaseKernel(
     std::vector<const DenseTensor*> inputs{};
     std::vector<DenseTensor*> outputs{out};
 
-    phi::funcs::ElementwiseKernel<T>(
-        dev_ctx, inputs, &outputs, ZeroFunctor<T>());
+    funcs::ElementwiseKernel<T>(dev_ctx, inputs, &outputs, ZeroFunctor<T>());
   }
 #ifdef PADDLE_WITH_HIP
   hipStream_t stream = dev_ctx.stream();
@@ -111,6 +110,7 @@ void FlashAttnUnpaddedBaseKernel(
   const int64_t num_heads = dims[1];
   const int64_t head_size = dims[2];
   const int64_t num_heads_k = k.dims()[1];
+  const int64_t total_q = dims[0];
 
   // TODO(umiswing): add shape check
 
@@ -138,7 +138,9 @@ void FlashAttnUnpaddedBaseKernel(
                               nullptr,  // startend_row_indices
                               softmax,
                               softmax_lse,
-                              seed_offset);
+                              seed_offset,
+                              /*_unpadded_lse*/ true,
+                              /*_total_q*/ total_q);
 
   VLOG(10) << "FlashAttn fwd seed: " << params.seed
            << ", offset: " << params.offset;
@@ -184,7 +186,13 @@ void FlashAttnUnpaddedBaseKernel(
       max_seqlen_k * k.strides()[0],
       max_seqlen_k * v.strides()[0],
       max_seqlen_q * out->strides()[0],
-      varlen_padded);
+#ifdef PADDLE_WITH_CUDA
+      varlen_padded,
+      params.total_q
+#else
+      varlen_padded
+#endif
+  );
   CheckFlashAttnStatus(succ);
 #else
   RaiseNotSupportedError();
@@ -378,32 +386,34 @@ void FlashAttnBaseKernel(
   const float softmax_scale = 1.0f / std::sqrt(head_size);
   const float softmax_unscale = std::sqrt(head_size);
 
-  int version =
-      FLAGS_flash_attn_version == 3 && !FLAGS_cudnn_deterministic &&
-              (head_size == 64 || head_size == 128 || head_size == 256)
-          ? FLAGS_flash_attn_version
-          : 2;
-  FlashAttnFwdParamsV2<T> params = FlashAttnFwdParamsV2<T>(dev_ctx,
-                                                           version,
-                                                           batch_size,
-                                                           seqlen_q,
-                                                           seqlen_k,
-                                                           num_heads,
-                                                           num_heads_k,
-                                                           head_size,
-                                                           dropout,
-                                                           softmax_scale,
-                                                           causal,
-                                                           return_softmax,
-                                                           q.dtype(),
-                                                           is_test,
-                                                           rng_name,
-                                                           fixed_seed_offset,
-                                                           attn_mask,
-                                                           startend_row_indices,
-                                                           softmax,
-                                                           softmax_lse,
-                                                           seed_offset);
+  int version = FLAGS_flash_attn_version == 3 && FLAGS_cudnn_deterministic &&
+                        head_size > 128
+                    ? 2
+                    : FLAGS_flash_attn_version;
+  FlashAttnFwdParamsV2<T> params =
+      FlashAttnFwdParamsV2<T>(dev_ctx,
+                              version,
+                              batch_size,
+                              seqlen_q,
+                              seqlen_k,
+                              num_heads,
+                              num_heads_k,
+                              head_size,
+                              dropout,
+                              softmax_scale,
+                              causal,
+                              return_softmax,
+                              q.dtype(),
+                              is_test,
+                              rng_name,
+                              fixed_seed_offset,
+                              attn_mask,
+                              startend_row_indices,
+                              softmax,
+                              softmax_lse,
+                              seed_offset,
+                              /*_unpadded_lse*/ false,
+                              /*_total_q*/ 0);
 
   VLOG(10) << "[FlashAttn Forward" << version << "] q.shape=[" << q.dims()
            << "], k.shape=[" << k.dims() << "], v.shape=[" << v.dims() << "]";
@@ -758,8 +768,8 @@ PD_REGISTER_KERNEL(flash_attn_unpadded,
                    GPU,
                    ALL_LAYOUT,
                    phi::FlashAttnUnpaddedKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(5).SetBackend(
       phi::Backend::ALL_BACKEND);  // fixed_seed_offset
 }
@@ -768,8 +778,8 @@ PD_REGISTER_KERNEL(flash_attn_varlen_qkvpacked,
                    GPU,
                    ALL_LAYOUT,
                    phi::FlashAttnVarlenQKVPackedKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(3).SetBackend(
       phi::Backend::ALL_BACKEND);  // fixed_seed_offset
 }
@@ -778,8 +788,8 @@ PD_REGISTER_KERNEL(flash_attn,
                    GPU,
                    ALL_LAYOUT,
                    phi::FlashAttnKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(3).SetBackend(
       phi::Backend::ALL_BACKEND);  // fixed_seed_offset
 }
@@ -788,8 +798,8 @@ PD_REGISTER_KERNEL(flash_attn_qkvpacked,
                    GPU,
                    ALL_LAYOUT,
                    phi::FlashAttnQKVPackedKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(1).SetBackend(
       phi::Backend::ALL_BACKEND);  // fixed_seed_offset
 }
@@ -798,8 +808,8 @@ PD_REGISTER_KERNEL(flashmask_attention,
                    GPU,
                    ALL_LAYOUT,
                    phi::FlashMaskKernel,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(4).SetBackend(
       phi::Backend::ALL_BACKEND);  // fixed_seed_offset
 }

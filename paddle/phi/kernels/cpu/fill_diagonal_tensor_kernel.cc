@@ -20,7 +20,7 @@
 
 namespace phi {
 
-void CalMatDims(phi::DDim out_dims,
+void CalMatDims(DDim out_dims,
                 int dim1,
                 int dim2,
                 int64_t *offset,
@@ -143,7 +143,7 @@ PD_REGISTER_KERNEL(fill_diagonal_tensor,
                    int16_t,
                    int8_t,
                    uint8_t,
-                   phi::dtype::float16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>,
+                   phi::float16,
+                   phi::complex64,
+                   phi::complex128,
                    bool) {}

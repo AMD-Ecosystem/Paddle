@@ -49,9 +49,8 @@ void ClipByNormKernel(const Context& dev_ctx,
   auto* tmp = &tmp_tensor;
   tmp->Resize({1});
   dev_ctx.template Alloc<float>(tmp);
-  phi::funcs::
-      ReduceKernel<T, float, kps::AddFunctor, kps::SquareFunctor<T, float>>(
-          dev_ctx, *input, tmp, kps::SquareFunctor<T, float>(), reduce_dims);
+  funcs::ReduceKernel<T, float, kps::AddFunctor, kps::SquareFunctor<T, float>>(
+      dev_ctx, *input, tmp, kps::SquareFunctor<T, float>(), reduce_dims);
   auto tmp_eigen = phi::EigenVector<float>::Flatten(*tmp);
   auto x_norm = tmp_eigen.sqrt();
 
@@ -80,5 +79,5 @@ PD_REGISTER_KERNEL(clip_by_norm,
                    ALL_LAYOUT,
                    phi::ClipByNormKernel,
                    float,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}

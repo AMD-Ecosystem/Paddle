@@ -19,7 +19,6 @@
 #include "paddle/common/layout.h"
 #include "paddle/phi/backends/context_pool.h"
 #include "paddle/phi/backends/onednn/onednn_context.h"
-#include "paddle/phi/common/bfloat16.h"
 #include "paddle/phi/common/place.h"
 #include "paddle/phi/core/dense_tensor.h"
 
@@ -123,7 +122,7 @@ void TransDataLayoutFromOneDNN(DataLayout in_layout,
   // As MKL-DNN description was in NCHW and paddle is expecting NHWC
   MatchShapeToLayout(out, in_layout, out_layout);
 
-  out->set_layout(DataLayout::kNCHW);
+  out->set_layout(DataLayout::NCHW);
   VLOG(10) << "out->layout: " << out->layout() << " in->dims: " << in.dims()
            << " out->dims: " << out->dims();
 }

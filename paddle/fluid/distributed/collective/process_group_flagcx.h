@@ -241,19 +241,7 @@ class ProcessGroupFlagcx final : public ProcessGroupWithStream {
   phi::distributed::FlagcxCommContext* GetCommContext(
       const std::string* key = nullptr);
 
-  void EraseTensorHolders() {
-    for (const auto& allocation_stream : allocation_stream_pairs_) {
-      auto holder_ptr = allocation_stream.first.lock();
-      if (holder_ptr) {
-        auto stream = reinterpret_cast<gpuStream_t*>(allocation_stream.second);
-        memory::EraseStream(holder_ptr, *stream);
-      }
-    }
-    VLOG(5) << "After task wait/synchronize, total "
-            << allocation_stream_pairs_.size()
-            << " tensor(s) allocation stream have been removed.";
-    allocation_stream_pairs_.clear();
-  }
+  void EraseTensorHolders();
 
   virtual void StartCoalescing();
 
@@ -274,6 +262,8 @@ class ProcessGroupFlagcx final : public ProcessGroupWithStream {
   std::unordered_map<std::string, phi::GPUContext*> place_to_calc_ctx_;
   std::unordered_map<std::string, std::unique_ptr<phi::GPUContext>>
       place_to_comm_ctx_;
+  std::unordered_map<uintptr_t, flagcxStream_t> stream_map_;
+  std::unordered_map<uintptr_t, flagcxHandlerGroup_t> handler_map_;
 
   uint64_t comm_seq_{0};
   std::unordered_map<std::string, uint64_t> p2p_comm_seq_;
@@ -290,6 +280,7 @@ class ProcessGroupFlagcx final : public ProcessGroupWithStream {
   std::vector<std::pair<std::weak_ptr<phi::Allocation>, gpuStream_t>>
       allocation_stream_pairs_;
   flagcxComm_t flagcx_comm_{nullptr};
+  flagcxHandlerGroup_t flagcx_handler_{nullptr};
   std::string store_key_;
 
   // For coalescing tensors processing (eg. batch_isend_irecv)

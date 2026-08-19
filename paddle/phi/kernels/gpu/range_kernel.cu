@@ -17,8 +17,6 @@
 #include "paddle/common/errors.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/common/amp_type_traits.h"
-#include "paddle/phi/common/bfloat16.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/core/enforce.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/core/tensor_utils.h"
@@ -45,7 +43,7 @@ void RangeTensorKernel(const Context& dev_ctx,
   MPType end_value = static_cast<MPType>(GetValue<T, Context>(dev_ctx, end));
   MPType step_value = static_cast<MPType>(GetValue<T, Context>(dev_ctx, step));
   if (step_value == static_cast<MPType>(0)) {
-    PADDLE_THROW(phi::errors::InvalidArgument("step must be nonzero."));
+    PADDLE_THROW(common::errors::InvalidArgument("step must be nonzero."));
   }
   int64_t size =
       static_cast<int64_t>(((end_value - start_value) / step_value) + 1);
@@ -74,17 +72,17 @@ void RangeNullaryKernel(const Context& dev_ctx,
   MPType step_value_mpt = static_cast<MPType>(step_value);
   if constexpr (std::is_same_v<T, float>) {
     if (std::isnan(static_cast<float>(end_value))) {
-      PADDLE_THROW(phi::errors::InvalidArgument(
+      PADDLE_THROW(common::errors::InvalidArgument(
           "The end value of range cannot be NaN. Please check your input."));
     }
   } else if constexpr (std::is_same_v<T, double>) {
     if (std::isnan(static_cast<double>(end_value))) {
-      PADDLE_THROW(phi::errors::InvalidArgument(
+      PADDLE_THROW(common::errors::InvalidArgument(
           "The end value of range cannot be NaN. Please check your input."));
     }
   }
   if (step_value == static_cast<T>(0)) {
-    PADDLE_THROW(phi::errors::InvalidArgument("step must be nonzero."));
+    PADDLE_THROW(common::errors::InvalidArgument("step must be nonzero."));
   }
   int64_t size = static_cast<int64_t>(
       ((end_value_mpt - start_value_mpt) / step_value_mpt) + 1);
@@ -115,17 +113,17 @@ void RangeKernel(const Context& dev_ctx,
   T step_value = step.to<T>();
   if constexpr (std::is_same_v<T, float>) {
     if (std::isnan(end_value)) {
-      PADDLE_THROW(phi::errors::InvalidArgument(
+      PADDLE_THROW(common::errors::InvalidArgument(
           "The end value of range cannot be NaN. Please check your input."));
     }
   } else if constexpr (std::is_same_v<T, double>) {
     if (std::isnan(end_value)) {
-      PADDLE_THROW(phi::errors::InvalidArgument(
+      PADDLE_THROW(common::errors::InvalidArgument(
           "The end value of range cannot be NaN. Please check your input."));
     }
   }
   if (step_value == static_cast<T>(0)) {
-    PADDLE_THROW(phi::errors::InvalidArgument("step must be nonzero."));
+    PADDLE_THROW(common::errors::InvalidArgument("step must be nonzero."));
   }
   RangeNullaryKernel<T, Context>(
       dev_ctx, start_value, end_value, step_value, out);
@@ -144,8 +142,8 @@ PD_REGISTER_KERNEL(range_tensor,
                    double,
                    int64_t,
                    int,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->InputAt(0).SetBackend(phi::Backend::ALL_BACKEND);
   kernel->InputAt(1).SetBackend(phi::Backend::ALL_BACKEND);
   kernel->InputAt(2).SetBackend(phi::Backend::ALL_BACKEND);
@@ -159,5 +157,5 @@ PD_REGISTER_KERNEL(range,
                    double,
                    int64_t,
                    int,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}

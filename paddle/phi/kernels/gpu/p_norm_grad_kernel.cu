@@ -91,7 +91,7 @@ void PNormGradKernel(const Context& dev_ctx,
   const std::vector<int> dims = {axis};
 
   if (porder == 0) {
-    phi::funcs::SetConstant<Context, T> set_zero;
+    funcs::SetConstant<Context, T> set_zero;
     set_zero(dev_ctx, out_dx, static_cast<T>(0));
   } else if (porder == INFINITY || porder == -INFINITY) {
     std::vector<int64_t> dims_for_amax;
@@ -137,5 +137,5 @@ PD_REGISTER_KERNEL(p_norm_grad,
                    phi::PNormGradKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}

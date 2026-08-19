@@ -17,7 +17,6 @@
 #include <Eigen/Dense>
 
 #include "paddle/phi/backends/cpu/cpu_context.h"
-#include "paddle/phi/common/complex.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/diagonal_kernel.h"
 #include "paddle/phi/kernels/fill_diagonal_tensor_kernel.h"
@@ -206,7 +205,7 @@ void QrKernel(const Context& dev_ctx,
               DenseTensor* r) {
   bool compute_q = false;
   bool reduced_mode = false;
-  std::tie(compute_q, reduced_mode) = phi::funcs::ParseQrMode(mode);
+  std::tie(compute_q, reduced_mode) = funcs::ParseQrMode(mode);
   if (x.numel() == 0) {
     if (q->numel() == 0) {
       q->Resize(q->dims());
@@ -229,5 +228,5 @@ PD_REGISTER_KERNEL(qr,
                    phi::QrKernel,
                    float,
                    double,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::complex64,
+                   phi::complex128) {}

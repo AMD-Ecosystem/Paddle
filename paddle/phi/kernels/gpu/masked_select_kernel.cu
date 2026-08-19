@@ -84,7 +84,7 @@ void MaskedSelectKernel(const Context& dev_ctx,
                         mask_dim));
 
   using Functor = MaskedSelectFunctor<bool, T, T>;
-  phi::funcs::SelectKernel<bool, T, T, 1, Functor>(
+  funcs::SelectKernel<bool, T, T, 1, Functor>(
       dev_ctx, mask_expand, x_expand, out, Functor());
 }
 
@@ -102,9 +102,9 @@ PD_REGISTER_KERNEL(masked_select,
                    int64_t,
                    int16_t,
                    uint8_t,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {
+                   phi::float16,
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {
   kernel->InputAt(1).SetDataType(phi::DataType::BOOL);
 }

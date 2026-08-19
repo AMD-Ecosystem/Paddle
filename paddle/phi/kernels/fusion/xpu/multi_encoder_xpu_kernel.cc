@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include "paddle/phi/backends/xpu/enforce_xpu.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/assign_kernel.h"
 #include "paddle/phi/kernels/xpu/xpu_api_wrapper.h"
@@ -72,8 +71,12 @@ void MultiEncoderXPUKernel(
   const int* max_seq_len_data = max_seq_len.get_ptr() == nullptr
                                     ? nullptr
                                     : max_seq_len.get_ptr()->data<int>();
-  int batch_size = x.dims()[0];
-  int seq_len = 1;
+  int64_t batch_size = x.dims()[0];
+
+  // TODO(large-tensor): XPU multi_encoder API not support int64
+  PADDLE_ENFORCE_LE_INT_MAX(batch_size, "batch_size");
+
+  int64_t seq_len = 1;
   int head_dim;
   if (x.dims().size() == 2) {
     head_dim = x.dims()[1];
@@ -103,19 +106,18 @@ void MultiEncoderXPUKernel(
   XPUTypeFP16* out_fp16_data = nullptr;
   if (x_dtype == phi::DataType::FLOAT32) {
     auto* x_fp16_data_t = reinterpret_cast<XPUTypeFP16*>(
-        dev_ctx.template Alloc<phi::dtype::float16>(x_fp16));
+        dev_ctx.template Alloc<phi::float16>(x_fp16));
     int r_cast_x = xpu::cast<float, XPUTypeFP16>(
         dev_ctx.x_context(), x.data<float>(), x_fp16_data_t, x.numel());
     PADDLE_ENFORCE_XDNN_SUCCESS(r_cast_x,
                                 "multi_encoder_xpu(cast x from fp32 to fp16)");
     x_fp16_data = x_fp16_data_t;
     out_fp16_data = reinterpret_cast<XPUTypeFP16*>(
-        dev_ctx.template Alloc<phi::dtype::float16>(out_fp16));
+        dev_ctx.template Alloc<phi::float16>(out_fp16));
   } else {
-    x_fp16_data =
-        reinterpret_cast<const XPUTypeFP16*>(x.data<phi::dtype::float16>());
+    x_fp16_data = reinterpret_cast<const XPUTypeFP16*>(x.data<phi::float16>());
     out_fp16_data = reinterpret_cast<XPUTypeFP16*>(
-        dev_ctx.template Alloc<phi::dtype::float16>(out));
+        dev_ctx.template Alloc<phi::float16>(out));
   }
 
   // q,k,v weight are fused.
@@ -176,7 +178,11 @@ void MultiEncoderXPUKernel(
 
   xpu::Activation_t qkv_act(static_cast<xpu::Activation_t::act_enum>(act_type));
 
-  int batch = x.dims()[0];
+  int64_t batch = x.dims()[0];
+
+  // TODO(large-tensor): XPU multi_encoder QKVAttnParam not support int64
+  PADDLE_ENFORCE_LE_INT_MAX(batch, "batch");
+
   // matmul_size * layer_num
   if (seq_lod_data) {
     xpu::VectorParam<int> query_lod = {
@@ -199,8 +205,8 @@ void MultiEncoderXPUKernel(
       qkv_attn_param.is_smooth_quant = true;
       std::vector<const XPUTypeFP16*> smooth_scale_weight_ptr;
       for (const auto& weight : smooth_scale_weight) {
-        auto tmp_ptr = reinterpret_cast<const XPUTypeFP16*>(
-            weight->data<phi::dtype::float16>());
+        auto tmp_ptr =
+            reinterpret_cast<const XPUTypeFP16*>(weight->data<phi::float16>());
         smooth_scale_weight_ptr.push_back(tmp_ptr);
       }
       qkv_attn_param.smooth_scale.assign(smooth_scale_weight_ptr.begin(),
@@ -231,9 +237,13 @@ void MultiEncoderXPUKernel(
     auto mask_dims = mask.get_ptr()->dims();
     std::vector<int> mask_shape(mask_dims.Get(),
                                 mask_dims.Get() + mask_dims.size());
-    int max_seq_len_value = x.dims()[1];
-    xpu::QKVAttnParam qkv_attn_param(batch,
-                                     max_seq_len_value,
+    int64_t max_seq_len_value = x.dims()[1];
+
+    // TODO(large-tensor): XPU QKVAttnParam not support int64
+    PADDLE_ENFORCE_LE_INT_MAX(max_seq_len_value, "max_seq_len_value");
+
+    xpu::QKVAttnParam qkv_attn_param(static_cast<int>(batch),
+                                     static_cast<int>(max_seq_len_value),
                                      head_num,
                                      size_per_head,
                                      mask_shape,
@@ -250,8 +260,8 @@ void MultiEncoderXPUKernel(
       qkv_attn_param.is_smooth_quant = true;
       std::vector<const XPUTypeFP16*> smooth_scale_weight_ptr;
       for (const auto& weight : smooth_scale_weight) {
-        auto tmp_ptr = reinterpret_cast<const XPUTypeFP16*>(
-            weight->data<phi::dtype::float16>());
+        auto tmp_ptr =
+            reinterpret_cast<const XPUTypeFP16*>(weight->data<phi::float16>());
         smooth_scale_weight_ptr.push_back(tmp_ptr);
       }
       qkv_attn_param.smooth_scale.assign(smooth_scale_weight_ptr.begin(),
@@ -277,10 +287,15 @@ void MultiEncoderXPUKernel(
     }
   } else {
     // When no mask input, like VIT, create LOD to act as vsl.
-    int max_seq_len_value = x.dims()[1];
+    int64_t max_seq_len_value = x.dims()[1];
+
+    // TODO(large-tensor): XPU QKVAttnParam not support int64
+    PADDLE_ENFORCE_LE_INT_MAX(max_seq_len_value * batch,
+                              "max_seq_len_value*batch");
+
     std::vector<int> lod;
-    for (int i = 0; i < batch + 1; i++) {
-      lod.push_back(i * max_seq_len_value);
+    for (int64_t i = 0; i < batch + 1; i++) {
+      lod.push_back(static_cast<int>(i * max_seq_len_value));
     }
     xpu::VectorParam<int> query_lod = {
         lod.data(), static_cast<int>(lod.size()), nullptr};
@@ -302,8 +317,8 @@ void MultiEncoderXPUKernel(
       qkv_attn_param.is_smooth_quant = true;
       std::vector<const XPUTypeFP16*> smooth_scale_weight_ptr;
       for (const auto& weight : smooth_scale_weight) {
-        auto tmp_ptr = reinterpret_cast<const XPUTypeFP16*>(
-            weight->data<phi::dtype::float16>());
+        auto tmp_ptr =
+            reinterpret_cast<const XPUTypeFP16*>(weight->data<phi::float16>());
         smooth_scale_weight_ptr.push_back(tmp_ptr);
       }
       qkv_attn_param.smooth_scale.assign(smooth_scale_weight_ptr.begin(),
@@ -348,7 +363,7 @@ PD_REGISTER_KERNEL(multi_encoder_xpu,
                    ALL_LAYOUT,
                    phi::fusion::MultiEncoderXPUKernel,
                    float,
-                   phi::dtype::float16) {
+                   phi::float16) {
   kernel->InputAt(10).SetBackend(phi::Backend::CPU);
   kernel->InputAt(11).SetBackend(phi::Backend::CPU);
 }

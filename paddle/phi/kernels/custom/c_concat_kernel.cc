@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "paddle/phi/kernels/c_concat_kernel.h"
 #include "paddle/phi/api/backward/backward_api.h"
 #include "paddle/phi/api/include/api.h"
 #include "paddle/phi/backends/all_context.h"
@@ -30,7 +31,7 @@ void CConcatKernel(const Context& dev_ctx,
                    int rank,
                    int nranks,
                    int ring_id UNUSED,
-                   bool use_calc_stream UNUSED,
+                   bool use_calc_stream,
                    bool use_model_parallel UNUSED,
                    DenseTensor* out) {
   auto x = &x_in;
@@ -71,7 +72,7 @@ void CConcatKernel(const Context& dev_ctx,
     std::vector<phi::DenseTensor> out_tensor;
     in_tensor.push_back(*x);
     out_tensor.push_back(temp_out);
-    auto task = pg->AllGather(in_tensor, out_tensor);
+    auto task = pg->AllGather(in_tensor, out_tensor, use_calc_stream, false);
     task->Wait();
   } else {
     auto comm = reinterpret_cast<phi::distributed::XCCLCommContext*>(
@@ -86,8 +87,14 @@ void CConcatKernel(const Context& dev_ctx,
     int64_t send_numel = x->numel();
     const T* send_buff = x->data<T>();
     T* recv_buff = temp_out.data<T>();
-    // should ExecutionContext for calc stream.
-    auto& stream = *dev_ctx.GetStream();
+
+    std::shared_ptr<phi::stream::Stream> stream;
+    if (use_calc_stream) {
+      stream = dev_ctx.GetStream();
+    } else {
+      stream = comm->GetStream();
+    }
+
     phi::DeviceManager::CCLAllGather(
         place.GetDeviceType(),
         reinterpret_cast<void*>(const_cast<T*>(send_buff)),
@@ -95,7 +102,7 @@ void CConcatKernel(const Context& dev_ctx,
         send_numel,
         x->dtype(),
         comm->GetXcclComm(),
-        stream.raw_stream());
+        stream->raw_stream());
   }
   std::vector<phi::DenseTensor> inputs;
   int axis = x->dims().size() - 1;
@@ -126,6 +133,6 @@ PD_REGISTER_KERNEL(c_concat,
                    ALL_LAYOUT,
                    phi::CConcatKernel,
                    float,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}
 #endif

@@ -15,7 +15,6 @@
 #include "paddle/phi/kernels/scatter_grad_kernel.h"
 
 #include "paddle/phi/backends/gpu/gpu_context.h"
-#include "paddle/phi/common/bfloat16.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/core/tensor_utils.h"
 #include "paddle/phi/kernels/full_kernel.h"
@@ -60,9 +59,9 @@ void ScatterGradKernel(const Context &dev_ctx,
   if (x_grad) {
     phi::Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, x_grad);
     if (index_type == phi::DataType::INT32) {
-      phi::funcs::GPUScatterGradForX<T, int32_t>(dev_ctx, index, x_grad);
+      funcs::GPUScatterGradForX<T, int32_t>(dev_ctx, index, x_grad);
     } else {
-      phi::funcs::GPUScatterGradForX<T, int64_t>(dev_ctx, index, x_grad);
+      funcs::GPUScatterGradForX<T, int64_t>(dev_ctx, index, x_grad);
     }
   }
 
@@ -70,9 +69,9 @@ void ScatterGradKernel(const Context &dev_ctx,
     dev_ctx.template Alloc<T>(updates_grad);
     // Gradient by Gather: dUpdates = dO[Ids]
     if (index_type == phi::DataType::INT32) {
-      phi::funcs::GPUGather<T, int32_t>(dev_ctx, out_grad, index, updates_grad);
+      funcs::GPUGather<T, int32_t>(dev_ctx, out_grad, index, updates_grad);
     } else {
-      phi::funcs::GPUGather<T, int64_t>(dev_ctx, out_grad, index, updates_grad);
+      funcs::GPUGather<T, int64_t>(dev_ctx, out_grad, index, updates_grad);
     }
   }
 }
@@ -87,5 +86,5 @@ PD_REGISTER_KERNEL(scatter_grad,
                    double,
                    int,
                    int64_t,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}

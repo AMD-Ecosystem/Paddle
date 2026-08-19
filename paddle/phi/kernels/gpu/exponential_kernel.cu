@@ -26,9 +26,9 @@ void ExponentialKernel(const Context &dev_ctx,
                        float lambda,
                        DenseTensor *out) {
   using MT = typename phi::dtype::MPTypeTrait<T>::Type;
-  phi::funcs::uniform_distribution<MT> dist;
-  phi::funcs::exponential_transform<MT> trans(lambda);
-  phi::funcs::distribution_and_transform<T>(dev_ctx, out, dist, trans);
+  funcs::uniform_distribution<MT> dist;
+  funcs::exponential_transform<MT> trans(lambda);
+  funcs::distribution_and_transform<T>(dev_ctx, out, dist, trans);
 }
 
 }  // namespace phi
@@ -39,5 +39,5 @@ PD_REGISTER_KERNEL(exponential,
                    phi::ExponentialKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}

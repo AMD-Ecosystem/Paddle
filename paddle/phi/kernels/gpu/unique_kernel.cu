@@ -25,17 +25,11 @@
 
 #include <iostream>
 #include <vector>
-
-#ifdef PADDLE_WITH_CUDA
-#include "cub/cub.cuh"
-#else
-#include <hipcub/hipcub.hpp>
-namespace cub = hipcub;
-#endif
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/common/memory_utils.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/core/tensor_utils.h"
+#include "paddle/phi/kernels/funcs/cub.h"
 #include "paddle/phi/kernels/funcs/unique_functor.h"
 #include "paddle/phi/kernels/index_select_kernel.h"
 
@@ -108,9 +102,8 @@ struct BinaryNotEqual {
 
 // The core logic of computing Unique for a flattened DenseTensor
 template <typename Context, typename InT, typename IndexT>
-static typename std::enable_if<
-    !std::is_same<InT, phi::dtype::float16>::value &&
-    !std::is_same<InT, phi::dtype::bfloat16>::value>::type
+static typename std::enable_if<!std::is_same<InT, phi::float16>::value &&
+                               !std::is_same<InT, phi::bfloat16>::value>::type
 UniqueFlattenedCUDATensor(const Context& dev_ctx,
                           const DenseTensor& in,
                           DenseTensor* out,
@@ -244,9 +237,8 @@ UniqueFlattenedCUDATensor(const Context& dev_ctx,
 
 // The core logic of computing Unique for a flattened DenseTensor
 template <typename Context, typename InT, typename IndexT>
-static typename std::enable_if<
-    std::is_same<InT, phi::dtype::float16>::value ||
-    std::is_same<InT, phi::dtype::bfloat16>::value>::type
+static typename std::enable_if<std::is_same<InT, phi::float16>::value ||
+                               std::is_same<InT, phi::bfloat16>::value>::type
 UniqueFlattenedCUDATensor(const Context& dev_ctx,
                           const DenseTensor& in,
                           DenseTensor* out,
@@ -448,12 +440,11 @@ static void UniqueDimsCUDATensor(const Context& dev_ctx,
     in_trans_dims = common::make_ddim(in_trans_dims_vec);
     in_trans.Resize(in_trans_dims);
     dev_ctx.template Alloc<InT>(&in_trans);
-    phi::funcs::TransCompute<Context, InT>(
-        in.dims().size(),  // num of dims
-        dev_ctx,           // device
-        in,                // original DenseTensor
-        &in_trans,         // DenseTensor after reshape
-        permute);          // index of axis
+    funcs::TransCompute<Context, InT>(in.dims().size(),  // num of dims
+                                      dev_ctx,           // device
+                                      in,                // original DenseTensor
+                                      &in_trans,  // DenseTensor after reshape
+                                      permute);   // index of axis
   } else {
     in_trans.ShareDataWith(in);
   }
@@ -516,7 +507,7 @@ static void UniqueDimsCUDATensor(const Context& dev_ctx,
     std::swap(out_trans_dims_vec[0], out_trans_dims_vec[axis]);
     out->Resize(common::make_ddim(out_trans_dims_vec));
     dev_ctx.template Alloc<InT>(out);
-    phi::funcs::TransCompute<Context, InT>(
+    funcs::TransCompute<Context, InT>(
         out_trans.dims().size(), dev_ctx, out_trans, out, permute);
   } else {
     out->Resize(common::make_ddim(out_trans_dims_vec));
@@ -712,8 +703,8 @@ PD_REGISTER_KERNEL(unique,
                    phi::UniqueKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
+                   phi::float16,
+                   phi::bfloat16,
                    int64_t,
                    int) {
   kernel->OutputAt(1).SetDataType(phi::DataType::UNDEFINED);
@@ -727,8 +718,8 @@ PD_REGISTER_KERNEL(unique_raw,
                    phi::UniqueRawKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
+                   phi::float16,
+                   phi::bfloat16,
                    int64_t,
                    int) {
   kernel->OutputAt(1).SetDataType(phi::DataType::UNDEFINED);

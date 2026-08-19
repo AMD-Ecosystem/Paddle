@@ -24,7 +24,7 @@ paddle::Tensor dtensor_to_local_ad_function(
     const paddle::Tensor& input,
     const phi::distributed::ProcessMesh& process_mesh,
     const phi::distributed::Placements& placements,
-    paddle::optional<paddle::Tensor*> input_out) {
+    paddle::optional<paddle::Tensor*> predefined_out) {
 #ifdef PADDLE_WITH_DISTRIBUTE
   VLOG(3) << "Running AD API: "
           << "dtensor_to_local dygraph";
@@ -48,6 +48,9 @@ paddle::Tensor dtensor_to_local_ad_function(
   // Get Input AutoGradMeta
   egr::AutogradMeta* input_autograd_meta =
       egr::EagerUtils::nullable_autograd_meta(input);
+  // Check LeafTensor if its GradNodeAccumulation TensorMeta is consistent with
+  // its TensorMeta
+  egr::CheckGradNodeAccumulation(input);
   bool trace_backward = egr::Controller::Instance().HasGrad();
   bool require_any_grad =
       egr::EagerUtils::ComputeRequireGrad(trace_backward, input_autograd_meta);

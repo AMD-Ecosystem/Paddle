@@ -14,7 +14,6 @@
 
 #include "glog/logging.h"
 #include "paddle/phi/backends/xpu/enforce_xpu.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/xpu/xpu_api_wrapper.h"
 
@@ -67,15 +66,23 @@ void CrossAttentionXPUKernelImpl(
     fc_bias_data.emplace_back(fc_bias[i]->data<float>());
   }
 
-  int batch = input_q.dims()[0];
-  int max_q_len = input_q.dims()[1];
-  int max_kv_len = input_kv.dims()[1];
-  int max_seq_len = std::max(max_q_len, max_kv_len);
+  int64_t batch = input_q.dims()[0];
+  int64_t max_q_len = input_q.dims()[1];
+  int64_t max_kv_len = input_kv.dims()[1];
+
+  int64_t max_seq_len = std::max(max_q_len, max_kv_len);
   int qkv_shape = 0;  // B x L x H x D
   int hidden_dim = head_num * head_dim;
-  int q_mul_m = batch * max_q_len;
-  int kv_mul_m = batch * max_kv_len;
-  int loop_m[3] = {q_mul_m, kv_mul_m, kv_mul_m};
+  int64_t q_mul_m = batch * max_q_len;
+  int64_t kv_mul_m = batch * max_kv_len;
+
+  // NOTE(large-tensor): XPU fc_fusion API not support int64
+  PADDLE_ENFORCE_LE_INT_MAX(q_mul_m, "q_mul_m");
+  PADDLE_ENFORCE_LE_INT_MAX(kv_mul_m, "kv_mul_m");
+
+  int loop_m[3] = {static_cast<int>(q_mul_m),
+                   static_cast<int>(kv_mul_m),
+                   static_cast<int>(kv_mul_m)};
   int n = hidden_dim;
   int k = hidden_dim;
   bool do_fc_qkv_fusion = false;
@@ -214,14 +221,13 @@ void CrossAttentionXPUKernel(
       input_kv.dtype() == DataType::FLOAT16 && qkv_dtype == DataType::FLOAT16) {
     // float16 kernel
     CROSS_ATTENTION_XPU_KERNEL_IMPL(
-        phi::dtype::float16, int16_t, phi::dtype::float16, int16_t);
+        phi::float16, int16_t, phi::float16, int16_t);
     return;
   }
   if (input_q.dtype() == DataType::FLOAT32 &&
       input_kv.dtype() == DataType::FLOAT32 && qkv_dtype == DataType::FLOAT32) {
     // float32 kernel
-    CROSS_ATTENTION_XPU_KERNEL_IMPL(
-        float, int16_t, phi::dtype::float16, int16_t);
+    CROSS_ATTENTION_XPU_KERNEL_IMPL(float, int16_t, phi::float16, int16_t);
     return;
   }
   PADDLE_THROW(common::errors::Unimplemented(
@@ -240,4 +246,4 @@ PD_REGISTER_KERNEL(cross_attention_xpu,
                    ALL_LAYOUT,
                    phi::fusion::CrossAttentionXPUKernel,
                    float,
-                   phi::dtype::float16) {}
+                   phi::float16) {}

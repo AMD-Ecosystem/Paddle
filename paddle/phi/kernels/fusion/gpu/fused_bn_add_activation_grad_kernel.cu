@@ -72,7 +72,7 @@ void FusedBatchNormAddActGradKernel(const Context &dev_ctx,
   const auto &in_dims = x_ptr->dims();
 
   int N, C, H, W, D;
-  const DataLayout data_layout = DataLayout::kNHWC;
+  const DataLayout data_layout = DataLayout::NHWC;
   phi::funcs::ExtractNCWHD(in_dims, data_layout, &N, &C, &H, &W, &D);
 
   // init output
@@ -214,7 +214,7 @@ PD_REGISTER_KERNEL(fused_bn_add_activation_grad,
                    GPU,
                    ALL_LAYOUT,
                    phi::fusion::FusedBatchNormAddActGradKernel,
-                   phi::dtype::float16) {
+                   phi::float16) {
   kernel->OutputAt(2).SetDataType(phi::DataType::FLOAT32);
   kernel->OutputAt(3).SetDataType(phi::DataType::FLOAT32);
 }

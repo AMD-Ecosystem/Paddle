@@ -28,8 +28,6 @@
 #endif
 
 #include "paddle/phi/backends/gpu/cuda/cudnn_workspace_helper.h"
-#include "paddle/phi/common/bfloat16.h"
-#include "paddle/phi/common/float16.h"
 #include "paddle/phi/kernels/cpu/conv_util.h"
 #include "paddle/phi/kernels/full_kernel.h"
 #include "paddle/phi/kernels/funcs/batch_norm_utils.h"
@@ -43,7 +41,6 @@
 #endif
 
 namespace phi {
-
 template <typename T, typename Context>
 void ConvCudnnGradKernelImplV7(
     const DenseTensor* transformed_input,
@@ -55,8 +52,8 @@ void ConvCudnnGradKernelImplV7(
     const std::vector<int>& strides,
     const std::vector<int>& padding_common,
     const std::vector<int>& dilations,
-    phi::backends::gpu::DataLayout compute_format,
-    phi::backends::gpu::DataLayout layout,
+    DataLayout compute_format,
+    DataLayout layout,
     bool use_addto,
     bool exhaustive_search,
     bool deterministic,
@@ -99,16 +96,16 @@ void ConvCudnnGradKernelImplV7(
 
   int i_n, i_c, i_d, i_h, i_w;
   int o_n, o_c, o_d, o_h, o_w;
-  if (compute_format == phi::backends::gpu::DataLayout::kNHWC) {
+  if (compute_format == DataLayout::NHWC) {
     GetNCDHW(transformed_input->dims(),
-             phi::backends::gpu::DataLayout::kNHWC,
+             DataLayout::NHWC,
              &i_n,
              &i_c,
              &i_d,
              &i_h,
              &i_w);
     GetNCDHW(transformed_output_grad_channel->dims(),
-             phi::backends::gpu::DataLayout::kNHWC,
+             DataLayout::NHWC,
              &o_n,
              &o_c,
              &o_d,
@@ -116,14 +113,14 @@ void ConvCudnnGradKernelImplV7(
              &o_w);
   } else {
     GetNCDHW(transformed_input->dims(),
-             phi::backends::gpu::DataLayout::kNCHW,
+             DataLayout::NCHW,
              &i_n,
              &i_c,
              &i_d,
              &i_h,
              &i_w);
     GetNCDHW(transformed_output_grad_channel->dims(),
-             phi::backends::gpu::DataLayout::kNCHW,
+             DataLayout::NCHW,
              &o_n,
              &o_c,
              &o_d,
@@ -147,7 +144,7 @@ void ConvCudnnGradKernelImplV7(
   int iwo_groups = groups;
   int c_groups = 1;
 
-#if defined(PADDLE_WITH_HIP) || CUDNN_VERSION_MIN(7, 0, 1)
+#if defined(PADDLE_WITH_HIP) || defined(PADDLE_WITH_CUDA)
   iwo_groups = 1;
   c_groups = groups;
   groups = 1;
@@ -350,7 +347,7 @@ void ConvCudnnGradKernelImplV8(
     const std::vector<int>& strides,
     const std::vector<int>& padding_common,
     const std::vector<int>& dilations,
-    phi::backends::gpu::DataLayout layout,
+    DataLayout layout,
     bool use_addto,
     bool exhaustive_search,
     bool deterministic,
@@ -468,7 +465,7 @@ void ConvCudnnGradKernel(const Context& dev_ctx,
 
 #ifdef PADDLE_WITH_HIP
   // HIP MIOPEN ONLY SUPPORT NCHW format
-  auto compute_format = phi::backends::gpu::DataLayout::kNCHW;
+  auto compute_format = DataLayout::NCHW;
 #else
 #if CUDNN_VERSION_MIN(8, 1, 0)
   const bool compute_in_nhwc =
@@ -478,14 +475,12 @@ void ConvCudnnGradKernel(const Context& dev_ctx,
   const bool compute_in_nhwc =
       dtype == CUDNN_DATA_HALF && IsVoltaOrLater(dev_ctx);
 #endif
-  auto compute_format = compute_in_nhwc && channel_last
-                            ? phi::backends::gpu::DataLayout::kNHWC
-                            : phi::backends::gpu::DataLayout::kNCHW;
+  auto compute_format =
+      compute_in_nhwc && channel_last ? DataLayout::NHWC : DataLayout::NCHW;
 #endif
   VLOG(3) << "Compute ConvGradOp with cuDNN:"
           << " data_format=" << data_format << " compute_format="
-          << (compute_format == phi::backends::gpu::DataLayout::kNHWC ? "NHWC"
-                                                                      : "NCHW");
+          << (compute_format == DataLayout::NHWC ? "NHWC" : "NCHW");
 
   // transform Tensor
   DenseTensor transformed_input_channel(input.type());
@@ -494,7 +489,7 @@ void ConvCudnnGradKernel(const Context& dev_ctx,
   DenseTensor transformed_filter_channel(filter.type());
   DenseTensor transformed_filter_grad_channel(filter.type());
 
-  if (channel_last && compute_format == phi::backends::gpu::DataLayout::kNCHW) {
+  if (channel_last && compute_format == DataLayout::NCHW) {
     VLOG(3) << "Transform input, output_grad, input_grad and tensor from "
                "NHWC to NCHW.";
     ResizeToChannelFirst<Context, T>(
@@ -525,7 +520,7 @@ void ConvCudnnGradKernel(const Context& dev_ctx,
     }
   }
 
-  if (compute_format == phi::backends::gpu::DataLayout::kNHWC) {
+  if (compute_format == DataLayout::NHWC) {
     VLOG(3) << "Transform filter and filter_grad tensor from NCHW to NHWC.";
     ResizeToChannelLast<Context, T>(
         dev_ctx, &filter, &transformed_filter_channel);
@@ -548,7 +543,7 @@ void ConvCudnnGradKernel(const Context& dev_ctx,
   auto filter_dims = transformed_filter_channel.dims();
   DDim in_data_dims;
   DDim filter_data_dims;
-  if (compute_format == phi::backends::gpu::DataLayout::kNCHW) {
+  if (compute_format == DataLayout::NCHW) {
     in_data_dims = slice_ddim(in_dims, 2, in_dims.size());
     filter_data_dims = slice_ddim(filter_dims, 2, filter_dims.size());
   } else {
@@ -573,7 +568,7 @@ void ConvCudnnGradKernel(const Context& dev_ctx,
     std::vector<int> padding_diff(data_dim);
     std::vector<int> new_input_shape_vec(data_dim + 2);
     new_input_shape_vec[0] = transformed_input_channel.dims()[0];
-    if (compute_format == phi::backends::gpu::DataLayout::kNCHW) {
+    if (compute_format == DataLayout::NCHW) {
       new_input_shape_vec[1] = transformed_input_channel.dims()[1];
     } else {
       new_input_shape_vec[data_dim + 1] =
@@ -583,14 +578,14 @@ void ConvCudnnGradKernel(const Context& dev_ctx,
     for (size_t i = 0; i < data_dim; ++i) {
       padding_diff[i] = std::abs(paddings[2 * i] - paddings[2 * i + 1]);
       padding_common[i] = std::min(paddings[2 * i], paddings[2 * i + 1]);
-      if (compute_format == phi::backends::gpu::DataLayout::kNCHW) {
+      if (compute_format == DataLayout::NCHW) {
         new_input_shape_vec[i + 2] =
             transformed_input_channel.dims()[i + 2] + padding_diff[i];
       } else {
         new_input_shape_vec[i + 1] =
             transformed_input_channel.dims()[i + 1] + padding_diff[i];
       }
-      if (compute_format == phi::backends::gpu::DataLayout::kNCHW) {
+      if (compute_format == DataLayout::NCHW) {
         input_pad[2 * i + 4] = paddings[2 * i] - padding_common[i];
         input_pad[2 * i + 4 + 1] = paddings[2 * i + 1] - padding_common[i];
       } else {
@@ -644,14 +639,11 @@ void ConvCudnnGradKernel(const Context& dev_ctx,
       }
     }
   }
-  phi::backends::gpu::DataLayout layout =
-      compute_format == phi::backends::gpu::DataLayout::kNHWC
-          ? phi::backends::gpu::DataLayout::kNHWC
-          : phi::backends::gpu::DataLayout::kNCHW;
+  DataLayout layout =
+      compute_format == DataLayout::NHWC ? DataLayout::NHWC : DataLayout::NCHW;
   if (transformed_input.dims().size() == 5) {
-    layout = compute_format == phi::backends::gpu::DataLayout::kNHWC
-                 ? phi::backends::gpu::DataLayout::kNDHWC
-                 : phi::backends::gpu::DataLayout::kNCDHW;
+    layout = compute_format == DataLayout::NHWC ? DataLayout::NDHWC
+                                                : DataLayout::NCDHW;
   }
   CUDNN_ENFORCE_TENSOR_SIZE_SUPPORTED(transformed_input);
   CUDNN_ENFORCE_TENSOR_SIZE_SUPPORTED(transformed_filter_channel);
@@ -739,15 +731,14 @@ void ConvCudnnGradKernel(const Context& dev_ctx,
       }
     }
 
-    if (channel_last &&
-        compute_format == phi::backends::gpu::DataLayout::kNCHW) {
+    if (channel_last && compute_format == DataLayout::NCHW) {
       TransToChannelLast<Context, T>(
           dev_ctx, &transformed_input_grad_channel, input_grad);
     }
   }
 
   if (filter_grad) {
-    if (compute_format == phi::backends::gpu::DataLayout::kNHWC) {
+    if (compute_format == DataLayout::NHWC) {
       TransToChannelFirst<Context, T>(
           dev_ctx, &transformed_filter_grad_channel, filter_grad);
     }
@@ -809,7 +800,7 @@ void ConvCudnnGradGradKernel(
   auto dX = input_grad;
   if (ddO) {
     dev_ctx.template Alloc<T>(ddO);
-    phi::funcs::SetConstant<Context, T> set_zero;
+    funcs::SetConstant<Context, T> set_zero;
     set_zero(dev_ctx, ddO, static_cast<T>(0));
   }
   if (dW) {
@@ -1001,7 +992,7 @@ void ConvCudnnGradGradKernel(
 
   int iwo_group = groups;
   int c_group = 1;
-#if defined(PADDLE_WITH_HIP) || CUDNN_VERSION_MIN(7, 0, 1)
+#if defined(PADDLE_WITH_HIP) || defined(PADDLE_WITH_CUDA)
   iwo_group = 1;
   c_group = groups;
   groups = 1;
@@ -1009,8 +1000,7 @@ void ConvCudnnGradGradKernel(
   auto dtype = phi::backends::gpu::CudnnDataType<T>::type;
 
   auto handle = dev_ctx.cudnn_handle();
-  auto layout = phi::backends::gpu::GetCudnnTensorFormat(
-      phi::backends::gpu::DataLayout::kNCHW);
+  auto layout = phi::backends::gpu::GetCudnnTensorFormat(DataLayout::NCHW);
 
   ConvArgs args1{handle,
                  &transformed_ddX,
@@ -1021,7 +1011,7 @@ void ConvCudnnGradGradKernel(
                  dilations,
                  dtype,
                  groups,
-                 phi::backends::gpu::DataLayout::kNCHW};
+                 DataLayout::NCHW};
   ConvArgs args2{handle,
                  &transformed_X,
                  ddW,
@@ -1031,7 +1021,7 @@ void ConvCudnnGradGradKernel(
                  dilations,
                  dtype,
                  groups,
-                 phi::backends::gpu::DataLayout::kNCHW};
+                 DataLayout::NCHW};
   ConvArgs args3{handle,
                  &transformed_ddX,
                  dW,
@@ -1041,7 +1031,7 @@ void ConvCudnnGradGradKernel(
                  dilations,
                  dtype,
                  groups,
-                 phi::backends::gpu::DataLayout::kNCHW};
+                 DataLayout::NCHW};
   ConvArgs args4{handle,
                  &transformed_dX,
                  ddW,
@@ -1051,7 +1041,7 @@ void ConvCudnnGradGradKernel(
                  dilations,
                  dtype,
                  groups,
-                 phi::backends::gpu::DataLayout::kNCHW};
+                 DataLayout::NCHW};
 
 #ifdef PADDLE_WITH_HIP
   SearchResult<miopenConvFwdAlgorithm_t> fwd_result1;
@@ -1177,11 +1167,11 @@ void ConvCudnnGradGradKernel(
 
   int i_n, i_c, i_d, i_h, i_w;
   GetNCDHW(
-      transformed_X.dims(), DataLayout::kNCHW, &i_n, &i_c, &i_d, &i_h, &i_w);
+      transformed_X.dims(), DataLayout::NCHW, &i_n, &i_c, &i_d, &i_h, &i_w);
 
   int o_n, o_c, o_d, o_h, o_w;
   GetNCDHW(transformed_dO_channel.dims(),
-           DataLayout::kNCHW,
+           DataLayout::NCHW,
            &o_n,
            &o_c,
            &o_d,
@@ -1458,34 +1448,34 @@ PD_REGISTER_KERNEL(conv2d_grad,
                    ALL_LAYOUT,
                    phi::ConvCudnnGradKernel,
                    float,
-                   phi::dtype::float16) {}
+                   phi::float16) {}
 
 PD_REGISTER_KERNEL(conv3d_grad,
                    GPUDNN,
                    ALL_LAYOUT,
                    phi::Conv3DCudnnGradKernel,
                    float,
-                   phi::dtype::float16) {}
+                   phi::float16) {}
 PD_REGISTER_KERNEL(conv2d_double_grad,
                    GPUDNN,
                    ALL_LAYOUT,
                    phi::ConvCudnnGradGradKernel,
                    float,
-                   phi::dtype::float16) {}
+                   phi::float16) {}
 
 PD_REGISTER_KERNEL(conv3d_double_grad,
                    GPUDNN,
                    ALL_LAYOUT,
                    phi::Conv3DCudnnDoubleGradKernel,
                    float,
-                   phi::dtype::float16) {}
+                   phi::float16) {}
 
 PD_REGISTER_KERNEL(depthwise_conv2d_double_grad,
                    GPU,
                    ALL_LAYOUT,
                    phi::DepthwiseConvDoubleGradGPUDNNKernel,
                    float,
-                   phi::dtype::float16) {}
+                   phi::float16) {}
 #else
 #if CUDNN_VERSION_MIN(8, 1, 0)
 PD_REGISTER_KERNEL(conv2d_grad,
@@ -1494,8 +1484,8 @@ PD_REGISTER_KERNEL(conv2d_grad,
                    phi::ConvCudnnGradKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}
 
 PD_REGISTER_KERNEL(conv3d_grad,
                    GPUDNN,
@@ -1503,16 +1493,16 @@ PD_REGISTER_KERNEL(conv3d_grad,
                    phi::Conv3DCudnnGradKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}
 PD_REGISTER_KERNEL(conv2d_double_grad,
                    GPUDNN,
                    ALL_LAYOUT,
                    phi::ConvCudnnGradGradKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}
 
 PD_REGISTER_KERNEL(conv3d_double_grad,
                    GPUDNN,
@@ -1520,8 +1510,8 @@ PD_REGISTER_KERNEL(conv3d_double_grad,
                    phi::Conv3DCudnnDoubleGradKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}
 
 PD_REGISTER_KERNEL(depthwise_conv2d_double_grad,
                    GPU,
@@ -1529,8 +1519,8 @@ PD_REGISTER_KERNEL(depthwise_conv2d_double_grad,
                    phi::DepthwiseConvDoubleGradGPUDNNKernel,
                    float,
                    double,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {}
+                   phi::float16,
+                   phi::bfloat16) {}
 #else
 PD_REGISTER_KERNEL(conv2d_grad,
                    GPUDNN,
@@ -1538,7 +1528,7 @@ PD_REGISTER_KERNEL(conv2d_grad,
                    phi::ConvCudnnGradKernel,
                    float,
                    double,
-                   phi::dtype::float16) {}
+                   phi::float16) {}
 
 PD_REGISTER_KERNEL(conv3d_grad,
                    GPUDNN,
@@ -1546,7 +1536,7 @@ PD_REGISTER_KERNEL(conv3d_grad,
                    phi::Conv3DCudnnGradKernel,
                    float,
                    double,
-                   phi::dtype::float16) {}
+                   phi::float16) {}
 
 PD_REGISTER_KERNEL(conv2d_double_grad,
                    GPUDNN,
@@ -1554,7 +1544,7 @@ PD_REGISTER_KERNEL(conv2d_double_grad,
                    phi::ConvCudnnGradGradKernel,
                    float,
                    double,
-                   phi::dtype::float16) {}
+                   phi::float16) {}
 
 PD_REGISTER_KERNEL(conv3d_double_grad,
                    GPUDNN,
@@ -1562,7 +1552,7 @@ PD_REGISTER_KERNEL(conv3d_double_grad,
                    phi::Conv3DCudnnDoubleGradKernel,
                    float,
                    double,
-                   phi::dtype::float16) {}
+                   phi::float16) {}
 
 PD_REGISTER_KERNEL(depthwise_conv2d_double_grad,
                    GPU,
@@ -1570,7 +1560,7 @@ PD_REGISTER_KERNEL(depthwise_conv2d_double_grad,
                    phi::DepthwiseConvDoubleGradGPUDNNKernel,
                    float,
                    double,
-                   phi::dtype::float16) {}
+                   phi::float16) {}
 #endif
 
 #endif

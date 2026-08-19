@@ -34,6 +34,13 @@ void MaskedSelectKernel(const Context& dev_ctx,
   auto* input_data = reinterpret_cast<const XPUType*>(input->data<T>());
   auto input_dim = input->dims();
   auto mask_dim = mask.dims();
+  auto numel = mask.numel();
+  if (numel == 0) {
+    out->Resize(common::make_ddim({0}));
+    dev_ctx.template Alloc<T>(out);
+    return;
+  }
+
   PADDLE_ENFORCE_EQ(input_dim,
                     mask_dim,
                     common::errors::InvalidArgument(
@@ -95,8 +102,8 @@ PD_REGISTER_KERNEL(masked_select,
                    ALL_LAYOUT,
                    phi::MaskedSelectKernel,
                    float,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
+                   phi::float16,
+                   phi::bfloat16,
                    int,
                    int64_t) {
   kernel->InputAt(1).SetDataType(phi::DataType::BOOL);

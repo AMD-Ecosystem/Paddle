@@ -111,7 +111,7 @@ void ArgsortKernel(const Context& dev_ctx,
   if (rank == 0) {
     phi::Copy<Context>(dev_ctx, input, dev_ctx.GetPlace(), false, output);
     dev_ctx.template Alloc<int64_t>(indices);
-    phi::funcs::set_constant(dev_ctx, indices, static_cast<int64_t>(0));
+    funcs::set_constant(dev_ctx, indices, static_cast<int64_t>(0));
     return;
   }
 
@@ -140,7 +140,7 @@ void ArgsortKernel(const Context& dev_ctx,
       trans.push_back(i);
     }
     trans.push_back(axis);
-    phi::DDim trans_dims(in_dims);
+    DDim trans_dims(in_dims);
     for (size_t i = 0; i < trans.size(); i++) {
       trans_dims[static_cast<int>(i)] = in_dims[trans[i]];
     }
@@ -191,7 +191,7 @@ PD_REGISTER_KERNEL(argsort,
                    int64_t,
                    int16_t,
                    uint8_t,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16) {
+                   phi::float16,
+                   phi::bfloat16) {
   kernel->OutputAt(1).SetDataType(phi::DataType::INT64);
 }

@@ -15,7 +15,6 @@
 #include "paddle/phi/kernels/gather_nd_kernel.h"
 
 #include "paddle/phi/backends/gpu/gpu_context.h"
-#include "paddle/phi/common/bfloat16.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/funcs/gather.cu.h"
 #include "paddle/phi/kernels/tile_kernel.h"
@@ -57,9 +56,9 @@ void GatherNdKernel(const Context &dev_ctx,
                         phi::DataType::INT32,
                         phi::DataType::INT64));
   if (index_type == phi::DataType::INT32) {
-    phi::funcs::GPUGatherNd<T, int>(dev_ctx, x, index, out);
+    funcs::GPUGatherNd<T, int>(dev_ctx, x, index, out);
   } else if (index_type == phi::DataType::INT64) {
-    phi::funcs::GPUGatherNd<T, int64_t>(dev_ctx, x, index, out);
+    funcs::GPUGatherNd<T, int64_t>(dev_ctx, x, index, out);
   }
 }
 
@@ -77,7 +76,7 @@ PD_REGISTER_KERNEL(gather_nd,
                    int64_t,
                    int16_t,
                    uint8_t,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::float16,
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}

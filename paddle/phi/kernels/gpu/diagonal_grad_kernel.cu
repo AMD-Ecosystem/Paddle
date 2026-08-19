@@ -63,7 +63,8 @@ void DiagonalGradKernel(const Context& dev_ctx,
   int64_t numel = dx->numel();
 
   int threads = PADDLE_CUDA_NUM_THREADS;
-  int blocks = (numel + threads - 1) / threads;
+  int64_t blocks_max = dev_ctx.GetCUDAMaxGridDimSize()[0];
+  int blocks = std::min((numel + threads - 1) / threads, blocks_max);
 
   int64_t dout_numel = out_grad.numel();
   phi::backends::gpu::GpuMemsetAsync(
@@ -168,7 +169,7 @@ void DiagonalGradKernel(const Context& dev_ctx,
       break;
     default:
       PADDLE_THROW(errors::InvalidArgument(
-          "The rank of output(input@Grad) should be less than 10, but "
+          "The rank of output(input@GRAD) should be less than 10, but "
           "received %d.",
           dx_dim_size));
   }
@@ -183,7 +184,7 @@ PD_REGISTER_KERNEL(diagonal_grad,
                    int,
                    int64_t,
                    bool,
-                   phi::dtype::float16,
-                   phi::dtype::bfloat16,
-                   phi::dtype::complex<float>,
-                   phi::dtype::complex<double>) {}
+                   phi::float16,
+                   phi::bfloat16,
+                   phi::complex64,
+                   phi::complex128) {}
