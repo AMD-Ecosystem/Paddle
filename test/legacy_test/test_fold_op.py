@@ -12,15 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import unittest
 
 import numpy as np
-from op_test import OpTest
+from op_test import OpTest, get_places
 
 import paddle
 from paddle import base
-from paddle.base import core
 
 paddle.enable_static()
 
@@ -185,15 +183,7 @@ class TestFoldAPI(TestFoldOp):
         self.op_type = 'fold'
         self.python_api = paddle.nn.functional.fold
         self.set_data()
-        self.places = []
-        if (
-            os.environ.get('FLAGS_CI_both_cpu_and_gpu', 'False').lower()
-            in ['1', 'true', 'on']
-            or not core.is_compiled_with_cuda()
-        ):
-            self.places.append(base.CPUPlace())
-        if core.is_compiled_with_cuda():
-            self.places.append(base.CUDAPlace(0))
+        self.places = get_places()
 
     def test_api(self):
         for place in self.places:
@@ -239,7 +229,7 @@ class TestFoldOpError(unittest.TestCase):
                 )
 
             def test_dilations_shape():
-                # dialtions_size must be 2
+                # dilations_size must be 2
                 x = paddle.randn(shape=[2, 6, 6], dtype="float32")
                 out = fold(
                     x,
@@ -249,7 +239,7 @@ class TestFoldOpError(unittest.TestCase):
                 )
 
             def test_strides_shape():
-                # strids_size must be 2
+                # strides_size must be 2
                 x = paddle.randn(shape=[2, 6, 6], dtype="float32")
                 out = fold(
                     x,
@@ -293,6 +283,17 @@ class TestFoldOpError(unittest.TestCase):
                     strides=0,
                 )
 
+            def test_zero_size():
+                x = paddle.randn(shape=[0, 1, 1], dtype="float32")
+                out = fold(
+                    x,
+                    output_sizes=[0, 0],
+                    kernel_sizes=[0, 0],
+                    dilations=0,
+                    paddings=[0, 0],
+                    strides=0,
+                )
+
             self.assertRaises(AssertionError, test_input_shape)
             self.assertRaises(AssertionError, test_kernel_shape)
             self.assertRaises(ValueError, test_padding_shape)
@@ -302,6 +303,7 @@ class TestFoldOpError(unittest.TestCase):
             self.assertRaises(TypeError, test_output_size_2)
             self.assertRaises(ValueError, test_block_h_w)
             self.assertRaises(ValueError, test_GT_0)
+            self.assertRaises(AssertionError, test_zero_size)
 
 
 if __name__ == '__main__':
