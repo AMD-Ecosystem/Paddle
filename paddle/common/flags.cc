@@ -2077,13 +2077,6 @@ PHI_DEFINE_EXPORTED_string(
     "For instance, /usr/local/cuda/lib64. If default, "
     "dlopen will search cuda from LD_LIBRARY_PATH");
 
-PHI_DEFINE_EXPORTED_string(
-    flagcx_dir,  // NOLINT
-    "",
-    "Specify path for loading libflagcx.so. For instance, "
-    "For instance, /usr/local/flagcx/lib. If default, "
-    "dlopen will search flagcx from LD_LIBRARY_PATH");
-
 PHI_DEFINE_EXPORTED_string(cupti_dir,
                            "",
                            "Specify path for loading cupti.so.");  // NOLINT
