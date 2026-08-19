@@ -114,7 +114,7 @@ struct IgammaFunctor {
       : x_(x), a_(a), output_(output), numel_(numel) {}
 
   HOSTDEVICE void operator()(int64_t idx) const {
-    using MT = typename phi::dtype::MPTypeTrait<T>::Type;
+    using MT = typename dtype::MPTypeTrait<T>::Type;
     const MT mp_x = static_cast<MT>(x_[idx]);
     const MT mp_a = static_cast<MT>(a_[idx]);
     output_[idx] = static_cast<T>(igamc<MT>(mp_a, mp_x));
@@ -140,7 +140,7 @@ void GammainccKernel(const Context& dev_ctx,
   auto* x_data = x.data<T>();
   auto* y_data = y.data<T>();
   auto* out_data = dev_ctx.template Alloc<T>(out);
-  phi::funcs::ForRange<Context> for_range(dev_ctx, numel);
+  funcs::ForRange<Context> for_range(dev_ctx, numel);
   IgammaFunctor<T> functor(y_data, x_data, out_data, numel);
   for_range(functor);
 }

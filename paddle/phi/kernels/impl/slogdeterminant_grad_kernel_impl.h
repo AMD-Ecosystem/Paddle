@@ -67,10 +67,10 @@ void SlogDeterminantGradKernel(const Context& dev_ctx,
     // The matrix is not invertible
     VLOG(3) << "The input matrix not invertible!";
     x_grad->Resize(x.dims());
-    phi::Full<T>(dev_ctx,
-                 common::vectorize(x.dims()),
-                 std::numeric_limits<T>::quiet_NaN(),
-                 x_grad);
+    Full<T>(dev_ctx,
+            vectorize(x.dims()),
+            std::numeric_limits<T>::quiet_NaN(),
+            x_grad);
     return;
   }
 
@@ -93,7 +93,7 @@ void SlogDeterminantGradKernel(const Context& dev_ctx,
 
   // Divide the batch into chunks because of cublasMatInv limitation
   if (total_batch_size <= 65536) {
-    phi::funcs::MatrixInverseFunctor<Context, T> mat_inv;
+    funcs::MatrixInverseFunctor<Context, T> mat_inv;
     mat_inv(dev_ctx, x, &inverse_A);
   } else {
     constexpr int64_t max_batch_size = 65536;
@@ -118,7 +118,7 @@ void SlogDeterminantGradKernel(const Context& dev_ctx,
       dev_ctx.template Alloc<T>(&inverse_batch);
 
       // Compute the inverse matrix for the current batch
-      phi::funcs::MatrixInverseFunctor<Context, T> mat_inv;
+      funcs::MatrixInverseFunctor<Context, T> mat_inv;
       mat_inv(dev_ctx, x_batch, &inverse_batch);
 
       // Copy the result to the output tensor
@@ -128,8 +128,7 @@ void SlogDeterminantGradKernel(const Context& dev_ctx,
       output_slice = output_slice.Slice(processed, processed + current_batch);
       output_slice.Resize({current_batch, n, n});
 
-      phi::Copy(
-          dev_ctx, inverse_batch, dev_ctx.GetPlace(), false, &output_slice);
+      Copy(dev_ctx, inverse_batch, dev_ctx.GetPlace(), false, &output_slice);
 
       processed += current_batch;
     }
@@ -138,13 +137,13 @@ void SlogDeterminantGradKernel(const Context& dev_ctx,
   VLOG(3) << "inverse(A) dims: " << inverse_A.dims();
 
   // Second: inverse(A).conj()
-  auto conj_inverse_A = phi::Conj<T>(dev_ctx, inverse_A);
+  auto conj_inverse_A = Conj<T>(dev_ctx, inverse_A);
 
   VLOG(3) << "inverse(A).conj() dims: " << conj_inverse_A.dims();
 
   // Third: inverse(A).conj().transpose(-2, -1)
   DenseTensor transpose_inverse_A =
-      phi::TransposeLast2Dim<T>(dev_ctx, conj_inverse_A);
+      TransposeLast2Dim<T>(dev_ctx, conj_inverse_A);
   VLOG(3) << "inverse(A).conj().transpose(-2, -1) dims: "
           << transpose_inverse_A.dims();
 
@@ -161,15 +160,15 @@ void SlogDeterminantGradKernel(const Context& dev_ctx,
   det_grad.Resize(det_grad.dims().reshape(det_grad_vec));
 
   // Fifth: unsqueeze(dslA, [-1, -2])
-  auto unsqueeze1 = phi::funcs::Unsqueeze(det_grad, -1);
-  auto unsqueeze2 = phi::funcs::Unsqueeze(unsqueeze1, -2);
+  auto unsqueeze1 = funcs::Unsqueeze(det_grad, -1);
+  auto unsqueeze2 = funcs::Unsqueeze(unsqueeze1, -2);
   VLOG(3) << "unsqueezed(dslA, [-1, -2]) dims: " << unsqueeze2.dims();
 
   // Finally: unsqueeze(dslA) * inverse(A)
-  auto res = phi::Multiply<T>(dev_ctx, unsqueeze2, transpose_inverse_A);
+  auto res = Multiply<T>(dev_ctx, unsqueeze2, transpose_inverse_A);
   VLOG(3) << "unsqueeze(dslA) * inverse(A) dims: " << res.dims();
 
-  phi::Copy(dev_ctx, res, dev_ctx.GetPlace(), false, x_grad);
+  Copy(dev_ctx, res, dev_ctx.GetPlace(), false, x_grad);
   x_grad->Resize(x.dims());
   VLOG(3) << "dsl|A| dims: " << x_grad->dims();
 }
@@ -182,7 +181,7 @@ void SlogDeterminantV2GradKernel(const Context& dev_ctx,
                                  const DenseTensor& sign_grad UNUSED,
                                  const DenseTensor& logdet_grad,
                                  DenseTensor* x_grad) {
-  using RealT = typename phi::dtype::Real<T>;
+  using RealT = typename dtype::Real<T>;
   const auto& x_dims = x.dims();
   const auto& grad_dims = logdet_grad.dims();
   int x_rank = x_dims.size();
@@ -224,10 +223,10 @@ void SlogDeterminantV2GradKernel(const Context& dev_ctx,
   if (!detail::CheckMatrixInvertible<RealT, Context>(dev_ctx, &logdet)) {
     // The matrix is not invertible
     VLOG(3) << "The input matrix not invertible!";
-    phi::Full<T>(dev_ctx,
-                 common::vectorize(x.dims()),
-                 std::numeric_limits<T>::quiet_NaN(),
-                 x_grad);
+    Full<T>(dev_ctx,
+            vectorize(x.dims()),
+            std::numeric_limits<T>::quiet_NaN(),
+            x_grad);
     return;
   }
 
@@ -243,7 +242,7 @@ void SlogDeterminantV2GradKernel(const Context& dev_ctx,
   inverse_A.Resize(x_dims);
   dev_ctx.template Alloc<T>(&inverse_A);
 
-  phi::funcs::MatrixInverseFunctor<Context, T> mat_inv;
+  funcs::MatrixInverseFunctor<Context, T> mat_inv;
   mat_inv(dev_ctx, x, &inverse_A);
 
   VLOG(3) << "inverse(A) dims: " << inverse_A.dims();
@@ -251,7 +250,7 @@ void SlogDeterminantV2GradKernel(const Context& dev_ctx,
   // Second: inverse(A).conj() for complex
   DenseTensor conj_inverse_A;
   if constexpr (is_complex64_or_complex128<T>::value) {
-    conj_inverse_A = phi::Conj<T>(dev_ctx, inverse_A);
+    conj_inverse_A = Conj<T>(dev_ctx, inverse_A);
     VLOG(3) << "Performed complex conjugate.";
   } else {
     conj_inverse_A.ShareDataWith(inverse_A);
@@ -262,32 +261,29 @@ void SlogDeterminantV2GradKernel(const Context& dev_ctx,
 
   // Third: inverse(A).conj().transpose(-2, -1)
   DenseTensor transpose_inverse_A =
-      phi::TransposeLast2Dim<T>(dev_ctx, conj_inverse_A);
+      TransposeLast2Dim<T>(dev_ctx, conj_inverse_A);
   VLOG(3) << "inverse(A).conj().transpose(-2, -1) dims: "
           << transpose_inverse_A.dims();
 
   DenseTensor logdet_grad_term = logdet_grad;
   if constexpr (is_complex64_or_complex128<T>::value) {
     // change logdet_grad datatype from <RealT> to <ComplexT>
-    DenseTensor logdet_grad_complex =
-        Empty<T>(dev_ctx, common::vectorize(grad_dims));
+    DenseTensor logdet_grad_complex = Empty<T>(dev_ctx, vectorize(grad_dims));
 
     int64_t logdet_numel = logdet_grad.numel();
-    phi::funcs::ForRange<Context> for_range(dev_ctx, logdet_numel);
-    phi::funcs::RealToComplexFunctor<T> functor(
+    funcs::ForRange<Context> for_range(dev_ctx, logdet_numel);
+    funcs::RealToComplexFunctor<T> functor(
         logdet_grad.data<RealT>(), logdet_grad_complex.data<T>(), logdet_numel);
 
     for_range(functor);
     logdet_grad_term = logdet_grad_complex;
   }
-  DenseTensor unsqueezed_combined_grad =
-      phi::funcs::Unsqueeze(logdet_grad_term, -1);
-  unsqueezed_combined_grad =
-      phi::funcs::Unsqueeze(unsqueezed_combined_grad, -2);
+  DenseTensor unsqueezed_combined_grad = funcs::Unsqueeze(logdet_grad_term, -1);
+  unsqueezed_combined_grad = funcs::Unsqueeze(unsqueezed_combined_grad, -2);
   VLOG(3) << "unsqueezed_combined_grad dims: "
           << unsqueezed_combined_grad.dims();
 
-  phi::Multiply<T, Context>(
+  Multiply<T, Context>(
       dev_ctx, unsqueezed_combined_grad, transpose_inverse_A, x_grad);
   VLOG(3) << x_grad->dims();
 }

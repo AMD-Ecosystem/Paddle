@@ -12,10 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <memory>
+
 #include "paddle/phi/core/memory/allocation/cuda_virtual_mem_allocator.h"
+
+// Expose internals for white-box testing.
+#define private public
 #include "paddle/phi/core/memory/allocation/virtual_memory_auto_growth_best_fit_allocator.h"
+#undef private
 
 #include "gtest/gtest.h"
+#include "paddle/common/errors.h"
 #include "paddle/phi/core/memory/memory.h"
 
 namespace paddle {
@@ -36,6 +43,56 @@ TEST(test_vmm_allocator, test_mem_stats) {
   EXPECT_GT(DeviceMemoryStatCurrentValue("Reserved", 0), 1024);
   allocation.reset();
   EXPECT_EQ(DeviceMemoryStatCurrentValue("Reserved", 0), 0);
+}
+
+class DummyAllocator : public Allocator {
+ public:
+  bool IsAllocThreadSafe() const override { return true; }
+
+ protected:
+  phi::Allocation* AllocateImpl(size_t) override {
+    PADDLE_THROW(common::errors::Unavailable(
+        "DummyAllocator::AllocateImpl should not be called."));
+  }
+  void FreeImpl(phi::Allocation*) override {}
+};
+
+// Expose FreeImpl for testing.
+class ExposedVmmAllocator : public VirtualMemoryAutoGrowthBestFitAllocator {
+ public:
+  using VirtualMemoryAutoGrowthBestFitAllocator::FreeImpl;
+  using VirtualMemoryAutoGrowthBestFitAllocator::
+      VirtualMemoryAutoGrowthBestFitAllocator;
+};
+
+TEST(test_vmm_allocator, free_impl_uses_allocation_block_iterator) {
+  auto underlying = std::make_shared<DummyAllocator>();
+  phi::GPUPlace place(0);
+  ExposedVmmAllocator allocator(underlying, 256, place);
+
+  // Manually construct blocks: [free-prev][used-target][free-next]
+  allocator.all_blocks_.clear();
+  auto prev = allocator.all_blocks_.emplace(
+      allocator.all_blocks_.end(), reinterpret_cast<void*>(0x1000), 1024, true);
+  auto target = allocator.all_blocks_.emplace(allocator.all_blocks_.end(),
+                                              reinterpret_cast<void*>(0x1400),
+                                              2048,
+                                              false);
+  auto next = allocator.all_blocks_.emplace(
+      allocator.all_blocks_.end(), reinterpret_cast<void*>(0x1C00), 4096, true);
+
+  allocator.free_blocks_.clear();
+  allocator.free_blocks_.emplace(std::make_pair(prev->size_, prev->ptr_), prev);
+  allocator.free_blocks_.emplace(std::make_pair(next->size_, next->ptr_), next);
+
+  auto allocation = std::make_unique<BlockAllocation>(target, place);
+
+  EXPECT_NO_THROW(allocator.FreeImpl(allocation.release()));
+  EXPECT_EQ(allocator.all_blocks_.size(), 1UL);
+  EXPECT_EQ(allocator.all_blocks_.front().ptr_,
+            reinterpret_cast<void*>(0x1000));
+  EXPECT_EQ(allocator.all_blocks_.front().size_, 7168UL);
+  EXPECT_TRUE(allocator.all_blocks_.front().is_free_);
 }
 
 }  // namespace allocation

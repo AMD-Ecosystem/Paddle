@@ -40,9 +40,9 @@ __global__ void CrossEntropyKernel(T* Y,
                    D,
                    ignore_index,
                    lbl);
-    Y[i] = ignore_index == lbl ? static_cast<T>(0)
-                               : -phi::funcs::TolerableValue<T>()(
-                                     phi::funcs::real_log(X[i * D + lbl]));
+    Y[i] = ignore_index == lbl
+               ? static_cast<T>(0)
+               : -funcs::TolerableValue<T>()(funcs::real_log(X[i * D + lbl]));
   }
 }
 
@@ -57,8 +57,7 @@ __global__ void SoftCrossEntropyKernel(T* Y,
   int64_t idx = static_cast<int64_t>(blockIdx.x) * class_num + tid;
   int64_t end = static_cast<int64_t>(blockIdx.x) * class_num + class_num;
   for (; idx < end; idx += blockDim.x) {
-    val += phi::funcs::TolerableValue<T>()(phi::funcs::real_log(X[idx])) *
-           label[idx];
+    val += funcs::TolerableValue<T>()(funcs::real_log(X[idx])) * label[idx];
   }
 
   val = phi::backends::gpu::reduceSum(val, tid, blockDim.x);
@@ -113,18 +112,23 @@ struct HardLabelCrossEntropyCUDAFunctorImpl {
 template <typename DeviceContext, typename T>
 void CrossEntropyFunctor<DeviceContext, T>::operator()(
     const DeviceContext& dev_ctx,
-    phi::DenseTensor* out,
-    const phi::DenseTensor* prob,
-    const phi::DenseTensor* labels,
+    DenseTensor* out,
+    const DenseTensor* prob,
+    const DenseTensor* labels,
     const bool softLabel,
     const int ignore_index,
     const int axis_dim) {
+  int64_t batch_size = prob->dims()[0];
+  int64_t class_num = prob->dims()[1];
+
+  // Handle zero-size tensor: early return to avoid invalid CUDA kernel launch
+  if (batch_size == 0 || class_num == 0) {
+    dev_ctx.template Alloc<T>(out);
+    return;
+  }
+
   T* loss_data = dev_ctx.template Alloc<T>(out);
   const T* prob_data = prob->data<T>();
-
-  int64_t batch_size = prob->dims()[0];
-
-  int64_t class_num = prob->dims()[1];
   // TODO(large-tensor): CUDA grid dims not support int64
   PADDLE_ENFORCE_LE_INT_MAX(batch_size, "batch_size");
   PADDLE_ENFORCE_LE_INT_MAX(class_num, "class_num");
@@ -162,11 +166,11 @@ void CrossEntropyFunctor<DeviceContext, T>::operator()(
   }
 }
 
-template class CrossEntropyFunctor<phi::GPUContext, float>;
-template class CrossEntropyFunctor<phi::GPUContext, double>;
-template class CrossEntropyFunctor<phi::GPUContext, phi::float16>;
+template class CrossEntropyFunctor<GPUContext, float>;
+template class CrossEntropyFunctor<GPUContext, double>;
+template class CrossEntropyFunctor<GPUContext, phi::float16>;
 #if defined(PADDLE_WITH_CUDA) && CUDNN_VERSION_MIN(8, 1, 0)
-template class CrossEntropyFunctor<phi::GPUContext, phi::bfloat16>;
+template class CrossEntropyFunctor<GPUContext, phi::bfloat16>;
 #endif
 
 }  // namespace funcs

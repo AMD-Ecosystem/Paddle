@@ -88,8 +88,7 @@ void CrossEntropyWithSoftmaxKernel(const Context& dev_ctx,
 
     // When soft_label is True, the axis column is 1.
     if (soft_label) {
-      phi::Full<T, Context>(
-          dev_ctx, phi::IntArray(common::vectorize(loss->dims())), 0, loss);
+      Full<T, Context>(dev_ctx, loss->dims(), 0, loss);
     }
     return;
   }
@@ -98,11 +97,11 @@ void CrossEntropyWithSoftmaxKernel(const Context& dev_ctx,
     CrossEntropy<T>(
         dev_ctx, logits, label, soft_label, ignore_index, axis, loss);
     // cause of input is softmax, copy to output softmax, directly
-    phi::Copy<Context>(dev_ctx, logits, dev_ctx.GetPlace(), false, softmax);
+    Copy<Context>(dev_ctx, logits, dev_ctx.GetPlace(), false, softmax);
     return;
   }
 
-  phi::SoftmaxKernel<T, Context>(dev_ctx, logits, axis, softmax);
+  SoftmaxKernel<T, Context>(dev_ctx, logits, axis, softmax);
   CrossEntropy<T>(
       dev_ctx, *softmax, label, soft_label, ignore_index, axis, loss);
 }

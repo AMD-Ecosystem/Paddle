@@ -83,14 +83,14 @@ void CSoftmaxWithMultiLabelCrossEntropyGradKernel(
     int rank,
     int nranks,
     DenseTensor* logits_grad) {
-  const phi::DenseTensor* labels = &label_in;
-  const phi::DenseTensor* smooth_weight = &smooth_weight_in;
-  const phi::DenseTensor* loss_grad = &loss_grad_in;
-  const phi::DenseTensor* softmax = &softmax_in;
-  phi::DenseTensor* logit_grad = logits_grad;
+  const DenseTensor* labels = &label_in;
+  const DenseTensor* smooth_weight = &smooth_weight_in;
+  const DenseTensor* loss_grad = &loss_grad_in;
+  const DenseTensor* softmax = &softmax_in;
+  DenseTensor* logit_grad = logits_grad;
 
   if (logit_grad != softmax) {
-    phi::Copy(dev_ctx, *softmax, dev_ctx.GetPlace(), false, logit_grad);
+    Copy(dev_ctx, *softmax, dev_ctx.GetPlace(), false, logit_grad);
   }
   const auto softmax_dims = softmax->dims();
   const int axis = softmax_dims.size() - 1;
@@ -100,7 +100,7 @@ void CSoftmaxWithMultiLabelCrossEntropyGradKernel(
   const auto label_dims = labels->dims();
   const int64_t C = label_dims[axis];
 
-  phi::DenseTensor logit_grad_2d;
+  DenseTensor logit_grad_2d;
   logit_grad_2d.ShareDataWith(*logit_grad).Resize({N, D});
 
   int64_t blocks = NumBlocks(N * D);
@@ -110,7 +110,7 @@ void CSoftmaxWithMultiLabelCrossEntropyGradKernel(
   const int64_t start_index = rank * D;
   const int64_t end_index = start_index + D;
 
-  if (label_type == phi::DataType::INT32) {
+  if (label_type == DataType::INT32) {
     CalculateSoftLogitsGrad<T, int32_t>
         <<<blocks_cal, threads, 0, dev_ctx.stream()>>>(logit_grad_2d.data<T>(),
                                                        labels->data<int32_t>(),
@@ -129,7 +129,7 @@ void CSoftmaxWithMultiLabelCrossEntropyGradKernel(
                                                    D,
                                                    C,
                                                    sum_multi_label_loss);
-  } else if (label_type == phi::DataType::INT64) {
+  } else if (label_type == DataType::INT64) {
     CalculateSoftLogitsGrad<T, int64_t>
         <<<blocks_cal, threads, 0, dev_ctx.stream()>>>(logit_grad_2d.data<T>(),
                                                        labels->data<int64_t>(),

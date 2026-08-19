@@ -27,7 +27,11 @@ from urllib.parse import urlparse
 from typing_extensions import TypeAlias
 
 import paddle
-from paddle.utils.download import _download, get_path_from_url
+from paddle.utils.download import (
+    _download,
+    _safe_extract_zip,
+    get_path_from_url,
+)
 
 if TYPE_CHECKING:
     import builtins
@@ -139,7 +143,7 @@ def _get_cache_or_reload(repo, force_reload, verbose=True, source='github'):
             extracted_repo = os.path.join(hub_dir, extracted_repo_name)
             _remove_if_exists(extracted_repo)
             # Unzip the code and rename the base folder
-            cached_zipfile.extractall(hub_dir)
+            _safe_extract_zip(cached_zipfile, hub_dir)
 
         _remove_if_exists(cached_file)
         _remove_if_exists(repo_dir)
@@ -207,7 +211,7 @@ def list(
         entrypoints: A list of available entrypoint names.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> import paddle
 
@@ -259,7 +263,7 @@ def help(
         docs
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> import paddle
 
@@ -309,7 +313,7 @@ def load(
         paddle model.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> import paddle
             >>> paddle.hub.load('lyuwenyu/paddlehub_demo:main', model='MM', source='github')
@@ -357,11 +361,16 @@ def load_state_dict_from_url(
         Any: A target object that can be used in Paddle.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
+            >>> # doctest: +TIMEOUT(60)
             >>> import paddle
-            >>> paddle.hub.load_state_dict_from_url(url='https://paddle-hapi.bj.bcebos.com/models/resnet18.pdparams', model_dir="./paddle/test_load_from_url")
-            >>> paddle.hub.load_state_dict_from_url(url='https://x2paddle.bj.bcebos.com/resnet18.zip', model_dir="./paddle/test_file_is_zip")
+            >>> paddle.hub.load_state_dict_from_url(
+            ...     url='https://paddle-hapi.bj.bcebos.com/models/resnet18.pdparams', model_dir="./paddle/test_load_from_url"
+            ... )
+            >>> paddle.hub.load_state_dict_from_url(
+            ...     url='https://x2paddle.bj.bcebos.com/resnet18.zip', model_dir="./paddle/test_file_is_zip"
+            ... )
     """
     if model_dir is None:
         hub_dir = get_dir()
@@ -415,7 +424,7 @@ def _legacy_zip_load(filename, model_dir, map_location=None):
             raise RuntimeError(
                 'Only one file(not dir) is allowed in the zipfile'
             )
-        f.extractall(model_dir)
+        _safe_extract_zip(f, model_dir)
         extracted_name = members[0].filename
         extracted_file = os.path.join(model_dir, extracted_name)
     if map_location:

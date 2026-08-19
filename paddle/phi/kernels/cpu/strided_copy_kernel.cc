@@ -38,11 +38,11 @@ void StridedCopyKernel(const Context& dev_ctx,
 // not support Windows
 #if !defined(_WIN32)
   if (FLAGS_use_stride_kernel &&
-      input.place().GetType() == phi::AllocationType::CPU &&
-      out->place().GetType() == phi::AllocationType::GPU &&
+      input.place().GetType() == AllocationType::CPU &&
+      out->place().GetType() == AllocationType::GPU &&
       input.dtype() == out->dtype() &&
       (!input.meta().is_contiguous() || !out->meta().is_contiguous())) {
-    phi::DenseTensor dst_gpu;
+    DenseTensor dst_gpu;
     if (out->meta().is_contiguous()) {
       dst_gpu = *out;
     } else {
@@ -55,45 +55,45 @@ void StridedCopyKernel(const Context& dev_ctx,
 
     auto src_cpu_place = input.place();
     auto dst_gpu_place = out->place();
-    auto& pool = phi::DeviceContextPool::Instance();
-    auto* gpu_dev_ctx = static_cast<phi::GPUContext*>(pool.Get(out->place()));
+    auto& pool = DeviceContextPool::Instance();
+    auto* gpu_dev_ctx = static_cast<GPUContext*>(pool.Get(out->place()));
     auto stream = gpu_dev_ctx->stream();
 
     if (input.meta().is_contiguous()) {
       auto src_cpu_place = input.place();
       auto dst_gpu_place = out->place();
-      auto size = phi::SizeOf(input.dtype()) * input.numel();
+      auto size = SizeOf(input.dtype()) * input.numel();
       void* dst_ptr = gpu_dev_ctx->Alloc(
           &dst_gpu,
           dst_gpu.dtype(),
           0,
           dst_gpu_place.GetType() == AllocationType::GPUPINNED);
 
-      phi::memory_utils::Copy(
+      memory_utils::Copy(
           dst_gpu_place, dst_ptr, src_cpu_place, input.data<T>(), size, stream);
 
     } else {
-      phi::DenseTensor cpu_out;
-      phi::ContiguousKernel<T, Context>(dev_ctx, input, &cpu_out);
+      DenseTensor cpu_out;
+      ContiguousKernel<T, Context>(dev_ctx, input, &cpu_out);
       auto* src_ptr = cpu_out.data<T>();
-      auto size = phi::SizeOf(input.dtype()) * cpu_out.numel();
+      auto size = SizeOf(input.dtype()) * cpu_out.numel();
       void* dst_ptr = gpu_dev_ctx->Alloc(
           &dst_gpu,
           dst_gpu.dtype(),
           0,
           dst_gpu_place.GetType() == AllocationType::GPUPINNED);
 
-      phi::memory_utils::Copy(
+      memory_utils::Copy(
           dst_gpu_place, dst_ptr, src_cpu_place, src_ptr, size, stream);
     }
     if (out != &dst_gpu) {
       PD_VISIT_ALL_TYPES(
           out->dtype(), "StridedCopyKernel", ([&] {
-            phi::StridedCopyKernel<data_t, phi::GPUContext>(
-                reinterpret_cast<const phi::GPUContext&>(*gpu_dev_ctx),
+            StridedCopyKernel<data_t, GPUContext>(
+                reinterpret_cast<const GPUContext&>(*gpu_dev_ctx),
                 dst_gpu,
-                common::vectorize<int64_t>(out->dims()),
-                common::vectorize<int64_t>(out->strides()),
+                vectorize<int64_t>(out->dims()),
+                vectorize<int64_t>(out->strides()),
                 out->offset(),
                 out);
           }));
@@ -104,9 +104,9 @@ void StridedCopyKernel(const Context& dev_ctx,
 #endif
 #endif
 
-  phi::DenseTensorMeta meta = input.meta();
-  meta.strides = common::make_ddim(out_stride);
-  meta.dims = common::make_ddim(dims);
+  DenseTensorMeta meta = input.meta();
+  meta.strides = make_ddim(out_stride);
+  meta.dims = make_ddim(dims);
   meta.offset = offset;
   out->set_meta(meta);
 

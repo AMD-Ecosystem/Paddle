@@ -40,30 +40,22 @@ void IndexAddGradKernel(const Context& dev_ctx,
       dev_ctx.template Alloc<T>(x_grad);
     }
     if (add_value_grad) {
-      phi::Full<T, Context>(
-          dev_ctx,
-          phi::IntArray(common::vectorize(add_value_grad->dims())),
-          0,
-          add_value_grad);
+      Full<T, Context>(dev_ctx, add_value_grad->dims(), 0, add_value_grad);
     }
     return;
   }
   if (index.numel() == 0) {
     if (x_grad) {
-      phi::Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, x_grad);
+      Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, x_grad);
     }
     if (add_value_grad) {
-      phi::Full<T, Context>(
-          dev_ctx,
-          phi::IntArray(common::vectorize(add_value_grad->dims())),
-          0,
-          add_value_grad);
+      Full<T, Context>(dev_ctx, add_value_grad->dims(), 0, add_value_grad);
     }
     return;
   }
   if (add_value.numel() == 0) {
     if (x_grad) {
-      phi::Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, x_grad);
+      Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, x_grad);
     }
     if (add_value_grad) {
       dev_ctx.template Alloc<T>(add_value_grad);
@@ -81,15 +73,15 @@ void IndexAddGradKernel(const Context& dev_ctx,
   const auto& index_type = index.dtype();
 
   bool index_type_match =
-      index_type == phi::DataType::INT64 || index_type == phi::DataType::INT32;
+      index_type == DataType::INT64 || index_type == DataType::INT32;
   PADDLE_ENFORCE_EQ(index_type_match,
                     true,
                     common::errors::InvalidArgument(
                         "Input(Index) holds the wrong type, it holds %s, but "
                         "desires to be %s or %s",
                         index_type,
-                        phi::DataType::INT32,
-                        phi::DataType::INT64));
+                        DataType::INT32,
+                        DataType::INT64));
 
   int64_t numel = add_value.numel();
   if (numel == 0) {
@@ -99,7 +91,7 @@ void IndexAddGradKernel(const Context& dev_ctx,
 
   // get x_grad: copy out_grad to x_grad.
   if (x_grad) {
-    phi::Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, x_grad);
+    Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, x_grad);
   }
 
   // get add_value_grad: index_select(out_grad, index, axis)
@@ -110,7 +102,7 @@ void IndexAddGradKernel(const Context& dev_ctx,
     dim3 grid_dim = dim3((numel + block_dim - 1) / block_dim);
     phi::backends::gpu::LimitGridDim(dev_ctx, &grid_dim);
 
-    if (index_type == phi::DataType::INT64) {
+    if (index_type == DataType::INT64) {
       const int64_t* index_data = index.data<int64_t>();
       index_select_cuda_kernel<T, int64_t>
           <<<grid_dim, block_dim, 0, stream>>>(output_grad_data,

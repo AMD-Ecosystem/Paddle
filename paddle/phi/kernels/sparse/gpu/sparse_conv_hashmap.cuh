@@ -25,7 +25,7 @@
 #include "paddle/phi/core/sparse_coo_tensor.h"
 #include "paddle/phi/kernels/empty_kernel.h"
 #include "paddle/phi/kernels/funcs/math_function_impl.h"
-#include "paddle/phi/kernels/funcs/transpose_function.cu.h"
+#include "paddle/phi/kernels/funcs/transpose_function.cuh"
 
 /** Reserved value for indicating "empty". */
 #define EMPTY_CELL (0)
@@ -35,36 +35,45 @@
 __inline__ __device__ int8_t atomicCAS(int8_t* address,
                                        int8_t compare,
                                        int8_t val) {
-  int32_t* base_address = (int32_t*)((char*)address - ((size_t)address & 3));
-  int32_t int_val = (int32_t)val << (((size_t)address & 3) * 8);
-  int32_t int_comp = (int32_t)compare << (((size_t)address & 3) * 8);
-  return (int8_t)atomicCAS(base_address, int_comp, int_val);
+  auto address_value = reinterpret_cast<uintptr_t>(address);
+  int32_t* base_address = reinterpret_cast<int32_t*>(
+      reinterpret_cast<char*>(address) - (address_value & 3));
+  int32_t int_val = static_cast<int32_t>(val) << ((address_value & 3) * 8);
+  int32_t int_comp = static_cast<int32_t>(compare) << ((address_value & 3) * 8);
+  return static_cast<int8_t>(atomicCAS(base_address, int_comp, int_val));
 }
 
-// TODO: can we do this more efficiently?
+// TODO(ShigureNyako): can we do this more efficiently?
 __inline__ __device__ int16_t atomicCAS(int16_t* address,
                                         int16_t compare,
                                         int16_t val) {
-  int32_t* base_address = (int32_t*)((char*)address - ((size_t)address & 2));
-  int32_t int_val = (int32_t)val << (((size_t)address & 2) * 8);
-  int32_t int_comp = (int32_t)compare << (((size_t)address & 2) * 8);
-  return (int16_t)atomicCAS(base_address, int_comp, int_val);
+  auto address_value = reinterpret_cast<uintptr_t>(address);
+  int32_t* base_address = reinterpret_cast<int32_t*>(
+      reinterpret_cast<char*>(address) - (address_value & 2));
+  int32_t int_val = static_cast<int32_t>(val) << ((address_value & 2) * 8);
+  int32_t int_comp = static_cast<int32_t>(compare) << ((address_value & 2) * 8);
+  return static_cast<int16_t>(atomicCAS(base_address, int_comp, int_val));
 }
 
 __inline__ __device__ int64_t atomicCAS(int64_t* address,
                                         int64_t compare,
                                         int64_t val) {
-  return (int64_t)atomicCAS((unsigned long long*)address,
-                            (unsigned long long)compare,
-                            (unsigned long long)val);
+  using AtomicCAS64Type = unsigned long long;  // NOLINT(runtime/int)
+  return static_cast<int64_t>(
+      atomicCAS(reinterpret_cast<AtomicCAS64Type*>(address),
+                static_cast<AtomicCAS64Type>(compare),
+                static_cast<AtomicCAS64Type>(val)));
 }
+
+namespace phi {
+namespace sparse {
 
 template <typename dtype = int>
 __device__ uint64_t hash_func_64b(dtype* data, int n = 4) {
-  uint64_t hash = 14695981039346656037UL;
+  uint64_t hash = UINT64_C(14695981039346656037);
   for (int j = 0; j < n; j++) {
-    hash ^= (unsigned int)data[j];
-    hash *= 1099511628211UL;
+    hash ^= static_cast<unsigned int>(data[j]);
+    hash *= UINT64_C(1099511628211);
   }
   // hash = (hash >> 60) ^ (hash & 0xFFFFFFFFFFFFFFF);
   return hash;
@@ -72,7 +81,7 @@ __device__ uint64_t hash_func_64b(dtype* data, int n = 4) {
 
 template <typename key_type>
 __device__ int hash(key_type key, int _capacity) {
-  return (uint64_t)key % _capacity;
+  return static_cast<uint64_t>(key) % _capacity;
 }
 
 template <typename key_type, typename val_type>
@@ -85,10 +94,10 @@ class GPUHashTable {
   const int _width;
   key_type* table_keys;
   val_type* table_vals;
-  void insert_many_coords(const phi::GPUContext& dev_ctx,
+  void insert_many_coords(const GPUContext& dev_ctx,
                           const int* coords,
                           const int n);
-  void lookup_many_coords(const phi::GPUContext& dev_ctx,
+  void lookup_many_coords(const GPUContext& dev_ctx,
                           const int* coords,
                           val_type* results,
                           const int* kernel_sizes,
@@ -97,8 +106,8 @@ class GPUHashTable {
                           const int kernel_volume);
 
  public:
-  GPUHashTable(phi::DenseTensor* table_keys,
-               phi::DenseTensor* table_vals,
+  GPUHashTable(DenseTensor* table_keys,
+               DenseTensor* table_vals,
                const int divisor,
                const int width)
       : _capacity(table_keys->dims()[0]),
@@ -106,21 +115,20 @@ class GPUHashTable {
         table_keys(table_keys->data<key_type>()),
         table_vals(table_vals->data<val_type>()),
         _divisor(divisor),
-        _width(width){};
+        _width(width) {}
   ~GPUHashTable() {
     if (free_pointers) {
       cudaFree(table_keys);
       cudaFree(table_vals);
     }
-  };
-  void insert_coords(const phi::GPUContext& dev_ctx,
-                     const phi::DenseTensor& coords);
-  void lookup_coords(const phi::GPUContext& dev_ctx,
-                     const phi::DenseTensor& coords,
+  }
+  void insert_coords(const GPUContext& dev_ctx, const DenseTensor& coords);
+  void lookup_coords(const GPUContext& dev_ctx,
+                     const DenseTensor& coords,
                      const int* kernel_sizes,
                      const int* tensor_strides,
                      int kernel_volume,
-                     phi::DenseTensor* results);
+                     DenseTensor* results);
   int get_divisor() { return _divisor; }
   int get_capacity() { return _capacity; }
 };
@@ -247,7 +255,7 @@ __global__ void set_kernel_sizes_and_strides_tensor(int* kernel_size_tensor,
 
 template <typename key_type, typename val_type>
 void GPUHashTable<key_type, val_type>::insert_many_coords(
-    const phi::GPUContext& dev_ctx, const int* coords, const int n) {
+    const GPUContext& dev_ctx, const int* coords, const int n) {
   insert_coords_kernel<key_type, val_type>
       <<<(n + BLOCK_SIZE - 1) / BLOCK_SIZE, BLOCK_SIZE, 0, dev_ctx.stream()>>>(
           table_keys, table_vals, coords, n, _capacity, _width);
@@ -255,13 +263,13 @@ void GPUHashTable<key_type, val_type>::insert_many_coords(
 
 template <typename key_type, typename val_type>
 void GPUHashTable<key_type, val_type>::insert_coords(
-    const phi::GPUContext& dev_ctx, const phi::DenseTensor& coords) {
+    const GPUContext& dev_ctx, const DenseTensor& coords) {
   insert_many_coords(dev_ctx, coords.data<int>(), coords.dims()[0]);
 }
 
 template <typename key_type, typename val_type>
 void GPUHashTable<key_type, val_type>::lookup_many_coords(
-    const phi::GPUContext& dev_ctx,
+    const GPUContext& dev_ctx,
     const int* coords,
     val_type* results,
     const int* kernel_sizes,
@@ -301,13 +309,12 @@ void GPUHashTable<key_type, val_type>::lookup_many_coords(
 }
 
 template <typename key_type, typename val_type>
-void GPUHashTable<key_type, val_type>::lookup_coords(
-    const phi::GPUContext& dev_ctx,
-    const phi::DenseTensor& coords,
-    const int* kernel_sizes,
-    const int* strides,
-    const int kernel_volume,
-    phi::DenseTensor* results) {
+void GPUHashTable<key_type, val_type>::lookup_coords(const GPUContext& dev_ctx,
+                                                     const DenseTensor& coords,
+                                                     const int* kernel_sizes,
+                                                     const int* strides,
+                                                     const int kernel_volume,
+                                                     DenseTensor* results) {
   int32_t* results_data = results->data<int32_t>();
   lookup_many_coords(dev_ctx,
                      coords.data<int>(),
@@ -319,47 +326,47 @@ void GPUHashTable<key_type, val_type>::lookup_coords(
 }
 
 template <typename IntT>
-void build_sparse_conv_kmap(const phi::GPUContext& dev_ctx,
-                            const phi::SparseCooTensor& x,
+void build_sparse_conv_kmap(const GPUContext& dev_ctx,
+                            const SparseCooTensor& x,
                             const std::string& key,
                             const std::vector<int>& kernel_sizes,
                             const std::vector<int>& strides,
                             const int kernel_volume,
                             const bool is2D,
-                            phi::SparseCooTensor* out) {
+                            SparseCooTensor* out) {
   int nnz = x.nnz();
-  const phi::KmapCache* in_kmap_cache_ptr = x.GetKmapCache(key);
+  const KmapCache* in_kmap_cache_ptr = x.GetKmapCache(key);
   out->ClearKmaps();
-  phi::KmapCache* out_kmap_cache_ptr = nullptr;
+  KmapCache* out_kmap_cache_ptr = nullptr;
   bool to_insert = false;
   if (in_kmap_cache_ptr == nullptr) {
-    phi::KmapCache kmap_cache;
+    KmapCache kmap_cache;
     out_kmap_cache_ptr = out->SetKmapCache(key, kmap_cache);
     if (out_kmap_cache_ptr->hashmap_keys == nullptr) {
-      phi::DenseTensor* tmp_hashmap_keys = new phi::DenseTensor();
+      DenseTensor* tmp_hashmap_keys = new DenseTensor();
       tmp_hashmap_keys->Resize({2 * x.nnz()});
       dev_ctx.template Alloc<IntT>(tmp_hashmap_keys);
-      phi::funcs::SetConstant<phi::GPUContext, IntT> set_zero;
+      funcs::SetConstant<GPUContext, IntT> set_zero;
       set_zero(dev_ctx, tmp_hashmap_keys, static_cast<IntT>(0));
       out_kmap_cache_ptr->hashmap_keys = tmp_hashmap_keys;
       to_insert = true;
     }
     if (out_kmap_cache_ptr->hashmap_values == nullptr) {
-      phi::DenseTensor* tmp_hashmap_values = new phi::DenseTensor();
+      DenseTensor* tmp_hashmap_values = new DenseTensor();
       tmp_hashmap_values->Resize({2 * x.nnz()});
       dev_ctx.template Alloc<int32_t>(tmp_hashmap_values);
-      phi::funcs::SetConstant<phi::GPUContext, int32_t> set_zero;
+      funcs::SetConstant<GPUContext, int32_t> set_zero;
       set_zero(dev_ctx, tmp_hashmap_values, static_cast<int32_t>(0));
       out_kmap_cache_ptr->hashmap_values = tmp_hashmap_values;
     }
 
     if (out_kmap_cache_ptr->coords == nullptr) {
-      phi::DenseTensor* tmp_indices = new phi::DenseTensor();
+      DenseTensor* tmp_indices = new DenseTensor();
       tmp_indices->Resize({x.indices().dims()[1], x.indices().dims()[0]});
       dev_ctx.template Alloc<int32_t>(tmp_indices);
       // transpose indices
       std::vector<int> perm = {1, 0};
-      phi::funcs::TransposeGPUKernelDriver<int32_t>(
+      funcs::TransposeGPUKernelDriver<int32_t>(
           dev_ctx, x.indices(), perm, tmp_indices);
       out_kmap_cache_ptr->coords = tmp_indices;
     }
@@ -375,12 +382,12 @@ void build_sparse_conv_kmap(const phi::GPUContext& dev_ctx,
       hashmap.insert_coords(dev_ctx, *(out_kmap_cache_ptr->coords));
     }
 
-    phi::DenseTensor* tmp_out_in_map = new phi::DenseTensor();
+    DenseTensor* tmp_out_in_map = new DenseTensor();
     tmp_out_in_map->Resize(
         {(x.nnz() + divisor - 1) / divisor * divisor, kernel_volume});
     dev_ctx.template Alloc<int32_t>(tmp_out_in_map);
     out_kmap_cache_ptr->out_in_map = tmp_out_in_map;
-    phi::funcs::SetConstant<phi::GPUContext, int32_t> set_neg_one;
+    funcs::SetConstant<GPUContext, int32_t> set_neg_one;
     set_neg_one(
         dev_ctx, out_kmap_cache_ptr->out_in_map, static_cast<int32_t>(-1));
 
@@ -407,9 +414,9 @@ void build_sparse_conv_kmap(const phi::GPUContext& dev_ctx,
     // out tensor takes the kmaps from x
     out->SetKmaps(x.GetKmaps());
     // force clear the kmaps of x
-    const_cast<phi::SparseCooTensor&>(x).ClearKmaps();
+    const_cast<SparseCooTensor&>(x).ClearKmaps();
   }
-  const phi::KmapCache* new_out_kmap_cache_ptr = out->GetKmapCache(key);
+  const KmapCache* new_out_kmap_cache_ptr = out->GetKmapCache(key);
   assert(new_out_kmap_cache_ptr != nullptr);
   assert(new_out_kmap_cache_ptr->hashmap_keys != nullptr);
   assert(new_out_kmap_cache_ptr->hashmap_values != nullptr);
@@ -417,3 +424,5 @@ void build_sparse_conv_kmap(const phi::GPUContext& dev_ctx,
   assert(new_out_kmap_cache_ptr->out_in_map != nullptr);
   return;
 }
+}  // namespace sparse
+}  // namespace phi

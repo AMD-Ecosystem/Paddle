@@ -78,7 +78,7 @@ __global__ void KeCMRNormOutput(
 }
 
 template <typename T>
-void CrossMapNormal(const phi::GPUContext& dev_ctx,
+void CrossMapNormal(const GPUContext& dev_ctx,
                     const T* inputs,
                     T* outputs,
                     T* mid,
@@ -117,11 +117,11 @@ void CrossMapNormal(const phi::GPUContext& dev_ctx,
 }
 
 template <typename T>
-struct LRNFunctor<phi::GPUContext, T> {
-  void operator()(const phi::GPUContext& dev_ctx,
-                  const phi::DenseTensor& input,
-                  phi::DenseTensor* out,
-                  phi::DenseTensor* mid,
+struct LRNFunctor<GPUContext, T> {
+  void operator()(const GPUContext& dev_ctx,
+                  const DenseTensor& input,
+                  DenseTensor* out,
+                  DenseTensor* mid,
                   int64_t N,
                   int64_t C,
                   int64_t H,
@@ -146,8 +146,8 @@ struct LRNFunctor<phi::GPUContext, T> {
                       data_layout);
   }
 };
-template struct LRNFunctor<phi::GPUContext, float>;
-template struct LRNFunctor<phi::GPUContext, double>;
+template struct LRNFunctor<GPUContext, float>;
+template struct LRNFunctor<GPUContext, double>;
 }  // namespace phi
 
 PD_REGISTER_KERNEL(lrn, GPU, ALL_LAYOUT, phi::LRNKernel, float) {}

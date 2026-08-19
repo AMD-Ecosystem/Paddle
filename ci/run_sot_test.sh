@@ -48,7 +48,7 @@ function run_sot_test() {
         run_and_check "Uninstalling numpy for Python 3.14..." \
             $PYTHON_WITH_SPECIFY_VERSION -m pip uninstall -y "numpy"
         run_and_check "Installing numpy>=2.3.5 for Python 3.14..." \
-            $PYTHON_WITH_SPECIFY_VERSION -m pip install "numpy>=2.3.5"
+            $PYTHON_WITH_SPECIFY_VERSION -m pip install --force-reinstall --no-cache-dir "numpy>=2.3.5"
     fi
 
     # cd to sot test dir
@@ -71,14 +71,19 @@ function run_sot_test() {
         skip_files=()
     fi
 
+    # prepare progress counters
+    total=$(ls -1 ./test_*.py 2>/dev/null | wc -l)
+    idx=0
+
     for file in ./test_*.py; do
         # check file is python file
         if [ -f "$file" ]; then
-            if [[ "${skip_files[*]}"  =~ "${file}" ]]; then
-                echo "skip ${PY_VERSION_NO_DOT} ${file}"
+            idx=$((idx+1))
+            if [[ "${skip_files[*]}" =~ "${file}" ]]; then
+                echo "[${idx}/${total}] Skipping ${PY_VERSION_NO_DOT} ${file}"
                 continue
             fi
-            echo Running:" STRICT_MODE=1 MIN_GRAPH_SIZE=0 SOT_LOG_LEVEL=0 FLAGS_cudnn_deterministic=True SOT_ENABLE_STRICT_GUARD_CHECK=True python " $file
+            echo "[${idx}/${total}] Running: STRICT_MODE=1 MIN_GRAPH_SIZE=0 SOT_LOG_LEVEL=0 FLAGS_cudnn_deterministic=True SOT_ENABLE_STRICT_GUARD_CHECK=True $PYTHON_WITH_SPECIFY_VERSION $file"
             # run unittests
             python_output=$($PYTHON_WITH_SPECIFY_VERSION $file 2>&1)
 

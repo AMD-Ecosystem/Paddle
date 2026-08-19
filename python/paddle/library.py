@@ -12,15 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-#  #The file has been adapted from pytorch project
-#  #Licensed under  BSD-style license -
-#  https://github.com/pytorch/pytorch/blob/main/LICENSE
+# The file has been adapted from pytorch project
+# Licensed under BSD-style license -
+# https://github.com/pytorch/pytorch/blob/main/LICENSE
 
 from __future__ import annotations
 
 import warnings
 from collections.abc import Callable, Iterable, Sequence
-from typing import Union, overload
+from typing import Any, Union, overload
 
 from typing_extensions import TypeAlias
 
@@ -69,6 +69,11 @@ class CustomOpDef:
             "register_fake", "torch.library.CustomOpDef"
         )
         return fn
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return PYTHON_OP_REGISTRY.get_operator(
+            f"{self._namespace}::{self._name}"
+        )(*args, **kwargs)
 
 
 @overload

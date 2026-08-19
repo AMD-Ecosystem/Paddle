@@ -24,11 +24,11 @@ limitations under the License. */
 namespace phi {
 namespace funcs {
 template <typename T>
-struct SelectedRowsAdd<phi::GPUContext, T> {
-  void operator()(const phi::GPUContext& dev_ctx,
-                  const phi::SelectedRows& input1,
-                  const phi::SelectedRows& input2,
-                  phi::SelectedRows* output) {
+struct SelectedRowsAdd<GPUContext, T> {
+  void operator()(const GPUContext& dev_ctx,
+                  const SelectedRows& input1,
+                  const SelectedRows& input2,
+                  SelectedRows* output) {
     auto in1_height = input1.height();
     PADDLE_ENFORCE_EQ(
         in1_height,
@@ -40,7 +40,7 @@ struct SelectedRowsAdd<phi::GPUContext, T> {
                                         input2.height()));
     output->set_height(in1_height);
 
-    phi::Vector<int64_t> in1_rows(input1.rows());
+    Vector<int64_t> in1_rows(input1.rows());
     auto& in2_rows = input2.rows();
     std::vector<int64_t> out_rows;
     out_rows.reserve(in1_rows.size() + in2_rows.size());
@@ -76,17 +76,17 @@ struct SelectedRowsAdd<phi::GPUContext, T> {
     auto* in1_data = in1_value.data<T>();
 
     auto in1_place = input1.place();
-    PADDLE_ENFORCE_EQ(in1_place.GetType() == phi::AllocationType::GPU,
+    PADDLE_ENFORCE_EQ(in1_place.GetType() == AllocationType::GPU,
                       true,
                       common::errors::InvalidArgument(
                           "The running environment is not on the GPU place."));
     auto in2_place = input2.place();
-    PADDLE_ENFORCE_EQ(in2_place.GetType() == phi::AllocationType::GPU,
+    PADDLE_ENFORCE_EQ(in2_place.GetType() == AllocationType::GPU,
                       true,
                       common::errors::InvalidArgument(
                           "The running environment is not on the GPU place."));
     auto out_place = dev_ctx.GetPlace();
-    PADDLE_ENFORCE_EQ(out_place.GetType() == phi::AllocationType::GPU,
+    PADDLE_ENFORCE_EQ(out_place.GetType() == AllocationType::GPU,
                       true,
                       common::errors::InvalidArgument(
                           "The running environment is not on the GPU place."));
@@ -108,8 +108,8 @@ struct SelectedRowsAdd<phi::GPUContext, T> {
   }
 };
 
-template struct PADDLE_API SelectedRowsAdd<phi::GPUContext, float>;
-template struct SelectedRowsAdd<phi::GPUContext, double>;
+template struct PADDLE_API SelectedRowsAdd<GPUContext, float>;
+template struct SelectedRowsAdd<GPUContext, double>;
 
 namespace {
 template <typename T, int block_size>
@@ -127,17 +127,17 @@ __global__ void SelectedRowsAddTensorKernel(const T* selected_rows,
     // Since index in rows of SelectedRows can be duplicate, we can not use
     // tensor_out[index] += selected_rows[index]; Instead, we have to use
     // AtomicAdd to avoid concurrent write error.
-    phi::CudaAtomicAdd(tensor_out + index, selected_rows[index]);
+    CudaAtomicAdd(tensor_out + index, selected_rows[index]);
   }
 }
 }  // namespace
 
 template <typename T>
-struct SelectedRowsAddTensor<phi::GPUContext, T> {
-  void operator()(const phi::GPUContext& dev_ctx,
-                  const phi::SelectedRows& input1,
-                  const phi::DenseTensor& input2,
-                  phi::DenseTensor* output) {
+struct SelectedRowsAddTensor<GPUContext, T> {
+  void operator()(const GPUContext& dev_ctx,
+                  const SelectedRows& input1,
+                  const DenseTensor& input2,
+                  DenseTensor* output) {
     auto in1_height = input1.height();
     auto in2_dims = input2.dims();
     auto out_dims = output->dims();
@@ -183,7 +183,7 @@ struct SelectedRowsAddTensor<phi::GPUContext, T> {
     auto* in2_data = input2.data<T>();
     auto* out_data = output->data<T>();
 
-    phi::funcs::SetConstant<phi::GPUContext, T> functor;
+    funcs::SetConstant<GPUContext, T> functor;
     functor(dev_ctx, output, static_cast<T>(0));
 
     const int block_size = 256;
@@ -203,17 +203,17 @@ struct SelectedRowsAddTensor<phi::GPUContext, T> {
   }
 };
 
-template struct PADDLE_API SelectedRowsAddTensor<phi::GPUContext, float>;
-template struct PADDLE_API SelectedRowsAddTensor<phi::GPUContext, double>;
-template struct SelectedRowsAdd<phi::GPUContext, phi::float16>;
-template struct SelectedRowsAddTensor<phi::GPUContext, phi::float16>;
+template struct PADDLE_API SelectedRowsAddTensor<GPUContext, float>;
+template struct PADDLE_API SelectedRowsAddTensor<GPUContext, double>;
+template struct SelectedRowsAdd<GPUContext, phi::float16>;
+template struct SelectedRowsAddTensor<GPUContext, phi::float16>;
 
 template <typename T>
-struct SelectedRowsAddTo<phi::GPUContext, T> {
-  void operator()(const phi::GPUContext& dev_ctx,
-                  const phi::SelectedRows& input1,
+struct SelectedRowsAddTo<GPUContext, T> {
+  void operator()(const GPUContext& dev_ctx,
+                  const SelectedRows& input1,
                   const int64_t input2_offset,
-                  phi::SelectedRows* input2) {
+                  SelectedRows* input2) {
     auto in1_height = input1.height();
     PADDLE_ENFORCE_EQ(
         in1_height,
@@ -237,12 +237,12 @@ struct SelectedRowsAddTo<phi::GPUContext, T> {
     }
 
     auto in1_place = input1.place();
-    PADDLE_ENFORCE_EQ(in1_place.GetType() == phi::AllocationType::GPU,
+    PADDLE_ENFORCE_EQ(in1_place.GetType() == AllocationType::GPU,
                       true,
                       common::errors::InvalidArgument(
                           "The running environment is not on the GPU place."));
     auto in2_place = input2->place();
-    PADDLE_ENFORCE_EQ(in1_place.GetType() == phi::AllocationType::GPU,
+    PADDLE_ENFORCE_EQ(in1_place.GetType() == AllocationType::GPU,
                       true,
                       common::errors::InvalidArgument(
                           "The running environment is not on the GPU place."));
@@ -258,11 +258,11 @@ struct SelectedRowsAddTo<phi::GPUContext, T> {
   }
 };
 
-template struct PADDLE_API SelectedRowsAddTo<phi::GPUContext, float>;
-template struct SelectedRowsAddTo<phi::GPUContext, double>;
-template struct SelectedRowsAddTo<phi::GPUContext, int>;
-template struct SelectedRowsAddTo<phi::GPUContext, int64_t>;
-template struct SelectedRowsAddTo<phi::GPUContext, phi::float16>;
+template struct PADDLE_API SelectedRowsAddTo<GPUContext, float>;
+template struct SelectedRowsAddTo<GPUContext, double>;
+template struct SelectedRowsAddTo<GPUContext, int>;
+template struct SelectedRowsAddTo<GPUContext, int64_t>;
+template struct SelectedRowsAddTo<GPUContext, phi::float16>;
 
 namespace {
 template <typename T, int block_size>
@@ -279,16 +279,16 @@ __global__ void SelectedRowsAddToTensorKernel(const T* selected_rows,
   for (int64_t index = tid; index < row_numel; index += block_size) {
     // Since index in rows of SelectedRows can be duplicate, we have to use
     // Atomic Operation to avoid concurrent write error.
-    phi::CudaAtomicAdd(tensor_out + index, selected_rows[index]);
+    CudaAtomicAdd(tensor_out + index, selected_rows[index]);
   }
 }
 }  // namespace
 
 template <typename T>
-struct SelectedRowsAddToTensor<phi::GPUContext, T> {
-  void operator()(const phi::GPUContext& dev_ctx,
-                  const phi::SelectedRows& input1,
-                  phi::DenseTensor* input2) {
+struct SelectedRowsAddToTensor<GPUContext, T> {
+  void operator()(const GPUContext& dev_ctx,
+                  const SelectedRows& input1,
+                  DenseTensor* input2) {
     auto in1_height = input1.height();
     auto in2_dims = input2->dims();
     PADDLE_ENFORCE_EQ(
@@ -328,13 +328,13 @@ struct SelectedRowsAddToTensor<phi::GPUContext, T> {
   }
 };
 
-template struct PADDLE_API SelectedRowsAddToTensor<phi::GPUContext, float>;
-template struct PADDLE_API SelectedRowsAddToTensor<phi::GPUContext, double>;
-template struct SelectedRowsAddToTensor<phi::GPUContext, int>;
-template struct SelectedRowsAddToTensor<phi::GPUContext, int64_t>;
-template struct SelectedRowsAddToTensor<phi::GPUContext, phi::float16>;
-template struct SelectedRowsAddToTensor<phi::GPUContext, phi::complex64>;
-template struct SelectedRowsAddToTensor<phi::GPUContext, phi::complex128>;
+template struct PADDLE_API SelectedRowsAddToTensor<GPUContext, float>;
+template struct PADDLE_API SelectedRowsAddToTensor<GPUContext, double>;
+template struct SelectedRowsAddToTensor<GPUContext, int>;
+template struct SelectedRowsAddToTensor<GPUContext, int64_t>;
+template struct SelectedRowsAddToTensor<GPUContext, phi::float16>;
+template struct SelectedRowsAddToTensor<GPUContext, phi::complex64>;
+template struct SelectedRowsAddToTensor<GPUContext, phi::complex128>;
 
 namespace scatter {
 
@@ -362,44 +362,44 @@ __global__ void MergeAddKernel(const T* input,
   input += ty * row_numel;
   out += out_idx * row_numel;
   for (int64_t index = tid; index < row_numel; index += block_size) {
-    phi::CudaAtomicAdd(out + index, input[index]);
+    CudaAtomicAdd(out + index, input[index]);
   }
 }
 
 template <typename DeviceContext, typename T>
 struct MergeAddImpl {
-  phi::SelectedRows operator()(const DeviceContext& dev_ctx,
-                               const phi::SelectedRows& input,
-                               const bool sorted_result = false) {
-    phi::SelectedRows out;
+  SelectedRows operator()(const DeviceContext& dev_ctx,
+                          const SelectedRows& input,
+                          const bool sorted_result = false) {
+    SelectedRows out;
     (*this)(dev_ctx, input, &out);
     return out;
   }
 
   void operator()(const DeviceContext& dev_ctx,
-                  const phi::SelectedRows& input,
-                  phi::SelectedRows* output,
+                  const SelectedRows& input,
+                  SelectedRows* output,
                   const bool sorted_result = false) {
-    phi::Vector<int64_t> input_rows(input.rows());
+    Vector<int64_t> input_rows(input.rows());
     if (input_rows.size() == 0) {
       return;
     }
 
-    phi::SelectedRows& out = *output;
+    SelectedRows& out = *output;
     std::set<int64_t> row_set(input_rows.begin(), input_rows.end());
     std::vector<int64_t> merge_rows_cpu(row_set.begin(), row_set.end());
-    phi::Vector<int64_t> merge_rows(merge_rows_cpu);
+    Vector<int64_t> merge_rows(merge_rows_cpu);
 
     auto input_width = input.value().dims()[1];
 
     out.set_rows(merge_rows);
     out.set_height(input.height());
     DenseTensor* out_tensor = out.mutable_value();
-    out_tensor->Resize(common::make_ddim(
-        {static_cast<int64_t>(merge_rows.size()), input_width}));
+    out_tensor->Resize(
+        make_ddim({static_cast<int64_t>(merge_rows.size()), input_width}));
     dev_ctx.template Alloc<T>(out_tensor);
 
-    phi::funcs::SetConstant<DeviceContext, T> constant_functor;
+    funcs::SetConstant<DeviceContext, T> constant_functor;
     constant_functor(dev_ctx, out.mutable_value(), static_cast<T>(0));
 
     auto* out_data = out.mutable_value()->data<T>();
@@ -422,14 +422,14 @@ struct MergeAddImpl {
   }
 
   void operator()(const DeviceContext& dev_ctx,
-                  const std::vector<const phi::SelectedRows*>& inputs,
-                  phi::SelectedRows* output,
+                  const std::vector<const SelectedRows*>& inputs,
+                  SelectedRows* output,
                   const bool sorted_result = false) {
     if (inputs.size() == 0) {
       VLOG(3) << "no input! return";
       return;
     }
-    const phi::SelectedRows* has_value_input = nullptr;
+    const SelectedRows* has_value_input = nullptr;
     for (auto* in : inputs) {
       if (in->rows().size() > 0) {
         has_value_input = in;
@@ -442,7 +442,7 @@ struct MergeAddImpl {
     }
     auto input_width = has_value_input->value().dims()[1];
     auto input_height = has_value_input->height();
-    phi::SelectedRows& out = *output;
+    SelectedRows& out = *output;
     std::set<int64_t> merged_row_set;
     for (auto* input : inputs) {
       if (input->rows().size() == 0) {
@@ -461,17 +461,17 @@ struct MergeAddImpl {
     }
     std::vector<int64_t> merge_rows_cpu(merged_row_set.begin(),
                                         merged_row_set.end());
-    phi::Vector<int64_t> merge_rows(merge_rows_cpu);
+    Vector<int64_t> merge_rows(merge_rows_cpu);
 
     out.set_rows(merge_rows);
     out.set_height(input_height);
 
     DenseTensor* out_tensor = out.mutable_value();
-    out_tensor->Resize(common::make_ddim(
-        {static_cast<int64_t>(merge_rows.size()), input_width}));
+    out_tensor->Resize(
+        make_ddim({static_cast<int64_t>(merge_rows.size()), input_width}));
     dev_ctx.template Alloc<T>(out_tensor);
 
-    phi::funcs::SetConstant<DeviceContext, T> constant_functor;
+    funcs::SetConstant<DeviceContext, T> constant_functor;
     constant_functor(dev_ctx, out.mutable_value(), static_cast<T>(0));
 
     auto* out_data = out.mutable_value()->data<T>();
@@ -502,33 +502,33 @@ struct MergeAddImpl {
 };
 
 template <typename T>
-struct MergeAdd<phi::GPUContext, T> {
+struct MergeAdd<GPUContext, T> {
   // unary functor, merge by adding duplicated rows in
   // the input SelectedRows object.
-  phi::SelectedRows operator()(const phi::GPUContext& dev_ctx,
-                               const phi::SelectedRows& input,
-                               const bool sorted_result) {
-    return MergeAddImpl<phi::GPUContext, T>()(dev_ctx, input, sorted_result);
+  SelectedRows operator()(const GPUContext& dev_ctx,
+                          const SelectedRows& input,
+                          const bool sorted_result) {
+    return MergeAddImpl<GPUContext, T>()(dev_ctx, input, sorted_result);
   }
 
-  void operator()(const phi::GPUContext& dev_ctx,
-                  const phi::SelectedRows& input,
-                  phi::SelectedRows* output,
+  void operator()(const GPUContext& dev_ctx,
+                  const SelectedRows& input,
+                  SelectedRows* output,
                   const bool sorted_result) {
-    MergeAddImpl<phi::GPUContext, T>()(dev_ctx, input, output, sorted_result);
+    MergeAddImpl<GPUContext, T>()(dev_ctx, input, output, sorted_result);
   }
 
-  void operator()(const phi::GPUContext& dev_ctx,
-                  const std::vector<const phi::SelectedRows*>& inputs,
-                  phi::SelectedRows* output,
+  void operator()(const GPUContext& dev_ctx,
+                  const std::vector<const SelectedRows*>& inputs,
+                  SelectedRows* output,
                   const bool sorted_result) {
-    MergeAddImpl<phi::GPUContext, T>()(dev_ctx, inputs, output, sorted_result);
+    MergeAddImpl<GPUContext, T>()(dev_ctx, inputs, output, sorted_result);
   }
 };
 
-#define TEMPLATE_SPECIALIZED_FOR_MERGEADD(dtype)        \
-  template struct MergeAddImpl<phi::GPUContext, dtype>; \
-  template struct PADDLE_API MergeAdd<phi::GPUContext, dtype>;
+#define TEMPLATE_SPECIALIZED_FOR_MERGEADD(dtype)   \
+  template struct MergeAddImpl<GPUContext, dtype>; \
+  template struct PADDLE_API MergeAdd<GPUContext, dtype>;
 
 TEMPLATE_SPECIALIZED_FOR_MERGEADD(float)
 TEMPLATE_SPECIALIZED_FOR_MERGEADD(double)
@@ -591,14 +591,14 @@ __global__ void UpdateToTensorKernel(const T* selected_rows,
 }
 
 template <typename T>
-struct UpdateToTensor<phi::GPUContext, T> {
-  void operator()(const phi::GPUContext& dev_ctx,
+struct UpdateToTensor<GPUContext, T> {
+  void operator()(const GPUContext& dev_ctx,
                   const ScatterOps& op,
-                  const phi::SelectedRows& input1,
+                  const SelectedRows& input1,
                   DenseTensor* input2) {
     // NOTE: Use SelectedRowsAddToTensor for better performance
     //       no additional MergeAdd called.
-    MergeAdd<phi::GPUContext, T> merge_func;
+    MergeAdd<GPUContext, T> merge_func;
     auto merged_in1 = merge_func(dev_ctx, input1);
 
     auto in1_height = merged_in1.height();

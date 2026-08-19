@@ -230,7 +230,7 @@ bool is_only_transposed(const DDim& shape,
 }
 
 template <typename T, typename Context>
-bool LaunchContiguousCazeZeroKernel(
+bool LaunchContiguousCaseZeroKernel(
     const Context& dev_ctx,
     const T* input_data,
     const phi::Array<int64_t, DDim::kMaxRank + 1>& input_stride,
@@ -302,7 +302,7 @@ bool LaunchContiguousCazeZeroKernel(
 }
 
 template <typename T, typename Context>
-bool LaunchContiguousCazeOneKernel(
+bool LaunchContiguousCaseOneKernel(
     const Context& dev_ctx,
     const T* input_data,
     const phi::Array<int64_t, DDim::kMaxRank + 1>& input_stride,
@@ -500,7 +500,7 @@ template <typename T, typename Context>
 void ContiguousKernel(const Context& dev_ctx,
                       const DenseTensor& input,
                       DenseTensor* out) {
-  phi::DenseTensorMeta meta = input.meta();
+  DenseTensorMeta meta = input.meta();
   std::vector<int> axis;
   DDim src_stride = meta.strides;
   DDim src_shape = meta.dims;
@@ -509,7 +509,7 @@ void ContiguousKernel(const Context& dev_ctx,
     meta.strides = meta.calc_strides(meta.dims);
     out->set_meta(meta);
     DenseTensor tmp_tensor = input;
-    phi::DenseTensorMeta tmp_meta = meta;
+    DenseTensorMeta tmp_meta = meta;
     tmp_meta.strides = src_stride;
     tmp_meta.dims = src_shape;
     tmp_tensor.set_meta(tmp_meta);
@@ -543,9 +543,9 @@ void ContiguousKernel(const Context& dev_ctx,
     input_stride[0] = 1;
   }
 
-  if (LaunchContiguousCazeZeroKernel<T, Context>(
+  if (LaunchContiguousCaseZeroKernel<T, Context>(
           dev_ctx, input_data, input_stride, input_dims, rank, output_data)) {
-  } else if (LaunchContiguousCazeOneKernel<T, Context>(dev_ctx,
+  } else if (LaunchContiguousCaseOneKernel<T, Context>(dev_ctx,
                                                        input_data,
                                                        input_stride,
                                                        input_dims,

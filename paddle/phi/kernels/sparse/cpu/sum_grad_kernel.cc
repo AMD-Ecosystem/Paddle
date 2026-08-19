@@ -47,12 +47,12 @@ void SumCooGradCPUKernel(const Context& dev_ctx,
   const auto* dx_indices_data = dx_indices->data<int64_t>();
   auto* dx_values_data = dx_values->data<T>();
 
-  phi::funcs::SetConstant<Context, T> set_constant;
+  funcs::SetConstant<Context, T> set_constant;
   if (n_dim == 0) {
     T value = dout_values.data<T>()[0];
     set_constant(dev_ctx, dx_values, value);
     if (dx_values->dtype() != dx->dtype()) {
-      *dx_values = phi::Cast<T, Context>(dev_ctx, *dx_values, dx->dtype());
+      *dx_values = Cast<T, Context>(dev_ctx, *dx_values, dx->dtype());
     }
     return;
   }
@@ -64,7 +64,7 @@ void SumCooGradCPUKernel(const Context& dev_ctx,
     phi::ReduceSumGradKernel<T, Context>(
         dev_ctx, x.values(), dout.values(), {dim}, keep_dim, false, dx_values);
     if (dx_values->dtype() != dx->dtype()) {
-      *dx_values = phi::Cast<T, Context>(dev_ctx, *dx_values, dx->dtype());
+      *dx_values = Cast<T, Context>(dev_ctx, *dx_values, dx->dtype());
     }
     return;
   }
@@ -103,7 +103,7 @@ void SumCooGradCPUKernel(const Context& dev_ctx,
     }
   }
   if (dx_values->dtype() != dx->dtype()) {
-    *dx_values = phi::Cast<T, Context>(dev_ctx, *dx_values, dx->dtype());
+    *dx_values = Cast<T, Context>(dev_ctx, *dx_values, dx->dtype());
   }
 }
 
@@ -129,12 +129,12 @@ void SumCsrGradKernel(const Context& dev_ctx,
   *dx_crows = x_crows;
   *dx_cols = x_cols;
 
-  phi::funcs::SetConstant<Context, T> set_constant;
+  funcs::SetConstant<Context, T> set_constant;
   if (n_dim == 0) {
     T value = dout_values.data<T>()[0];
     set_constant(dev_ctx, dx_values, value);
     if (dx_values->dtype() != dx->dtype()) {
-      *dx_values = phi::Cast<T, Context>(dev_ctx, *dx_values, dx->dtype());
+      *dx_values = Cast<T, Context>(dev_ctx, *dx_values, dx->dtype());
     }
     return;
   }
@@ -175,7 +175,7 @@ void SumCsrGradKernel(const Context& dev_ctx,
   }
 
   if (dx_values->dtype() != dx->dtype()) {
-    *dx_values = phi::Cast<T, Context>(dev_ctx, *dx_values, dx->dtype());
+    *dx_values = Cast<T, Context>(dev_ctx, *dx_values, dx->dtype());
   }
 }
 

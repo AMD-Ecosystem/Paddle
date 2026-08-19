@@ -22,8 +22,8 @@ void L1NormKernel(const Context& dev_ctx,
                   const DenseTensor& x,
                   DenseTensor* out) {
   dev_ctx.template Alloc<T>(out);
-  auto x_tmp = phi::EigenVector<T>::Flatten(x);
-  auto out_tmp = phi::EigenScalar<T>::From(*out);
+  auto x_tmp = EigenVector<T>::Flatten(x);
+  auto out_tmp = EigenScalar<T>::From(*out);
   auto& dev = *dev_ctx.eigen_device();
   funcs::EigenL1Norm<std::decay_t<decltype(dev)>, T>::Eval(dev, out_tmp, x_tmp);
 }
@@ -38,11 +38,11 @@ void L1NormGradKernel(const Context& dev_ctx,
                     common::errors::InvalidArgument(
                         "Input(GRAD@Out) of L1NormGradOp should be a scalar."));
   dev_ctx.template Alloc<T>(x_grad);
-  auto x_eigen = phi::EigenVector<T>::Flatten(x);
-  auto d_out_eigen = phi::EigenVector<T>::Flatten(out_grad);
-  auto dx_eigen = phi::EigenVector<T>::Flatten(*x_grad);
+  auto x_eigen = EigenVector<T>::Flatten(x);
+  auto d_out_eigen = EigenVector<T>::Flatten(out_grad);
+  auto dx_eigen = EigenVector<T>::Flatten(*x_grad);
   auto& dev = *dev_ctx.eigen_device();
-  Eigen::DSizes<Eigen::DenseIndex, 1> x_dsize(x.numel());
+  Eigen::DSizes<int64_t, 1> x_dsize(x.numel());
   funcs::EigenL1NormGrad<std::decay_t<decltype(dev)>, T>::Eval(
       dev, dx_eigen, d_out_eigen, x_eigen, x_dsize);
 }

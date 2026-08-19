@@ -35,7 +35,7 @@ void TakeAlongAxisKernel(const Context& dev_ctx,
   }
   if (x.numel() == 0) {
     phi::Full<T, Context>(
-        dev_ctx, common::vectorize(out->dims()), static_cast<T>(0), out);
+        dev_ctx, vectorize(out->dims()), static_cast<T>(0), out);
     return;
   }
 
@@ -55,7 +55,7 @@ void TakeAlongAxisKernel(const Context& dev_ctx,
     PADDLE_THROW(common::errors::InvalidArgument(
         "The data type of input index is expected "
         "to be int32 or int64, but received %s.",
-        phi::DataTypeToString(index_type)));
+        DataTypeToString(index_type)));
   }
 }
 

@@ -23,6 +23,7 @@ limitations under the License. */
 #include "paddle/phi/kernels/cpu/conv_util.h"
 #include "paddle/phi/kernels/funcs/padding.h"
 #include "paddle/phi/kernels/funcs/slice.h"
+#include "paddle/phi/kernels/gpudnn/conv_gpudnn.h"
 #include "paddle/phi/kernels/transpose_kernel.h"
 
 #ifdef PADDLE_WITH_HIP
@@ -42,6 +43,10 @@ limitations under the License. */
 #include "paddle/phi/kernels/gpudnn/conv_cudnn_frontend.h"
 // clang-format on
 #endif
+
+#include "paddle/common/flags.h"
+
+COMMON_DECLARE_bool(use_accuracy_compatible_kernel);
 
 namespace phi {
 
@@ -220,7 +225,8 @@ void ConvTransposeCudnnKernelImplV8(const DenseTensor* transformed_x,
                                           input_data,
                                           filter_data,
                                           handle,
-                                          &workspace_handle);
+                                          &workspace_handle,
+                                          transformed_x->dtype());
 
   helper::ExecutePlansAndCache(handle,
                                &workspace_handle,
@@ -246,8 +252,7 @@ void ConvTransposeRawGPUDNNKernel(const Context& dev_ctx,
                                   const std::string& data_format,
                                   DenseTensor* out) {
   if (x.numel() == 0 || filter.numel() == 0) {
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(out->dims())), 0, out);
+    Full<T, Context>(dev_ctx, out->dims(), 0, out);
     return;
   }
 
@@ -269,8 +274,8 @@ void ConvTransposeRawGPUDNNKernel(const Context& dev_ctx,
   std::vector<int> dilations_ = dilations;
   const DataLayout data_layout =
       (data_format != "NHWC" ? DataLayout::NCHW : DataLayout::NHWC);
-  std::vector<int64_t> x_vec = common::vectorize<int64_t>(x.dims());
-  std::vector<int64_t> out_vec = common::vectorize<int64_t>(out->dims());
+  std::vector<int64_t> x_vec = vectorize<int64_t>(x.dims());
+  std::vector<int64_t> out_vec = vectorize<int64_t>(out->dims());
   // if channel_last, transpose to channel_first
   DenseTensor x_transpose;
   if (data_layout == DataLayout::NHWC) {
@@ -299,7 +304,7 @@ void ConvTransposeRawGPUDNNKernel(const Context& dev_ctx,
   DDim x_data_dims;
   x_data_dims = slice_ddim(x_dims, 2, x_dims.size());
   DDim filter_data_dims = slice_ddim(filter_dims, 2, filter_dims.size());
-  std::vector<int> ksize = common::vectorize<int>(filter_data_dims);
+  std::vector<int> ksize = vectorize<int>(filter_data_dims);
   UpdatePaddingAndDilation(
       &paddings_, &dilations_, padding_algorithm, x_data_dims, strides, ksize);
 
@@ -322,7 +327,7 @@ void ConvTransposeRawGPUDNNKernel(const Context& dev_ctx,
       x_pad[2 * i + 4] = paddings_[2 * i] - padding_common[i];
       x_pad[2 * i + 4 + 1] = paddings_[2 * i + 1] - padding_common[i];
     }
-    DDim new_x_shape(common::make_ddim(new_x_shape_vec));
+    DDim new_x_shape(make_ddim(new_x_shape_vec));
     transformed_x.Resize(new_x_shape);
     dev_ctx.template Alloc<T>(&transformed_x);
 
@@ -363,7 +368,7 @@ void ConvTransposeRawGPUDNNKernel(const Context& dev_ctx,
     axes[i] = i + 2;
   }
 
-  x_vec = common::vectorize<int64_t>(transformed_x.dims());
+  x_vec = vectorize<int64_t>(transformed_x.dims());
 
   std::vector<int64_t> transformed_out_vec = out_vec;
   for (size_t i = 0; i < data_dim; ++i) {
@@ -374,12 +379,12 @@ void ConvTransposeRawGPUDNNKernel(const Context& dev_ctx,
 
   DenseTensor transformed_out;
   if (!is_sys_pad) {
-    transformed_out.Resize(common::make_ddim(transformed_out_vec));
+    transformed_out.Resize(transformed_out_vec);
     dev_ctx.template Alloc<T>(&transformed_out);
   } else {
     dev_ctx.template Alloc<T>(out);
     transformed_out.ShareDataWith(*out);
-    transformed_out.Resize(common::make_ddim(transformed_out_vec));
+    transformed_out.Resize(transformed_out_vec);
   }
 
   DataLayout layout;
@@ -443,7 +448,7 @@ void ConvTransposeRawGPUDNNKernel(const Context& dev_ctx,
     DenseTensor out_transpose;
     DenseTensor out_nchw;
     out_nchw.ShareDataWith(*out);
-    out_nchw.Resize(common::make_ddim(out_vec));
+    out_nchw.Resize(out_vec);
 
     if (strides.size() == 2U) {
       out_transpose = Transpose<T, Context>(dev_ctx, out_nchw, {0, 2, 3, 1});
@@ -453,6 +458,41 @@ void ConvTransposeRawGPUDNNKernel(const Context& dev_ctx,
     *out = out_transpose;
   }
 }
+
+#ifdef PADDLE_WITH_CUDNN_FRONTEND
+template <typename T, typename Context>
+void ConvTransposeRawGPUDNNKernelV8(const Context& dev_ctx,
+                                    const DenseTensor& x,
+                                    const DenseTensor& filter,
+                                    const std::vector<int>& strides,
+                                    const std::vector<int>& paddings,
+                                    const std::string& padding_algorithm,
+                                    int groups,
+                                    const std::vector<int>& dilations,
+                                    const std::string& data_format,
+                                    DenseTensor* out) {
+  DenseTensor dummy_input;
+  dummy_input.Resize(out->dims());
+
+  dev_ctx.template Alloc<T>(out);
+  dummy_input.ShareDataWith(*out);
+
+  DenseTensor* filter_grad_ptr = nullptr;
+
+  ConvCudnnGradKernel<T, Context>(dev_ctx,
+                                  dummy_input,
+                                  filter,
+                                  x,
+                                  strides,
+                                  paddings,
+                                  padding_algorithm,
+                                  dilations,
+                                  groups,
+                                  data_format,
+                                  out,
+                                  filter_grad_ptr);
+}
+#endif
 
 template <typename T, typename Context>
 void Conv2dTransposeGPUDNNKernel(const Context& dev_ctx,
@@ -467,6 +507,31 @@ void Conv2dTransposeGPUDNNKernel(const Context& dev_ctx,
                                  const std::vector<int>& dilations,
                                  const std::string& data_format,
                                  DenseTensor* out) {
+#ifdef PADDLE_WITH_CUDNN_FRONTEND
+  if (dynload::IsCudnnFrontendEnabled() && FLAGS_use_accuracy_compatible_kernel)
+    ConvTransposeRawGPUDNNKernelV8<T, Context>(dev_ctx,
+                                               x,
+                                               filter,
+                                               strides,
+                                               paddings,
+                                               padding_algorithm,
+                                               groups,
+                                               dilations,
+                                               data_format,
+                                               out);
+  else
+    ConvTransposeRawGPUDNNKernel<T, Context>(dev_ctx,
+                                             x,
+                                             filter,
+                                             strides,
+                                             paddings,
+                                             padding_algorithm,
+                                             groups,
+                                             dilations,
+                                             data_format,
+                                             out);
+
+#else
   ConvTransposeRawGPUDNNKernel<T, Context>(dev_ctx,
                                            x,
                                            filter,
@@ -477,6 +542,7 @@ void Conv2dTransposeGPUDNNKernel(const Context& dev_ctx,
                                            dilations,
                                            data_format,
                                            out);
+#endif
 }
 
 template <typename T, typename Context>

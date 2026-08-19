@@ -40,7 +40,7 @@ void RowConvKernel(const Context &dev_ctx,
   } else {
     batch_size = static_cast<int>(x->lod()[0].size() - 1);
   }
-  phi::Vector<size_t> batch_indices(batch_size + 1);
+  Vector<size_t> batch_indices(batch_size + 1);
   int input_dim = 0;
   int timesteps = 0;
   if (is_tensor) {
@@ -68,12 +68,12 @@ void RowConvKernel(const Context &dev_ctx,
       current_timesteps = end - start;
     }
     // int current_timesteps = end - start;
-    phi::DenseTensor cur_input_sequence =
+    DenseTensor cur_input_sequence =
         x->Slice(start, end);  // Current input sequence
     cur_input_sequence =
         cur_input_sequence.Resize({current_timesteps, input_dim});
 
-    phi::DenseTensor cur_output_sequence =
+    DenseTensor cur_output_sequence =
         out->Slice(start, end);  // Current output sequence
     cur_output_sequence =
         cur_output_sequence.Resize({current_timesteps, input_dim});

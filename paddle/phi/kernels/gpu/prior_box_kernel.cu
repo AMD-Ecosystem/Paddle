@@ -124,10 +124,8 @@ void PriorBoxKernel(const Context& dev_ctx,
                     DenseTensor* out,
                     DenseTensor* var) {
   if (input.numel() == 0 || image.numel() == 0) {
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(out->dims())), 0, out);
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(var->dims())), 0, var);
+    Full<T, Context>(dev_ctx, out->dims(), 0, out);
+    Full<T, Context>(dev_ctx, var->dims(), 0, var);
     return;
   }
 
@@ -169,15 +167,15 @@ void PriorBoxKernel(const Context& dev_ctx,
   dev_ctx.template Alloc<T>(var);
 
   DenseTensor r;
-  phi::TensorFromVector(new_aspect_ratios, dev_ctx, &r);
+  TensorFromVector(new_aspect_ratios, dev_ctx, &r);
 
   DenseTensor min;
-  phi::TensorFromVector(min_sizes, dev_ctx, &min);
+  TensorFromVector(min_sizes, dev_ctx, &min);
 
   T* max_data = nullptr;
   DenseTensor max;
   if (max_sizes.size() > 0) {
-    phi::TensorFromVector(max_sizes, dev_ctx, &max);
+    TensorFromVector(max_sizes, dev_ctx, &max);
     max_data = max.data<T>();
   }
 
@@ -198,7 +196,7 @@ void PriorBoxKernel(const Context& dev_ctx,
                                              min_max_aspect_ratios_order);
 
   DenseTensor v;
-  phi::TensorFromVector(variances, dev_ctx, &v);
+  TensorFromVector(variances, dev_ctx, &v);
   grid = (box_num * 4 + block - 1) / block;
   SetVariance<T><<<grid, block, 0, stream>>>(
       var->data<T>(), v.data<T>(), variances.size(), box_num * 4);

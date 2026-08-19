@@ -78,7 +78,7 @@ void DiagEmbedKernel(const Context& dev_ctx,
   if (out && out->numel() == 0) {
     return;
   }
-  phi::funcs::SetConstant<Context, T> set_zero;
+  funcs::SetConstant<Context, T> set_zero;
 
   set_zero(dev_ctx, out, static_cast<T>(0.0));
 
@@ -102,11 +102,11 @@ void DiagEmbedKernel(const Context& dev_ctx,
   } else {
     storage_offset -= offset * stride[dim1_];
   }
-  auto strides = common::vectorize(stride);
+  auto strides = vectorize(stride);
   strides.erase(strides.begin() + std::max(dim1_, dim2_));
   strides.erase(strides.begin() + std::min(dim1_, dim2_));
   strides.push_back(stride[dim1_] + stride[dim2_]);
-  const auto dims = common::vectorize(x.dims());
+  const auto dims = vectorize(x.dims());
 
 #if defined(__NVCC__) || defined(__HIPCC__)
   thrust::device_vector<int64_t> dims_vec(dims);
@@ -118,7 +118,7 @@ void DiagEmbedKernel(const Context& dev_ctx,
   const int64_t* strides_arr = strides.data();
 #endif
 
-  phi::funcs::ForRange<Context> for_range(dev_ctx, x.numel());
+  funcs::ForRange<Context> for_range(dev_ctx, x.numel());
   DiagEmbedFunctor<T> functor(input_data,
                               x.numel(),
                               dims_arr,

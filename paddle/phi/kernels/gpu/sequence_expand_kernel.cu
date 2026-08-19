@@ -18,11 +18,11 @@
 namespace phi {
 
 template <typename T>
-static inline int ExpandByMemoryCopy(const phi::GPUContext& dev_ctx,
+static inline int ExpandByMemoryCopy(const GPUContext& dev_ctx,
                                      const DenseTensor& x,
                                      DenseTensor* out,
-                                     const phi::Vector<size_t>& x_lod,
-                                     const phi::Vector<size_t>& ref_lod,
+                                     const Vector<size_t>& x_lod,
+                                     const Vector<size_t>& ref_lod,
                                      bool do_copy) {
   auto out_data = out->data<T>();
   auto x_data = x.data<T>();
@@ -93,11 +93,11 @@ inline __global__ void sequence_expand_kernel(const T* x_data,
 }
 
 template <typename T>
-struct SequenceExpandFunctor<phi::GPUContext, T> {
-  void operator()(const phi::GPUContext& dev_ctx,
+struct SequenceExpandFunctor<GPUContext, T> {
+  void operator()(const GPUContext& dev_ctx,
                   const DenseTensor& x,
-                  const phi::Vector<size_t>& x_lod,   /*expand source lod*/
-                  const phi::Vector<size_t>& ref_lod, /*expand referenced lod*/
+                  const Vector<size_t>& x_lod,   /*expand source lod*/
+                  const Vector<size_t>& ref_lod, /*expand referenced lod*/
                   DenseTensor* out) {
     int num_copies =
         ExpandByMemoryCopy<T>(dev_ctx, x, out, x_lod, ref_lod, false);
@@ -107,7 +107,7 @@ struct SequenceExpandFunctor<phi::GPUContext, T> {
     } else {
       size_t x_item_length = x.numel() / x.dims()[0];
       size_t x_lod_size = x_lod.size();
-      phi::Vector<size_t> out_offset(x_lod_size * 2 + ref_lod.size());
+      Vector<size_t> out_offset(x_lod_size * 2 + ref_lod.size());
       GetOutputOffset(x_lod, ref_lod, &out_offset);
 
       for (size_t i = 0; i < x_lod_size; ++i) {

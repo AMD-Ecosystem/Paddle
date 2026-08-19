@@ -22,11 +22,13 @@
 
 #include "paddle/phi/core/memory/allocation/allocator.h"
 #include "paddle/phi/core/memory/allocation/spin_lock.h"
+#include "paddle/phi/core/memory/mem_visitor.h"
 
 COMMON_DECLARE_bool(enable_auto_growth_allocator_add_lock);
 
 namespace paddle {
 namespace memory {
+class AllBlocksInfoVisitor;
 namespace allocation {
 
 class PADDLE_API AutoGrowthBestFitAllocator : public Allocator {
@@ -43,6 +45,8 @@ class PADDLE_API AutoGrowthBestFitAllocator : public Allocator {
 
   void PreAlloc() override;
 
+  void Accept(AllocatorVisitor *visitor) override { visitor->Visit(this); }
+
  protected:
   phi::Allocation *AllocateImpl(size_t size) override;
 
@@ -52,7 +56,7 @@ class PADDLE_API AutoGrowthBestFitAllocator : public Allocator {
   size_t auto_growth_size(bool is_small, size_t chunk_size);
 
   // Release the memory block which is not used in pool.
-  uint64_t ReleaseImpl(const phi::Place &place) override {
+  uint64_t ReleaseImpl(const Place &place) override {
     // TODO(vivienfanghuagood): the next line may cause the process to deadlock.
     if (FLAGS_enable_auto_growth_allocator_add_lock) {
       std::lock_guard<SpinLock> guard(spinlock_);
@@ -122,6 +126,8 @@ class PADDLE_API AutoGrowthBestFitAllocator : public Allocator {
   size_t total_free_size_;
 
   SpinLock spinlock_;
+
+  friend class paddle::memory::AllBlocksInfoVisitor;
 };
 
 }  // namespace allocation

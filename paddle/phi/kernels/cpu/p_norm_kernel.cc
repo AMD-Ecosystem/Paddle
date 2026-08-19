@@ -44,7 +44,7 @@ inline void GetDims(
 template <typename T, typename Context>
 void PNormKernel(const Context& dev_ctx,
                  const DenseTensor& x,
-                 float porder,
+                 double porder,
                  int axis,
                  float epsilon UNUSED,
                  bool keepdim UNUSED,
@@ -60,9 +60,8 @@ void PNormKernel(const Context& dev_ctx,
 
   if (x.numel() == 0) {
     if (out->numel() > 0) {
-      std::vector<int64_t> vec_dims = common::vectorize(out->dims());
-      phi::Full<T, Context>(
-          dev_ctx, phi::IntArray(vec_dims), static_cast<T>(0), out);
+      std::vector<int64_t> vec_dims = vectorize(out->dims());
+      Full<T, Context>(dev_ctx, vec_dims, static_cast<T>(0), out);
     }
     return;
   }
@@ -72,8 +71,8 @@ void PNormKernel(const Context& dev_ctx,
   Eigen::DSizes<int64_t, 3> shape(pre, n, post);
   Eigen::DSizes<int64_t, 2> norm_shape(pre, post);
 
-  auto x_e = phi::EigenVector<T>::Flatten(*in_x);
-  auto norm_e = phi::EigenVector<T>::Flatten(*out);
+  auto x_e = EigenVector<T>::Flatten(*in_x);
+  auto norm_e = EigenVector<T>::Flatten(*out);
 
   auto xr = x_e.reshape(shape);
   auto norm = norm_e.reshape(norm_shape);
@@ -90,7 +89,7 @@ void PNormKernel(const Context& dev_ctx,
   } else if (porder == -INFINITY) {
     norm.device(*place) = xr.abs().minimum(rdim);
   } else {
-    norm.device(*place) = xr.abs().pow(porder).sum(rdim).pow(1.0f / porder);
+    norm.device(*place) = xr.abs().pow(porder).sum(rdim).pow(1.0 / porder);
   }
 }
 }  // namespace phi

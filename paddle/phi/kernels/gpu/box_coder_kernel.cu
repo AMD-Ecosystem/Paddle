@@ -17,6 +17,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
 
+#include "paddle/phi/backends/gpu/cuda/cuda_graph_with_memory_pool.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/backends/gpu/gpu_primitives.h"
 #include "paddle/phi/common/memory_utils.h"
@@ -152,7 +153,7 @@ __global__ void DecodeCenterSizeKernel(const T *prior_box_data,
 template <typename T, typename Context>
 void BoxCoderKernel(const Context &dev_ctx,
                     const DenseTensor &prior_box,
-                    const paddle::optional<DenseTensor> &prior_box_var,
+                    const optional<DenseTensor> &prior_box_var,
                     const DenseTensor &target_box,
                     const std::string &code_type_str,
                     bool normalized,
@@ -162,10 +163,7 @@ void BoxCoderKernel(const Context &dev_ctx,
   // prior_box and prior_box_var have the same shape, so do not judge
   // prior_box_var
   if (prior_box.numel() == 0 || target_box.numel() == 0) {
-    phi::Full<T, Context>(dev_ctx,
-                          phi::IntArray(common::vectorize(output_box->dims())),
-                          0,
-                          output_box);
+    Full<T, Context>(dev_ctx, output_box->dims(), 0, output_box);
     return;
   }
 
@@ -216,10 +214,13 @@ void BoxCoderKernel(const Context &dev_ctx,
       bytes,
       phi::Stream(reinterpret_cast<phi::StreamId>(dev_ctx.stream())));
   float *dev_var_data = reinterpret_cast<float *>(dev_var->ptr());
-  auto cplace = phi::CPUPlace();
+  auto cplace = CPUPlace();
   const auto gplace = dev_ctx.GetPlace();
+  const float *stable_variance =
+      phi::backends::gpu::RestoreHostMemIfCapturingCUDAGraph(
+          const_cast<float *>(variance.data()), variance.size());
   memory_utils::Copy(
-      gplace, dev_var_data, cplace, &variance[0], bytes, dev_ctx.stream());
+      gplace, dev_var_data, cplace, stable_variance, bytes, dev_ctx.stream());
 
   output_box->Resize({row, col, len});
   dev_ctx.template Alloc<T>(output_box);

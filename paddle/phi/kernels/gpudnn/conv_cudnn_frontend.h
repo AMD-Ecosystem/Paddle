@@ -19,6 +19,7 @@ limitations under the License. */
 
 #include "glog/logging.h"
 
+#include "paddle/common/flags.h"
 #include "paddle/phi/backends/dynload/cudnn_frontend.h"
 #include "paddle/phi/backends/gpu/cuda/cudnn_desc.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
@@ -27,6 +28,9 @@ limitations under the License. */
 #include "paddle/phi/kernels/autotune/cache.h"
 #include "paddle/phi/kernels/autotune/switch_autotune.h"
 #include "paddle/phi/kernels/gpudnn/conv_gpudnn_base.h"
+
+COMMON_DECLARE_bool(use_accuracy_compatible_kernel);
+COMMON_DECLARE_bool(cudnn_allow_tf32);
 
 namespace phi {
 
@@ -41,7 +45,7 @@ class CudnnFrontendConvHelper {
     return false;
   }
 
-  static uint8_t GetAlignment(const phi::DenseTensor* tensor) {
+  static uint8_t GetAlignment(const DenseTensor* tensor) {
     // alignment are in bytes
     uint8_t alignment = 1;
     uint64_t address = reinterpret_cast<uint64_t>(tensor->data());
@@ -84,10 +88,10 @@ class CudnnFrontendConvHelper {
   }
 
   static cudnn_frontend::Tensor GetTensorDescriptor(
-      const phi::DenseTensor* tensor,
+      const DenseTensor* tensor,
       int64_t id,
       cudnnTensorFormat_t layout_format) {
-    auto transformed_dims = common::vectorize<int64_t>(tensor->dims());
+    auto transformed_dims = vectorize<int64_t>(tensor->dims());
     if (layout_format == CUDNN_TENSOR_NHWC) {
       transformed_dims =
           phi::backends::gpu::TransformDimOrder(transformed_dims);
@@ -154,9 +158,9 @@ class CudnnFrontendConvHelper {
 
   template <cudnnBackendDescriptorType_t op_mode>
   static cudnn_frontend::OperationGraph BuildConvOperationGraph(
-      const phi::DenseTensor* x_tensor,
-      const phi::DenseTensor* y_tensor,
-      const phi::DenseTensor* w_tensor,
+      const DenseTensor* x_tensor,
+      const DenseTensor* y_tensor,
+      const DenseTensor* w_tensor,
       cudnnTensorFormat_t layout_format,
       const std::vector<int>& strides,
       const std::vector<int>& padding_common,
@@ -188,14 +192,37 @@ class CudnnFrontendConvHelper {
       std::vector<void*>* data_ptrs,
       std::vector<int64_t>* uids,
       cudnnHandle_t handle,
-      phi::DnnWorkspaceHandle* workspace_handle) {
+      phi::DnnWorkspaceHandle* workspace_handle,
+      DataType data_type) {
+    auto filter_fn = [=](cudnnBackendDescriptor_t c) {
+      if (deterministic) {
+        if (cudnn_frontend::hasNumericalNote<
+                CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC>(c)) {
+          return true;
+        }
+      }
+
+      if (cudnn_frontend::hasNumericalNote<
+              CUDNN_NUMERICAL_NOTE_DOWN_CONVERT_INPUTS>(c)) {
+        return true;
+      }
+      if (data_type == DataType::FLOAT32) {
+        if (!FLAGS_cudnn_allow_tf32 &&
+            cudnn_frontend::hasNumericalNote<CUDNN_NUMERICAL_NOTE_TENSOR_CORE>(
+                c)) {
+          return true;
+        }
+      }
+      return false;
+    };
+
     auto heurgen_method = [=](cudnn_frontend::OperationGraph& op_graph_)
         -> cudnn_frontend::EngineConfigList {
       cudnn_frontend::EngineConfigList filtered_configs;
       auto statuses = cudnn_frontend::get_heuristics_list<2>(
           {"heuristics_instant", "heuristics_fallback"},
           op_graph_,
-          deterministic ? IsNonDeterministic : AllowAll,
+          filter_fn,
           filtered_configs,
           true);
       VLOG(6) << "Filter config list has " << filtered_configs.size()
@@ -212,7 +239,10 @@ class CudnnFrontendConvHelper {
         CalcWorkspaceLimitInBytes(UseFixedWorkspace());
     auto predicate_function =
         [=](cudnn_frontend::ExecutionPlan const& plan) -> bool {
-      return plan.getWorkspaceSize() > workspace_size_limit;
+      if (FLAGS_use_accuracy_compatible_kernel)
+        return false;
+      else
+        return plan.getWorkspaceSize() > workspace_size_limit;
     };
     VLOG(6) << "[cudnn_frontend] Max workspace size: " << workspace_size_limit;
     cudnn_frontend::executionPlans_t plans;
@@ -256,11 +286,52 @@ class CudnnFrontendConvHelper {
       cudnn_frontend::OperationGraph* op_graph_pointer,
       bool exhaustive_search,
       bool deterministic,
+      std::vector<void*>* data_ptrs,
+      std::vector<int64_t>* uids,
+      cudnnHandle_t handle,
+      phi::DnnWorkspaceHandle* workspace_handle) {
+    return FindExecutionPlans(op_graph_pointer,
+                              exhaustive_search,
+                              deterministic,
+                              data_ptrs,
+                              uids,
+                              handle,
+                              workspace_handle,
+                              DataType::UNDEFINED);
+  }
+
+  static cudnn_frontend::executionPlans_t FindExecutionPlans(
+      cudnn_frontend::OperationGraph* op_graph_pointer,
+      bool exhaustive_search,
+      bool deterministic,
       void* x_data,
       void* y_data,
       void* w_data,
       cudnnHandle_t handle,
       phi::DnnWorkspaceHandle* workspace_handle) {
+    std::vector<void*> data_ptrs({x_data, y_data, w_data});
+    std::vector<int64_t> uids({'x', 'y', 'w'});
+
+    return FindExecutionPlans(op_graph_pointer,
+                              exhaustive_search,
+                              deterministic,
+                              &data_ptrs,
+                              &uids,
+                              handle,
+                              workspace_handle,
+                              DataType::UNDEFINED);
+  }
+
+  static cudnn_frontend::executionPlans_t FindExecutionPlans(
+      cudnn_frontend::OperationGraph* op_graph_pointer,
+      bool exhaustive_search,
+      bool deterministic,
+      void* x_data,
+      void* y_data,
+      void* w_data,
+      cudnnHandle_t handle,
+      phi::DnnWorkspaceHandle* workspace_handle,
+      DataType data_type) {
     std::vector<void*> data_ptrs({x_data, y_data, w_data});
     std::vector<int64_t> uids({'x', 'y', 'w'});
     return FindExecutionPlans(op_graph_pointer,
@@ -269,7 +340,8 @@ class CudnnFrontendConvHelper {
                               &data_ptrs,
                               &uids,
                               handle,
-                              workspace_handle);
+                              workspace_handle,
+                              data_type);
   }
 
   static void ExecutePlan(cudnnHandle_t handle_,
@@ -496,7 +568,8 @@ void CudnnConvBwdDataV8(const DenseTensor* dy_tensor,
                                           dy_tensor_data,
                                           w_tensor_data,
                                           handle,
-                                          workspace_handle);
+                                          workspace_handle,
+                                          dy_tensor->dtype());
 
   helper::ExecutePlansAndCache(handle,
                                workspace_handle,
@@ -570,7 +643,8 @@ void CudnnConvBwdFilterV8(const DenseTensor* x_tensor,
                                           dy_tensor_data,
                                           dw_tensor_data,
                                           handle,
-                                          workspace_handle);
+                                          workspace_handle,
+                                          x_tensor->dtype());
 
   helper::ExecutePlansAndCache(handle,
                                workspace_handle,

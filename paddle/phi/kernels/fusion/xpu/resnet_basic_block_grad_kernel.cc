@@ -37,12 +37,12 @@ class ResnetBasicBlockGradAttr {
       const DenseTensor &bias2_in,
       const DenseTensor &saved_mean2_in,
       const DenseTensor &saved_invstd2_in,
-      const paddle::optional<DenseTensor> &filter3_in,
-      const paddle::optional<DenseTensor> &conv3_in,
-      const paddle::optional<DenseTensor> &scale3_in,
-      const paddle::optional<DenseTensor> &bias3_in,
-      const paddle::optional<DenseTensor> &saved_mean3_in,
-      const paddle::optional<DenseTensor> &saved_invstd3_in,
+      const optional<DenseTensor> &filter3_in,
+      const optional<DenseTensor> &conv3_in,
+      const optional<DenseTensor> &scale3_in,
+      const optional<DenseTensor> &bias3_in,
+      const optional<DenseTensor> &saved_mean3_in,
+      const optional<DenseTensor> &saved_invstd3_in,
       const DenseTensor &max_input1,
       const DenseTensor &max_filter1,
       const DenseTensor &max_input2,
@@ -100,16 +100,16 @@ class ResnetBasicBlockGradAttr {
     auto conv1_out = &conv1_in;
     auto filter2 = &filter2_in;
     auto conv2_out = &conv2_in;
-    conv1_input_shape = common::vectorize<int64_t>(input1->dims());
-    conv1_output_shape = common::vectorize<int64_t>(conv1_out->dims());
-    conv1_filter_shape = common::vectorize<int64_t>(filter1->dims());
+    conv1_input_shape = vectorize<int64_t>(input1->dims());
+    conv1_output_shape = vectorize<int64_t>(conv1_out->dims());
+    conv1_filter_shape = vectorize<int64_t>(filter1->dims());
     conv1_filter_numel = filter1->numel();
     conv1_input_numel = input1->numel();
     conv1_output_numel = conv1_out->numel();
 
-    conv2_input_shape = common::vectorize<int64_t>(conv1_out->dims());
-    conv2_output_shape = common::vectorize<int64_t>(conv2_out->dims());
-    conv2_filter_shape = common::vectorize<int64_t>(filter2->dims());
+    conv2_input_shape = vectorize<int64_t>(conv1_out->dims());
+    conv2_output_shape = vectorize<int64_t>(conv2_out->dims());
+    conv2_filter_shape = vectorize<int64_t>(filter2->dims());
     conv2_filter_numel = filter2->numel();
     conv2_input_numel = conv1_out->numel();
     conv2_output_numel = conv2_out->numel();
@@ -117,9 +117,9 @@ class ResnetBasicBlockGradAttr {
     if (has_shortcut) {
       auto filter3 = filter3_in.get_ptr();
       auto conv3_out = conv3_in.get_ptr();
-      conv3_input_shape = common::vectorize<int64_t>(input1->dims());
-      conv3_output_shape = common::vectorize<int64_t>(conv3_out->dims());
-      conv3_filter_shape = common::vectorize<int64_t>(filter3->dims());
+      conv3_input_shape = vectorize<int64_t>(input1->dims());
+      conv3_output_shape = vectorize<int64_t>(conv3_out->dims());
+      conv3_filter_shape = vectorize<int64_t>(filter3->dims());
       conv3_filter_numel = filter3->numel();
       conv3_input_numel = input1->numel();
       conv3_output_numel = conv3_out->numel();
@@ -227,12 +227,12 @@ void ResNetBasicBlockGradXPUKernel(
     const DenseTensor &bias2_in,
     const DenseTensor &saved_mean2_in,
     const DenseTensor &saved_invstd2_in,
-    const paddle::optional<DenseTensor> &filter3_in,
-    const paddle::optional<DenseTensor> &conv3_in,
-    const paddle::optional<DenseTensor> &scale3_in,
-    const paddle::optional<DenseTensor> &bias3_in,
-    const paddle::optional<DenseTensor> &saved_mean3_in,
-    const paddle::optional<DenseTensor> &saved_invstd3_in,
+    const optional<DenseTensor> &filter3_in,
+    const optional<DenseTensor> &conv3_in,
+    const optional<DenseTensor> &scale3_in,
+    const optional<DenseTensor> &bias3_in,
+    const optional<DenseTensor> &saved_mean3_in,
+    const optional<DenseTensor> &saved_invstd3_in,
     const DenseTensor &max_input1,
     const DenseTensor &max_filter1,
     const DenseTensor &max_input2,
@@ -271,34 +271,34 @@ void ResNetBasicBlockGradXPUKernel(
     DenseTensor *scale3_grad,
     DenseTensor *bias3_grad) {
   using XPUType = typename XPUTypeTrait<T>::Type;
-  const phi::DenseTensor *y_grad = &out_grad;
-  const phi::DenseTensor *y = &out;
+  const DenseTensor *y_grad = &out_grad;
+  const DenseTensor *y = &out;
 
-  const phi::DenseTensor *x = &x_in;
-  const phi::DenseTensor *filter1 = &filter1_in;
-  const phi::DenseTensor *scale1 = &scale1_in;
-  const phi::DenseTensor *filter2 = &filter2_in;
-  const phi::DenseTensor *scale2 = &scale2_in;
-  const phi::DenseTensor *saved_mean1 = &saved_mean1_in;
-  const phi::DenseTensor *saved_invstd1 = &saved_invstd1_in;
-  const phi::DenseTensor *saved_mean2 = &saved_mean2_in;
-  const phi::DenseTensor *saved_invstd2 = &saved_invstd2_in;
-  const phi::DenseTensor *conv1_out = &conv1_in;
-  const phi::DenseTensor *conv2_out = &conv2_in;
-  const phi::DenseTensor *conv2_input = &conv2_input_in;
+  const DenseTensor *x = &x_in;
+  const DenseTensor *filter1 = &filter1_in;
+  const DenseTensor *scale1 = &scale1_in;
+  const DenseTensor *filter2 = &filter2_in;
+  const DenseTensor *scale2 = &scale2_in;
+  const DenseTensor *saved_mean1 = &saved_mean1_in;
+  const DenseTensor *saved_invstd1 = &saved_invstd1_in;
+  const DenseTensor *saved_mean2 = &saved_mean2_in;
+  const DenseTensor *saved_invstd2 = &saved_invstd2_in;
+  const DenseTensor *conv1_out = &conv1_in;
+  const DenseTensor *conv2_out = &conv2_in;
+  const DenseTensor *conv2_input = &conv2_input_in;
 
-  const phi::DenseTensor *filter3 = filter3_in.get_ptr();
-  const phi::DenseTensor *conv3_out = conv3_in.get_ptr();
-  const phi::DenseTensor *scale3 = scale3_in.get_ptr();
-  const phi::DenseTensor *saved_mean3 = saved_mean3_in.get_ptr();
-  const phi::DenseTensor *saved_invstd3 = saved_invstd3_in.get_ptr();
+  const DenseTensor *filter3 = filter3_in.get_ptr();
+  const DenseTensor *conv3_out = conv3_in.get_ptr();
+  const DenseTensor *scale3 = scale3_in.get_ptr();
+  const DenseTensor *saved_mean3 = saved_mean3_in.get_ptr();
+  const DenseTensor *saved_invstd3 = saved_invstd3_in.get_ptr();
 
-  const phi::DenseTensor *conv1_input_max = &max_input1;
-  const phi::DenseTensor *conv1_filter_max = &max_filter1;
-  const phi::DenseTensor *conv2_input_max = &max_input2;
-  const phi::DenseTensor *conv2_filter_max = &max_filter2;
-  const phi::DenseTensor *conv3_input_max = &max_input3;
-  const phi::DenseTensor *conv3_filter_max = &max_filter3;
+  const DenseTensor *conv1_input_max = &max_input1;
+  const DenseTensor *conv1_filter_max = &max_filter1;
+  const DenseTensor *conv2_input_max = &max_input2;
+  const DenseTensor *conv2_filter_max = &max_filter2;
+  const DenseTensor *conv3_input_max = &max_input3;
+  const DenseTensor *conv3_filter_max = &max_filter3;
 
   // attrs
   ResnetBasicBlockGradAttr attr(dev_ctx,

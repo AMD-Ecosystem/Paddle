@@ -14,6 +14,7 @@
 
 #include "paddle/phi/kernels/sigmoid_cross_entropy_with_logits_kernel.h"
 
+#include "paddle/phi/backends/gpu/cuda/cuda_graph_with_memory_pool.h"
 #include "paddle/phi/common/memory_utils.h"
 #include "paddle/phi/kernels/gpu/sigmoid_cross_entropy_with_logits.h"
 #include "paddle/phi/kernels/scale_kernel.h"
@@ -93,7 +94,7 @@ void SigmoidCrossEntropyWithLogitsKernel(
     const Context &dev_ctx,
     const DenseTensor &x,
     const DenseTensor &label,
-    const paddle::optional<DenseTensor> &pos_weight,
+    const optional<DenseTensor> &pos_weight,
     bool normalize,
     int ignore_index,
     DenseTensor *out) {
@@ -124,7 +125,7 @@ void SigmoidCrossEntropyWithLogitsKernel(
     DenseTensor norm_tensor;
     norm_tensor.Resize({sizeof(T)});
     dev_ctx.template Alloc<T>(&norm_tensor);
-    auto dims = common::vectorize(counts_tensor.dims());
+    auto dims = vectorize(counts_tensor.dims());
     std::vector<int> reduce_dim = {};
     for (int i = 0; i < dims.size(); i++) {
       reduce_dim.push_back(i);
@@ -133,9 +134,18 @@ void SigmoidCrossEntropyWithLogitsKernel(
     funcs::ReduceKernel<T, T, kps::AddFunctor, NonzeroFunctor<T>>(
         dev_ctx, counts_tensor, &norm_tensor, NonzeroFunctor<T>(), reduce_dim);
     T *norm = dev_ctx.template Alloc<T>(&norm_tensor);
-    auto norm_cpu_mem = phi::memory_utils::Alloc(phi::CPUPlace(), sizeof(T));
+    PADDLE_ENFORCE_EQ(
+        phi::backends::gpu::IsCUDAGraphCapturing(),
+        false,
+        common::errors::InvalidArgument(
+            "SigmoidCrossEntropyWithLogits does not support CUDA Graph "
+            "capture: async D2H copy to a locally allocated CPU buffer "
+            "'norm_cpu_mem' will bake the destination address into the graph; "
+            "on replay the allocation is re-created at a different address, "
+            "causing a dangling-pointer write."));
+    auto norm_cpu_mem = phi::memory_utils::Alloc(CPUPlace(), sizeof(T));
     T *norm_cpu_ptr = reinterpret_cast<T *>(norm_cpu_mem->ptr());
-    memory_utils::Copy(phi::CPUPlace(),
+    memory_utils::Copy(CPUPlace(),
                        norm_cpu_ptr,
                        dev_ctx.GetPlace(),
                        norm,

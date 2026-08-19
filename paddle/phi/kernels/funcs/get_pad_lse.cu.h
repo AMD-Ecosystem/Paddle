@@ -44,12 +44,12 @@ __global__ void ViewSliceHelper(T* data,
 }
 
 template <typename T>
-phi::DenseTensor get_pad_lse(const phi::GPUContext& dev_ctx,
-                             phi::DenseTensor* lse,
-                             int out_second_dim,
-                             int pad_to,
-                             const std::string& data_format = "NCHW",
-                             bool force_pad_inf = false) {
+DenseTensor get_pad_lse(const GPUContext& dev_ctx,
+                        DenseTensor* lse,
+                        int out_second_dim,
+                        int pad_to,
+                        const std::string& data_format = "NCHW",
+                        bool force_pad_inf = false) {
   int pad_amount = (pad_to - (lse->dims()[2] % pad_to)) % pad_to;
   PADDLE_ENFORCE_EQ(
       lse->dims().size(),
@@ -61,22 +61,22 @@ phi::DenseTensor get_pad_lse(const phi::GPUContext& dev_ctx,
                         "The data_format should be NCHW or NHWC"));
   std::string pad3d_data_format = data_format == "NCHW" ? "NCDHW" : "NDHWC";
   if (pad_amount > 0) {
-    phi::DenseTensor tmp = *lse;
+    DenseTensor tmp = *lse;
     if (force_pad_inf) {
-      tmp = phi::funcs::Slice<T, phi::GPUContext>(
+      tmp = funcs::Slice<T, GPUContext>(
           dev_ctx, *lse, {2}, {0}, {out_second_dim});
       pad_amount = (pad_to - (tmp.dims()[2] % pad_to)) % pad_to;
     }
     tmp.Resize({tmp.dims()[0], tmp.dims()[1], tmp.dims()[2], 1, 1});
-    phi::DenseTensor out;
+    DenseTensor out;
     out.Resize({1, 1, 1, 1, 1});
-    phi::Pad3dKernel<T, phi::GPUContext>(dev_ctx,
-                                         tmp,
-                                         {0, 0, 0, 0, 0, pad_amount},
-                                         "constant",
-                                         std::numeric_limits<T>::infinity(),
-                                         pad3d_data_format,
-                                         &out);
+    phi::Pad3dKernel<T, GPUContext>(dev_ctx,
+                                    tmp,
+                                    {0, 0, 0, 0, 0, pad_amount},
+                                    "constant",
+                                    std::numeric_limits<T>::infinity(),
+                                    pad3d_data_format,
+                                    &out);
     out.Resize({out.dims()[0], out.dims()[1], out.dims()[2]});
     return out;
   } else if (force_pad_inf && out_second_dim != lse->dims()[2]) {

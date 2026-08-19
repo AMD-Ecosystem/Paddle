@@ -34,11 +34,11 @@ limitations under the License. */
 
 namespace phi::funcs {
 template <typename T>
-struct SelectedRowsAdd<phi::CPUContext, T> {
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const phi::SelectedRows& input1,
-                  const phi::SelectedRows& input2,
-                  phi::SelectedRows* output) {
+struct SelectedRowsAdd<CPUContext, T> {
+  void operator()(const CPUContext& dev_ctx,
+                  const SelectedRows& input1,
+                  const SelectedRows& input2,
+                  SelectedRows* output) {
     auto in1_height = input1.height();
     PADDLE_ENFORCE_EQ(
         in1_height,
@@ -83,17 +83,17 @@ struct SelectedRowsAdd<phi::CPUContext, T> {
             out_value->numel() / out_rows.size()));
 
     auto in1_place = input1.place();
-    PADDLE_ENFORCE_EQ(in1_place.GetType() == phi::AllocationType::CPU,
+    PADDLE_ENFORCE_EQ(in1_place.GetType() == AllocationType::CPU,
                       true,
                       common::errors::InvalidArgument(
                           "The running environment is not on the CPU place."));
     auto in2_place = input2.place();
-    PADDLE_ENFORCE_EQ(in2_place.GetType() == phi::AllocationType::CPU,
+    PADDLE_ENFORCE_EQ(in2_place.GetType() == AllocationType::CPU,
                       true,
                       common::errors::InvalidArgument(
                           "The running environment is not on the CPU place."));
     auto out_place = dev_ctx.GetPlace();
-    PADDLE_ENFORCE_EQ(out_place.GetType() == phi::AllocationType::CPU,
+    PADDLE_ENFORCE_EQ(out_place.GetType() == AllocationType::CPU,
                       true,
                       common::errors::InvalidArgument(
                           "The running environment is not on the CPU place."));
@@ -115,15 +115,15 @@ struct SelectedRowsAdd<phi::CPUContext, T> {
   }
 };
 
-template struct PADDLE_API SelectedRowsAdd<phi::CPUContext, float>;
-template struct PADDLE_API SelectedRowsAdd<phi::CPUContext, double>;
+template struct PADDLE_API SelectedRowsAdd<CPUContext, float>;
+template struct PADDLE_API SelectedRowsAdd<CPUContext, double>;
 
 template <typename T>
-struct SelectedRowsAddTensor<phi::CPUContext, T> {
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const phi::SelectedRows& input1,
-                  const phi::DenseTensor& input2,
-                  phi::DenseTensor* output) {
+struct SelectedRowsAddTensor<CPUContext, T> {
+  void operator()(const CPUContext& dev_ctx,
+                  const SelectedRows& input1,
+                  const DenseTensor& input2,
+                  DenseTensor* output) {
     auto in1_height = input1.height();
     const auto& in2_dims = input2.dims();
     const auto& out_dims = output->dims();
@@ -166,7 +166,7 @@ struct SelectedRowsAddTensor<phi::CPUContext, T> {
             in1_row_numel,
             output->numel() / in1_height));
 
-    phi::funcs::SetConstant<phi::CPUContext, T> functor;
+    phi::funcs::SetConstant<CPUContext, T> functor;
     functor(dev_ctx, output, static_cast<T>(0.0));
 
     auto* in1_data = in1_value.data<T>();
@@ -185,15 +185,15 @@ struct SelectedRowsAddTensor<phi::CPUContext, T> {
   }
 };
 
-template struct PADDLE_API SelectedRowsAddTensor<phi::CPUContext, float>;
-template struct PADDLE_API SelectedRowsAddTensor<phi::CPUContext, double>;
+template struct PADDLE_API SelectedRowsAddTensor<CPUContext, float>;
+template struct PADDLE_API SelectedRowsAddTensor<CPUContext, double>;
 
 template <typename T>
-struct SelectedRowsAddTo<phi::CPUContext, T> {
-  void operator()(const phi::CPUContext& dev_ctx UNUSED,
-                  const phi::SelectedRows& input1,
+struct SelectedRowsAddTo<CPUContext, T> {
+  void operator()(const CPUContext& dev_ctx UNUSED,
+                  const SelectedRows& input1,
                   const int64_t input2_offset,
-                  phi::SelectedRows* input2) {
+                  SelectedRows* input2) {
     auto in1_height = input1.height();
     PADDLE_ENFORCE_EQ(
         in1_height,
@@ -215,12 +215,12 @@ struct SelectedRowsAddTo<phi::CPUContext, T> {
     mixv_in2_rows.Extend(in1_rows.begin(), in1_rows.end());
 
     auto in1_place = input1.place();
-    PADDLE_ENFORCE_EQ(in1_place.GetType() == phi::AllocationType::CPU,
+    PADDLE_ENFORCE_EQ(in1_place.GetType() == AllocationType::CPU,
                       true,
                       common::errors::InvalidArgument(
                           "The running environment is not on the CPU place."));
     auto in2_place = input2->place();
-    PADDLE_ENFORCE_EQ(in2_place.GetType() == phi::AllocationType::CPU,
+    PADDLE_ENFORCE_EQ(in2_place.GetType() == AllocationType::CPU,
                       true,
                       common::errors::InvalidArgument(
                           "The running environment is not on the CPU place."));
@@ -235,17 +235,17 @@ struct SelectedRowsAddTo<phi::CPUContext, T> {
   }
 };
 
-template struct PADDLE_API SelectedRowsAddTo<phi::CPUContext, float>;
-template struct PADDLE_API SelectedRowsAddTo<phi::CPUContext, double>;
-template struct PADDLE_API SelectedRowsAddTo<phi::CPUContext, int>;
-template struct PADDLE_API SelectedRowsAddTo<phi::CPUContext, int64_t>;
+template struct PADDLE_API SelectedRowsAddTo<CPUContext, float>;
+template struct PADDLE_API SelectedRowsAddTo<CPUContext, double>;
+template struct PADDLE_API SelectedRowsAddTo<CPUContext, int>;
+template struct PADDLE_API SelectedRowsAddTo<CPUContext, int64_t>;
 
 template <typename T>
-struct SelectedRowsSumTo<phi::CPUContext, T> {
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const std::vector<phi::SelectedRows*>& input1,
+struct SelectedRowsSumTo<CPUContext, T> {
+  void operator()(const CPUContext& dev_ctx,
+                  const std::vector<SelectedRows*>& input1,
                   const std::vector<int64_t>& input2_offsets,
-                  phi::SelectedRows* input2) {
+                  SelectedRows* input2) {
     // Ensure all selected rows have the same height
     size_t size = 0u;
     for (auto item : input1) {
@@ -265,14 +265,14 @@ struct SelectedRowsSumTo<phi::CPUContext, T> {
     std::vector<int64_t> in2_rows;
     in2_rows.reserve(in2_rows.size() + size);
     for (auto item : input1) {
-      const phi::Vector<int64_t>& in_rows = item->rows();
+      const Vector<int64_t>& in_rows = item->rows();
       in2_rows.insert(in2_rows.end(), in_rows.begin(), in_rows.end());
     }
     input2->set_rows(in2_rows);
 
     auto* in2_value = input2->mutable_value();
     auto* in2_data = in2_value->data<T>();
-    auto blas = phi::funcs::GetBlas<phi::CPUContext, T>(dev_ctx);
+    auto blas = phi::funcs::GetBlas<CPUContext, T>(dev_ctx);
     size_t offset = 0u;
     for (size_t i = 0u; i != input1.size(); ++i) {
       auto& in_value = input1[i]->value();
@@ -283,14 +283,14 @@ struct SelectedRowsSumTo<phi::CPUContext, T> {
   }
 };
 
-template struct PADDLE_API SelectedRowsSumTo<phi::CPUContext, float>;
-template struct PADDLE_API SelectedRowsSumTo<phi::CPUContext, double>;
+template struct PADDLE_API SelectedRowsSumTo<CPUContext, float>;
+template struct PADDLE_API SelectedRowsSumTo<CPUContext, double>;
 
 template <typename T>
-struct SelectedRowsAddToTensor<phi::CPUContext, T> {
-  void operator()(const phi::CPUContext& dev_ctx UNUSED,
-                  const phi::SelectedRows& input1,
-                  phi::DenseTensor* input2) {
+struct SelectedRowsAddToTensor<CPUContext, T> {
+  void operator()(const CPUContext& dev_ctx UNUSED,
+                  const SelectedRows& input1,
+                  DenseTensor* input2) {
     if (UNLIKELY(input1.rows().empty())) {
       LOG(WARNING) << "input selected rows is empty!";
       return;
@@ -334,10 +334,10 @@ struct SelectedRowsAddToTensor<phi::CPUContext, T> {
 
 #ifdef PADDLE_WITH_XPU
 template <typename T>
-struct SelectedRowsAddToTensor<phi::XPUContext, T> {
-  void operator()(const phi::XPUContext& dev_ctx,
-                  const phi::SelectedRows& input1,
-                  phi::DenseTensor* input2) {
+struct SelectedRowsAddToTensor<XPUContext, T> {
+  void operator()(const XPUContext& dev_ctx,
+                  const SelectedRows& input1,
+                  DenseTensor* input2) {
     if (UNLIKELY(input1.rows().size() == 0)) {
       LOG(WARNING) << "input selected rows is empty!";
       return;
@@ -392,20 +392,16 @@ struct SelectedRowsAddToTensor<phi::XPUContext, T> {
 
 #endif
 
-template struct PADDLE_API SelectedRowsAddToTensor<phi::CPUContext, float>;
-template struct PADDLE_API SelectedRowsAddToTensor<phi::CPUContext, double>;
-template struct PADDLE_API SelectedRowsAddToTensor<phi::CPUContext, int>;
-template struct PADDLE_API SelectedRowsAddToTensor<phi::CPUContext, int64_t>;
-template struct PADDLE_API
-    SelectedRowsAddToTensor<phi::CPUContext, phi::float16>;
-template struct PADDLE_API
-    SelectedRowsAddToTensor<phi::CPUContext, phi::bfloat16>;
-template struct PADDLE_API
-    SelectedRowsAddToTensor<phi::CPUContext, phi::complex64>;
-template struct PADDLE_API
-    SelectedRowsAddToTensor<phi::CPUContext, phi::complex128>;
+template struct PADDLE_API SelectedRowsAddToTensor<CPUContext, float>;
+template struct PADDLE_API SelectedRowsAddToTensor<CPUContext, double>;
+template struct PADDLE_API SelectedRowsAddToTensor<CPUContext, int>;
+template struct PADDLE_API SelectedRowsAddToTensor<CPUContext, int64_t>;
+template struct PADDLE_API SelectedRowsAddToTensor<CPUContext, phi::float16>;
+template struct PADDLE_API SelectedRowsAddToTensor<CPUContext, phi::bfloat16>;
+template struct PADDLE_API SelectedRowsAddToTensor<CPUContext, phi::complex64>;
+template struct PADDLE_API SelectedRowsAddToTensor<CPUContext, phi::complex128>;
 #ifdef PADDLE_WITH_XPU
-template struct SelectedRowsAddToTensor<phi::XPUContext, float>;
+template struct SelectedRowsAddToTensor<XPUContext, float>;
 #endif
 // This is a separated namespace for manipulate SelectedRows typed
 // data. Like merge duplicated rows, adding two SelectedRows etc.
@@ -438,7 +434,7 @@ typename std::enable_if<std::is_integral<T>::value>::type elementwise_add_to(
 
 template <typename T, typename DeviceContext>
 typename std::enable_if<std::is_same<T, phi::bfloat16>::value>::type
-add_sparse_inputs(const std::vector<const phi::SelectedRows*>& inputs,
+add_sparse_inputs(const std::vector<const SelectedRows*>& inputs,
                   const std::unordered_map<int64_t, size_t>& rows_to_id,
                   int64_t input_width,
                   const DeviceContext& dev_ctx,
@@ -476,7 +472,7 @@ add_sparse_inputs(const std::vector<const phi::SelectedRows*>& inputs,
 
 template <typename T, typename DeviceContext>
 typename std::enable_if<!std::is_same<T, phi::bfloat16>::value>::type
-add_sparse_inputs(const std::vector<const phi::SelectedRows*>& inputs,
+add_sparse_inputs(const std::vector<const SelectedRows*>& inputs,
                   const std::unordered_map<int64_t, size_t>& rows_to_id,
                   int64_t input_width,
                   const DeviceContext& dev_ctx,
@@ -502,32 +498,32 @@ add_sparse_inputs(const std::vector<const phi::SelectedRows*>& inputs,
 
 template <typename DeviceContext, typename T>
 struct MergeAddImpl {
-  phi::SelectedRows operator()(const DeviceContext& dev_ctx,
-                               const phi::SelectedRows& input,
-                               const bool sorted_result = false) {
-    phi::SelectedRows out;
+  SelectedRows operator()(const DeviceContext& dev_ctx,
+                          const SelectedRows& input,
+                          const bool sorted_result = false) {
+    SelectedRows out;
     (*this)(dev_ctx, input, &out, sorted_result);
     return out;
   }
 
   void operator()(const DeviceContext& dev_ctx,
-                  const phi::SelectedRows& input,
-                  phi::SelectedRows* output,
+                  const SelectedRows& input,
+                  SelectedRows* output,
                   const bool sorted_result = false) {
-    std::vector<const phi::SelectedRows*> inputs;
+    std::vector<const SelectedRows*> inputs;
     inputs.push_back(&input);
     (*this)(dev_ctx, inputs, output, sorted_result);
   }
 
   void operator()(const DeviceContext& dev_ctx,
-                  const std::vector<const phi::SelectedRows*>& inputs,
-                  phi::SelectedRows* output,
+                  const std::vector<const SelectedRows*>& inputs,
+                  SelectedRows* output,
                   const bool sorted_result = false) {
     if (inputs.empty()) {
       VLOG(3) << "no input! return";
       return;
     }
-    const phi::SelectedRows* has_value_input = nullptr;
+    const SelectedRows* has_value_input = nullptr;
     for (auto* in : inputs) {
       if (!in->rows().empty()) {
         has_value_input = in;
@@ -540,7 +536,7 @@ struct MergeAddImpl {
     }
     auto input_width = has_value_input->value().dims()[1];
     auto input_height = has_value_input->height();
-    phi::SelectedRows& out = *output;
+    SelectedRows& out = *output;
     std::set<int64_t> merged_row_set;
     size_t row_num = 0;
     for (auto* input : inputs) {
@@ -562,8 +558,8 @@ struct MergeAddImpl {
 
     out.set_height(input_height);
     DenseTensor* out_tensor = out.mutable_value();
-    out_tensor->Resize(common::make_ddim(
-        {static_cast<int64_t>(merged_row_set.size()), input_width}));
+    out_tensor->Resize(
+        make_ddim({static_cast<int64_t>(merged_row_set.size()), input_width}));
     auto* out_data = dev_ctx.template Alloc<T>(out_tensor);
 
     if (merged_row_set.size() == row_num && !sorted_result) {
@@ -614,33 +610,33 @@ struct MergeAddImpl {
 };
 
 template <typename T>
-struct MergeAdd<phi::CPUContext, T> {
+struct MergeAdd<CPUContext, T> {
   // unary functor, merge by adding duplicated rows in
   // the input SelectedRows object.
-  phi::SelectedRows operator()(const phi::CPUContext& dev_ctx,
-                               const phi::SelectedRows& input,
-                               const bool sorted_result) {
-    return MergeAddImpl<phi::CPUContext, T>()(dev_ctx, input, sorted_result);
+  SelectedRows operator()(const CPUContext& dev_ctx,
+                          const SelectedRows& input,
+                          const bool sorted_result) {
+    return MergeAddImpl<CPUContext, T>()(dev_ctx, input, sorted_result);
   }
 
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const phi::SelectedRows& input,
-                  phi::SelectedRows* output,
+  void operator()(const CPUContext& dev_ctx,
+                  const SelectedRows& input,
+                  SelectedRows* output,
                   const bool sorted_result) {
-    MergeAddImpl<phi::CPUContext, T>()(dev_ctx, input, output, sorted_result);
+    MergeAddImpl<CPUContext, T>()(dev_ctx, input, output, sorted_result);
   }
 
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const std::vector<const phi::SelectedRows*>& inputs,
-                  phi::SelectedRows* output,
+  void operator()(const CPUContext& dev_ctx,
+                  const std::vector<const SelectedRows*>& inputs,
+                  SelectedRows* output,
                   const bool sorted_result) {
-    MergeAddImpl<phi::CPUContext, T>()(dev_ctx, inputs, output, sorted_result);
+    MergeAddImpl<CPUContext, T>()(dev_ctx, inputs, output, sorted_result);
   }
 };
 
-#define TEMPLATE_SPECIALIZED_FOR_MERGEADD_CPU(dtype)    \
-  template struct MergeAddImpl<phi::CPUContext, dtype>; \
-  template struct PADDLE_API MergeAdd<phi::CPUContext, dtype>;
+#define TEMPLATE_SPECIALIZED_FOR_MERGEADD_CPU(dtype) \
+  template struct MergeAddImpl<CPUContext, dtype>;   \
+  template struct PADDLE_API MergeAdd<CPUContext, dtype>;
 
 TEMPLATE_SPECIALIZED_FOR_MERGEADD_CPU(float)
 TEMPLATE_SPECIALIZED_FOR_MERGEADD_CPU(double)
@@ -652,25 +648,25 @@ TEMPLATE_SPECIALIZED_FOR_MERGEADD_CPU(phi::complex128)
 
 #ifdef PADDLE_WITH_XPU
 template <typename T>
-struct MergeAdd<phi::XPUContext, T> {
-  phi::SelectedRows operator()(const phi::XPUContext& dev_ctx,
-                               const phi::SelectedRows& input,
-                               const bool sorted_result = false) {
-    phi::SelectedRows out;
+struct MergeAdd<XPUContext, T> {
+  SelectedRows operator()(const XPUContext& dev_ctx,
+                          const SelectedRows& input,
+                          const bool sorted_result = false) {
+    SelectedRows out;
     (*this)(dev_ctx, input, &out, sorted_result);
     return out;
   }
 
-  void operator()(const phi::XPUContext& dev_ctx,
-                  const phi::SelectedRows& input,
-                  phi::SelectedRows* output,
+  void operator()(const XPUContext& dev_ctx,
+                  const SelectedRows& input,
+                  SelectedRows* output,
                   const bool sorted_result = false) {
-    phi::Vector<int64_t> input_rows(input.rows());
+    Vector<int64_t> input_rows(input.rows());
     if (input_rows.size() == 0) {
       return;
     }
 
-    phi::SelectedRows& out = *output;
+    SelectedRows& out = *output;
     std::set<int64_t> row_set(input_rows.begin(), input_rows.end());
     std::vector<int64_t> merge_rows(row_set.begin(), row_set.end());
     auto input_width = input.value().dims()[1];
@@ -678,8 +674,8 @@ struct MergeAdd<phi::XPUContext, T> {
     out.set_rows(merge_rows);
     out.set_height(input.height());
     DenseTensor* out_tensor = out.mutable_value();
-    out_tensor->Resize(common::make_ddim(
-        {static_cast<int64_t>(merge_rows.size()), input_width}));
+    out_tensor->Resize(
+        make_ddim({static_cast<int64_t>(merge_rows.size()), input_width}));
     dev_ctx.template Alloc<T>(out_tensor);
 
     std::unordered_map<int64_t, size_t> rows_to_id;
@@ -698,12 +694,12 @@ struct MergeAdd<phi::XPUContext, T> {
     int64_t* y_rows_data = RAII_GUARD.alloc_l3_or_gm<int64_t>(ym);
     memory_utils::Copy(dev_ctx.GetPlace(),
                        y_rows_data,
-                       phi::CPUPlace(),
+                       CPUPlace(),
                        merge_rows.data(),
                        ym * sizeof(int64_t));
     memory_utils::Copy(dev_ctx.GetPlace(),
                        x_rows_data,
-                       phi::CPUPlace(),
+                       CPUPlace(),
                        input_rows.data(),
                        xm * sizeof(int64_t));
     int r = xpu::merge_dup_rows<T, int64_t>(dev_ctx.x_context(),
@@ -717,15 +713,15 @@ struct MergeAdd<phi::XPUContext, T> {
     PADDLE_ENFORCE_XDNN_SUCCESS(r, "merge_dup_rows");
   }
 
-  void operator()(const phi::XPUContext& dev_ctx,
-                  const std::vector<const phi::SelectedRows*>& inputs,
-                  phi::SelectedRows* output,
+  void operator()(const XPUContext& dev_ctx,
+                  const std::vector<const SelectedRows*>& inputs,
+                  SelectedRows* output,
                   const bool sorted_result = false) {
     if (inputs.size() == 0) {
       VLOG(3) << "no input! return";
       return;
     }
-    const phi::SelectedRows* has_value_input = nullptr;
+    const SelectedRows* has_value_input = nullptr;
     for (auto* in : inputs) {
       if (in->rows().size() > 0) {
         has_value_input = in;
@@ -738,7 +734,7 @@ struct MergeAdd<phi::XPUContext, T> {
     }
     auto input_width = has_value_input->value().dims()[1];
     auto input_height = has_value_input->height();
-    phi::SelectedRows& out = *output;
+    SelectedRows& out = *output;
     std::set<int64_t> merged_row_set;
     size_t row_num = 0;
     for (auto* input : inputs) {
@@ -769,8 +765,8 @@ struct MergeAdd<phi::XPUContext, T> {
     out.set_height(input_height);
 
     DenseTensor* out_tensor = out.mutable_value();
-    out_tensor->Resize(common::make_ddim(
-        {static_cast<int64_t>(merged_row_set.size()), input_width}));
+    out_tensor->Resize(
+        make_ddim({static_cast<int64_t>(merged_row_set.size()), input_width}));
     dev_ctx.template Alloc<T>(out_tensor);
 
     float* y_data = reinterpret_cast<float*>(out_tensor->data<T>());
@@ -796,12 +792,12 @@ struct MergeAdd<phi::XPUContext, T> {
       int64_t* y_rows_data = RAII_GUARD.alloc_l3_or_gm<int64_t>(ym);
       memory_utils::Copy(dev_ctx.GetPlace(),
                          y_rows_data,
-                         phi::CPUPlace(),
+                         CPUPlace(),
                          merge_rows.data(),
                          ym * sizeof(int64_t));
       memory_utils::Copy(dev_ctx.GetPlace(),
                          x_rows_data,
-                         phi::CPUPlace(),
+                         CPUPlace(),
                          input_rows.data(),
                          xm * sizeof(int64_t));
       int r = xpu::merge_dup_rows<T, int64_t>(dev_ctx.x_context(),
@@ -819,30 +815,30 @@ struct MergeAdd<phi::XPUContext, T> {
 
 #endif
 template <typename T>
-struct MergeAverage<phi::CPUContext, T> {
-  phi::SelectedRows operator()(const phi::CPUContext& dev_ctx,
-                               const phi::SelectedRows& input) {
-    phi::SelectedRows out;
+struct MergeAverage<CPUContext, T> {
+  SelectedRows operator()(const CPUContext& dev_ctx,
+                          const SelectedRows& input) {
+    SelectedRows out;
     (*this)(dev_ctx, input, &out);
     return out;
   }
 
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const phi::SelectedRows& input,
-                  phi::SelectedRows* output) {
-    std::vector<const phi::SelectedRows*> inputs;
+  void operator()(const CPUContext& dev_ctx,
+                  const SelectedRows& input,
+                  SelectedRows* output) {
+    std::vector<const SelectedRows*> inputs;
     inputs.push_back(&input);
     (*this)(dev_ctx, inputs, output);
   }
 
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const std::vector<const phi::SelectedRows*>& inputs,
-                  phi::SelectedRows* output) {
+  void operator()(const CPUContext& dev_ctx,
+                  const std::vector<const SelectedRows*>& inputs,
+                  SelectedRows* output) {
     if (inputs.empty()) {
       VLOG(3) << "no input! return";
       return;
     }
-    const phi::SelectedRows* has_value_input = nullptr;
+    const SelectedRows* has_value_input = nullptr;
     for (auto* in : inputs) {
       if (!in->rows().empty()) {
         has_value_input = in;
@@ -855,7 +851,7 @@ struct MergeAverage<phi::CPUContext, T> {
     }
     auto input_width = has_value_input->value().dims()[1];
     auto input_height = has_value_input->height();
-    phi::SelectedRows& out = *output;
+    SelectedRows& out = *output;
     std::set<int64_t> merged_row_set;
     for (auto* input : inputs) {
       if (input->rows().empty()) {
@@ -876,8 +872,8 @@ struct MergeAverage<phi::CPUContext, T> {
     out.set_height(input_height);
 
     DenseTensor* out_tensor = out.mutable_value();
-    out_tensor->Resize(common::make_ddim(
-        {static_cast<int64_t>(merged_row_set.size()), input_width}));
+    out_tensor->Resize(
+        make_ddim({static_cast<int64_t>(merged_row_set.size()), input_width}));
     auto* out_data = dev_ctx.template Alloc<T>(out_tensor);
 
     std::vector<int64_t> merge_rows(merged_row_set.begin(),
@@ -886,7 +882,7 @@ struct MergeAverage<phi::CPUContext, T> {
 
     out.set_rows(merge_rows);
 
-    phi::funcs::SetConstant<phi::CPUContext, T> constant_functor;
+    phi::funcs::SetConstant<CPUContext, T> constant_functor;
     constant_functor(dev_ctx, out.mutable_value(), static_cast<T>(0.0));
 
     std::unordered_map<int64_t, size_t> rows_to_id;
@@ -894,7 +890,7 @@ struct MergeAverage<phi::CPUContext, T> {
       rows_to_id[merge_rows[i]] = i;
     }
 
-    auto blas = phi::funcs::GetBlas<phi::CPUContext, T>(dev_ctx);
+    auto blas = phi::funcs::GetBlas<CPUContext, T>(dev_ctx);
     for (auto* input : inputs) {
       if (input->rows().empty()) {
         continue;
@@ -921,20 +917,20 @@ struct MergeAverage<phi::CPUContext, T> {
 };
 
 #ifdef PADDLE_WITH_XPU
-template struct MergeAdd<phi::XPUContext, float>;
+template struct MergeAdd<XPUContext, float>;
 #endif
 
-template struct PADDLE_API MergeAverage<phi::CPUContext, int>;
-template struct PADDLE_API MergeAverage<phi::CPUContext, int64_t>;
-template struct PADDLE_API MergeAverage<phi::CPUContext, float>;
-template struct PADDLE_API MergeAverage<phi::CPUContext, double>;
+template struct PADDLE_API MergeAverage<CPUContext, int>;
+template struct PADDLE_API MergeAverage<CPUContext, int64_t>;
+template struct PADDLE_API MergeAverage<CPUContext, float>;
+template struct PADDLE_API MergeAverage<CPUContext, double>;
 
 template <typename T>
-struct UpdateToTensor<phi::CPUContext, T> {
-  void operator()(const phi::CPUContext& dev_ctx,
+struct UpdateToTensor<CPUContext, T> {
+  void operator()(const CPUContext& dev_ctx,
                   const ScatterOps& op,
-                  const phi::SelectedRows& input1,
-                  phi::DenseTensor* input2) {
+                  const SelectedRows& input1,
+                  DenseTensor* input2) {
     auto in1_height = input1.height();
     const auto& in2_dims = input2->dims();
     PADDLE_ENFORCE_EQ(

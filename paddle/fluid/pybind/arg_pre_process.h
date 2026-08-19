@@ -25,13 +25,13 @@
 namespace paddle {
 
 namespace pybind {
-using Tensor = paddle::Tensor;
 using Value = pir::Value;
 using IntArray = paddle::experimental::IntArray;
+using Scalar = paddle::experimental::Scalar;
 using IntVector = std::vector<int64_t>;
 
-void ExpandAsPreProcess(paddle::Tensor* x,
-                        paddle::optional<paddle::Tensor>* y,
+void ExpandAsPreProcess(Tensor* x,
+                        paddle::optional<Tensor>* y,
                         std::vector<int64_t>* target_shape);
 void ExpandAsPreProcess(Value* x,
                         paddle::optional<pir::Value>* y,
@@ -39,11 +39,19 @@ void ExpandAsPreProcess(Value* x,
 void RollPreProcess(Tensor* x, IntArray* shifts, IntVector* axis);
 void RollPreProcess(Value* x, Value* shifts, IntVector* axis);
 
+void BinCountPreProcess(Tensor* x,
+                        paddle::optional<Tensor>* weights,
+                        Scalar* minlength);
+void BinCountPreProcess(Value* x,
+                        paddle::optional<Value>* weights,
+                        Value* minlength);
+
 void LogsumexpPreProcess(Tensor* x, std::vector<int>* axis, bool* reduce_all);
 void LogsumexpPreProcess(Value* x, std::vector<int>* axis, bool* reduce_all);
 
 void SumPreProcess(Value* x, Value* axis);
 void IsClosePreProcess(Value* x, Value* y, Value* rtol, Value* atol);
+void AllClosePreProcess(Value* x, Value* y, Value* rtol, Value* atol);
 
 void GridSamplePreProcess(Tensor* x,
                           Tensor* grid,
@@ -55,6 +63,30 @@ void GridSamplePreProcess(Value* x,
                           std::string* mode,
                           std::string* padding_mode,
                           bool* align_corners);
-}  // namespace pybind
 
+// Addmm broadcast validation for dygraph
+void AddmmPreProcess(Tensor* input, Tensor* x, Tensor* y);
+
+// Addmm broadcast validation for static graph
+void AddmmPreProcess(pir::Value* input, pir::Value* x, pir::Value* y);
+
+// Baddbmm broadcast validation for dygraph
+void BaddbmmPreProcess(Tensor* input, Tensor* x, Tensor* y);
+
+// Baddbmm broadcast validation for static graph
+void BaddbmmPreProcess(pir::Value* input, pir::Value* x, pir::Value* y);
+
+// Renorm preprocessing: handle negative axis
+void NegativeAxisPreProcess(Tensor* x, int* axis);
+void NegativeAxisPreProcess(Value* x, int* axis);
+
+void PixelShufflePreProcess(std::string* data_format);
+
+// Inplace API broadcast validation for dygraph
+void InplaceShapePreProcess(Tensor* x, Tensor* y);
+
+// Inplace API broadcast validation for static graph
+void InplaceShapePreProcess(pir::Value* x, pir::Value* y);
+
+}  // namespace pybind
 }  // namespace paddle

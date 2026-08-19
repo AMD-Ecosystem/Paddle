@@ -25,6 +25,7 @@ from .streams import Event, Stream, create_event, create_stream  # noqa: F401
 
 if TYPE_CHECKING:
     from paddle import XPUPlace
+    from paddle.base.libpaddle import _gpuDeviceProperties
 
     _XPUPlaceLike: TypeAlias = Union[
         XPUPlace,
@@ -47,6 +48,7 @@ __all__ = [
     'memory_reserved',
     'memory_total',  # memory managed by runtime, not paddle
     'memory_used',  # memory managed by runtime, not paddle
+    'get_device_properties',
 ]
 
 
@@ -62,7 +64,7 @@ def current_stream(device: _XPUPlaceLike | None = None) -> core.XPUStream:
             XPUStream: the stream to the device.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -149,7 +151,7 @@ def synchronize(device: _XPUPlaceLike | None = None) -> int:
         If device is None, the device is the current device. Default: None.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -192,7 +194,7 @@ def device_count() -> int:
         int: the number of XPUs available.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> import paddle
 
@@ -221,7 +223,7 @@ def set_debug_level(level: int = 0) -> None:
             0x1000 for profiling (Record the execution time of each operator).
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -246,7 +248,7 @@ def empty_cache() -> None:
     Because it keeps xpu memory in a pool so that next allocations can be done much faster.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -263,6 +265,80 @@ def empty_cache() -> None:
         )
     else:
         core.xpu_empty_cache()
+
+
+def get_device_properties(
+    device: _XPUPlaceLike | None = None,
+) -> _gpuDeviceProperties:
+    '''
+    Return the properties of given device.
+
+    Args:
+        device(paddle.XPUPlace|int|str|None, optional): The device, the id of the device or
+            the string name of device like 'xpu:x' which to get the properties of the
+            device from. If device is None, the device is the current device.
+            Default: None.
+
+    Returns:
+        _gpuDeviceProperties: The properties of the device which include ASCII string
+        identifying device, major compute capability, minor compute capability, global
+        memory available and the number of multiprocessors on the device.
+
+    Examples:
+
+        .. code-block:: pycon
+
+            >>> # doctest: +REQUIRES(env:XPU)
+
+            >>> import paddle
+            >>> paddle.device.set_device('xpu')
+            >>> paddle.device.xpu.get_device_properties()
+            >>> # _gpuDeviceProperties(name='GPU', major=8, minor=6, total_memory=98304MB, multi_processor_count=8)
+
+            >>> paddle.device.xpu.get_device_properties(0)
+            >>> # _gpuDeviceProperties(name='GPU', major=8, minor=6, total_memory=98304MB, multi_processor_count=8)
+
+            >>> paddle.device.xpu.get_device_properties('xpu:0')
+            >>> # _gpuDeviceProperties(name='GPU', major=8, minor=6, total_memory=98304MB, multi_processor_count=8)
+
+            >>> paddle.device.xpu.get_device_properties(paddle.XPUPlace(0))
+            >>> # _gpuDeviceProperties(name='GPU', major=8, minor=6, total_memory=98304MB, multi_processor_count=8)
+
+    '''
+
+    if not core.is_compiled_with_xpu():
+        raise ValueError(
+            "The API paddle.device.xpu.get_device_properties is not supported in "
+            "CPU-only PaddlePaddle. Please reinstall PaddlePaddle with XPU support "
+            "to call this API."
+        )
+
+    if device is not None:
+        if isinstance(device, int):
+            device_id = device
+        elif isinstance(device, core.XPUPlace):
+            device_id = device.get_device_id()
+        elif isinstance(device, str):
+            if device.startswith('xpu:'):
+                device_id = int(device[4:])
+            elif device == 'xpu':
+                device_id = 0
+            else:
+                raise ValueError(
+                    f"The current string {device} is not expected. Because paddle.device."
+                    "xpu.get_device_properties only support string which is like 'xpu:x' or 'xpu'. "
+                    "Please input appropriate string again!"
+                )
+        else:
+            raise ValueError(
+                f"The device type {device} is not expected. Because paddle.device.xpu."
+                "get_device_properties only support int, str or paddle.XPUPlace. "
+                "Please input appropriate device again!"
+            )
+    else:
+        device_id = -1
+
+    return core.get_device_properties(device_id)
 
 
 def max_memory_allocated(device: _XPUPlaceLike | None = None) -> int:
@@ -282,7 +358,7 @@ def max_memory_allocated(device: _XPUPlaceLike | None = None) -> int:
         int: The peak size of xpu memory that is allocated to tensor of the given device, in bytes.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -314,7 +390,7 @@ def max_memory_reserved(device: _XPUPlaceLike | None = None) -> int:
         int: The peak size of XPU memory that is held by the allocator of the given device, in bytes.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -343,7 +419,7 @@ def reset_max_memory_allocated(device: _XPUPlaceLike | None = None) -> None:
             Default: None.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -373,7 +449,7 @@ def reset_max_memory_reserved(device: _XPUPlaceLike | None = None) -> None:
             Default: None.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -410,7 +486,7 @@ def memory_allocated(device: _XPUPlaceLike | None = None) -> int:
         int: The current size of xpu memory that is allocated to tensor of the given device, in bytes.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -442,7 +518,7 @@ def memory_reserved(device: _XPUPlaceLike | None = None) -> int:
         int: The current size of XPU memory that is held by the allocator of the given device, in bytes.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -474,7 +550,7 @@ def memory_total(device: _XPUPlaceLike | None = None) -> int:
         int: The total size of XPU memory of the given device that is held by the XPU Runtime, in bytes.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -506,7 +582,7 @@ def memory_used(device: _XPUPlaceLike | None = None) -> int:
         int: The used size of XPU memory of the given device that is held by the XPU Runtime, in bytes.
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -534,7 +610,7 @@ def get_rng_state(device: _XPUPlaceLike | None = None) -> core.GeneratorState:
 
     Examples:
 
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
@@ -564,7 +640,7 @@ def set_rng_state(
         None
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> import paddle
             >>> # Save RNG state
@@ -598,7 +674,8 @@ def manual_seed(seed: int) -> None:
         None
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
+
             >>> # doctest: +REQUIRES(env:XPU)
             >>> import paddle
             >>> paddle.device.manual_seed(102)

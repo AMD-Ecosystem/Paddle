@@ -26,9 +26,9 @@
 
 namespace phi {
 
-static phi::DDim ValidateShape(const std::vector<int64_t>& shape,
-                               const std::vector<int64_t>& offsets,
-                               const phi::DDim& in_dims) {
+static DDim ValidateShape(const std::vector<int64_t>& shape,
+                          const std::vector<int64_t>& offsets,
+                          const DDim& in_dims) {
   auto in_dim_size = in_dims.size();
   auto shape_size = shape.size();
   PADDLE_ENFORCE_EQ(
@@ -63,7 +63,7 @@ static phi::DDim ValidateShape(const std::vector<int64_t>& shape,
     }
   }
 
-  return common::make_ddim(output_shape);
+  return make_ddim(output_shape);
 }
 
 template <typename Context, typename T, size_t D>
@@ -125,14 +125,14 @@ void CropTensorFunction(const Context& dev_ctx,
 
   auto x_tensor = EigenTensor<T, D>::From(x);
   auto out_tensor = EigenTensor<T, D>::From(*out);
-  Eigen::DSizes<Eigen::DenseIndex, D> e_offsets;
-  Eigen::DSizes<Eigen::DenseIndex, D> e_shape;
+  Eigen::DSizes<int64_t, D> e_offsets;
+  Eigen::DSizes<int64_t, D> e_shape;
   for (size_t i = 0; i < D; ++i) {
     e_offsets[i] = offsets_vec[i];
     e_shape[i] = out->dims()[i];
   }
   auto& place = *dev_ctx.eigen_device();
-  phi::funcs::EigenSlice<std::decay_t<decltype(place)>, T, D>::Eval(
+  funcs::EigenSlice<std::decay_t<decltype(place)>, T, D>::Eval(
       place, out_tensor, x_tensor, e_offsets, e_shape);
 }
 

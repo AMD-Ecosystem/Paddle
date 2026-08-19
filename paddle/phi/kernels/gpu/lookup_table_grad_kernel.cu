@@ -50,7 +50,7 @@ __global__ void LookupTableGrad(T *table,
     const T *out = output + idy * D;
     T *tab = table + id * D;
     for (int64_t i = idx; i < D; i += BlockDimX) {
-      phi::CudaAtomicAdd(&tab[i], out[i]);
+      CudaAtomicAdd(&tab[i], out[i]);
     }
     idy += BlockDimY * GridDimX;
   }
@@ -93,7 +93,7 @@ void LookupTableGradCUDAKernel(
   const T *d_output = d_output_t->data<T>();
   T *d_table = dev_ctx.template Alloc<T>(d_table_t);
 
-  auto t = phi::EigenVector<T>::Flatten(*d_table_t);
+  auto t = EigenVector<T>::Flatten(*d_table_t);
   t.device(*dev_ctx.eigen_device()) = t.constant(static_cast<T>(0));
 
 #ifdef PADDLE_WITH_HIP
@@ -145,7 +145,7 @@ void LookupTableSparseGradCUDAKernel(
 
   auto stream = dev_ctx.stream();
   // copy GPU memory to CPU pinned memory
-  phi::Vector<int64_t> new_rows;
+  Vector<int64_t> new_rows;
   new_rows.resize(ids_num);
   auto gpu_place = dev_ctx.GetPlace();
 

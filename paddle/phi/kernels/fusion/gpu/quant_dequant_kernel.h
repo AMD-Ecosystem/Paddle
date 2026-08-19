@@ -37,8 +37,7 @@ __forceinline__ __device__ int8_t quant_helper(const T input,
   float quant_value = max_bound * scale * static_cast<float>(input);
 
   if (round_type == 0) {
-    quant_value =
-        static_cast<float>(phi::funcs::roundWithTiesToEven(quant_value));
+    quant_value = static_cast<float>(funcs::roundWithTiesToEven(quant_value));
   } else {
     quant_value = static_cast<float>(round(quant_value));
   }
@@ -123,9 +122,9 @@ __global__ void DequantKernel(T* output,
       VecSize;
   int col_id = idx % n;
 
-  phi::AlignedVector<int32_t, VecSize> in_vec;
-  phi::AlignedVector<float, VecSize> out_scale_vec;
-  phi::AlignedVector<T, VecSize> out_vec;
+  AlignedVector<int32_t, VecSize> in_vec;
+  AlignedVector<float, VecSize> out_scale_vec;
+  AlignedVector<T, VecSize> out_vec;
 
   for (; idx < numel; idx += stride) {
     phi::Load<int32_t, VecSize>(input + idx, &in_vec);

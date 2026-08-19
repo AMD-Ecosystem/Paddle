@@ -20,7 +20,7 @@
 namespace phi {
 
 bool SliceGradCheckIfOneDNNSupport(const KernelContext* dev_ctx) {
-  if (dev_ctx->InputAt<phi::DenseTensor>(1).mem_desc().get_inner_nblks() == 0) {
+  if (dev_ctx->InputAt<DenseTensor>(1).mem_desc().get_inner_nblks() == 0) {
     return true;
   }
   return false;
@@ -38,7 +38,7 @@ void SliceGradKernel(const Context& dev_ctx,
                      DenseTensor* input_grad) {
   const auto& onednn_engine = dev_ctx.GetEngine();
 
-  auto dx_dims = common::vectorize(input_grad->dims());
+  auto dx_dims = vectorize(input_grad->dims());
 
   auto starts_vec = starts.GetData();
   auto ends_vec = ends.GetData();

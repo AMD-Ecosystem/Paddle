@@ -25,33 +25,32 @@
 namespace phi {
 
 template <typename T, typename Context>
-void AdamDenseKernel(
-    const Context& dev_ctx,
-    const DenseTensor& param,
-    const DenseTensor& grad,
-    const DenseTensor& learning_rate,
-    const DenseTensor& moment1,
-    const DenseTensor& moment2,
-    const paddle::optional<DenseTensor>& moment2_max,  // UNUSED
-    const DenseTensor& beta1_pow,
-    const DenseTensor& beta2_pow,
-    const paddle::optional<DenseTensor>& master_param,
-    const paddle::optional<DenseTensor>& skip_update,
-    const Scalar& beta1,
-    const Scalar& beta2,
-    const Scalar& epsilon,
-    bool lazy_mode,
-    int64_t min_row_size_to_use_multithread,
-    bool multi_precision,
-    bool use_global_beta_pow,
-    bool amsgrad,  // UNUSED
-    DenseTensor* param_out,
-    DenseTensor* moment1_out,
-    DenseTensor* moment2_out,
-    DenseTensor* moment2_max_out,  // UNUSED
-    DenseTensor* beta1_pow_out,
-    DenseTensor* beta2_pow_out,
-    DenseTensor* master_param_outs) {
+void AdamDenseKernel(const Context& dev_ctx,
+                     const DenseTensor& param,
+                     const DenseTensor& grad,
+                     const DenseTensor& learning_rate,
+                     const DenseTensor& moment1,
+                     const DenseTensor& moment2,
+                     const optional<DenseTensor>& moment2_max,  // UNUSED
+                     const DenseTensor& beta1_pow,
+                     const DenseTensor& beta2_pow,
+                     const optional<DenseTensor>& master_param,
+                     const optional<DenseTensor>& skip_update,
+                     const Scalar& beta1,
+                     const Scalar& beta2,
+                     const Scalar& epsilon,
+                     bool lazy_mode,
+                     int64_t min_row_size_to_use_multithread,
+                     bool multi_precision,
+                     bool use_global_beta_pow,
+                     bool amsgrad,  // UNUSED
+                     DenseTensor* param_out,
+                     DenseTensor* moment1_out,
+                     DenseTensor* moment2_out,
+                     DenseTensor* moment2_max_out,  // UNUSED
+                     DenseTensor* beta1_pow_out,
+                     DenseTensor* beta2_pow_out,
+                     DenseTensor* master_param_outs) {
   PADDLE_ENFORCE_NE(
       amsgrad,
       true,
@@ -71,14 +70,26 @@ void AdamDenseKernel(
       moment2, &mom2_ptr, dev_ctx, &RAII_GUARD);
 
   float* lr_ptr = nullptr;
-  funcs::GetDataPointer<Context, float>(
-      learning_rate, &lr_ptr, dev_ctx, &RAII_GUARD);
+  float* lr_cast_buf = nullptr;
+  if (learning_rate.dtype() == DataType::FLOAT64) {
+    lr_cast_buf = RAII_GUARD.alloc_l3_or_gm<float>(learning_rate.numel());
+    PADDLE_ENFORCE_XDNN_NOT_NULL(lr_cast_buf);
+    int r_lr = xpu::cast<double, float>(dev_ctx.x_context(),
+                                        learning_rate.template data<double>(),
+                                        lr_cast_buf,
+                                        learning_rate.numel());
+    PADDLE_ENFORCE_XDNN_SUCCESS(r_lr, "cast lr from float64 to float32");
+    lr_ptr = lr_cast_buf;
+  } else {
+    funcs::GetDataPointer<Context, float>(
+        learning_rate, &lr_ptr, dev_ctx, &RAII_GUARD);
+  }
 
   float* beta1_pow_ptr = nullptr;
   const float* beta1_const_pow_ptr = nullptr;
   DenseTensor xpu_beta1_pow;
   if (beta1_pow.place() == CPUPlace()) {
-    phi::Copy(dev_ctx, beta1_pow, dev_ctx.GetPlace(), false, &xpu_beta1_pow);
+    Copy(dev_ctx, beta1_pow, dev_ctx.GetPlace(), false, &xpu_beta1_pow);
     if (xpu_beta1_pow.dtype() == DataType::FLOAT16)
       funcs::GetDataPointer<Context, float>(
           xpu_beta1_pow, &beta1_pow_ptr, dev_ctx, &RAII_GUARD);
@@ -96,7 +107,7 @@ void AdamDenseKernel(
   const float* beta2_const_pow_ptr = nullptr;
   DenseTensor xpu_beta2_pow;
   if (beta2_pow.place() == CPUPlace()) {
-    phi::Copy(dev_ctx, beta2_pow, dev_ctx.GetPlace(), false, &xpu_beta2_pow);
+    Copy(dev_ctx, beta2_pow, dev_ctx.GetPlace(), false, &xpu_beta2_pow);
     if (xpu_beta2_pow.dtype() == DataType::FLOAT16)
       funcs::GetDataPointer<Context, float>(
           xpu_beta2_pow, &beta2_pow_ptr, dev_ctx, &RAII_GUARD);
@@ -112,21 +123,21 @@ void AdamDenseKernel(
 
   DenseTensor xpu_param_out;
   float* param_out_ptr = nullptr;
-  const phi::DenseTensorMeta meta_param(DataType::FLOAT32, param_out->dims());
+  const DenseTensorMeta meta_param(DataType::FLOAT32, param_out->dims());
   xpu_param_out.set_meta(meta_param);
   funcs::GetOutDataPointer<Context, float>(
       param_out, &xpu_param_out, &param_out_ptr, dev_ctx);
 
   DenseTensor xpu_mom1_out;
   float* mom1_out_ptr = nullptr;
-  const phi::DenseTensorMeta meta_mom1(DataType::FLOAT32, moment1_out->dims());
+  const DenseTensorMeta meta_mom1(DataType::FLOAT32, moment1_out->dims());
   xpu_mom1_out.set_meta(meta_mom1);
   funcs::GetOutDataPointer<Context, float>(
       moment1_out, &xpu_mom1_out, &mom1_out_ptr, dev_ctx);
 
   DenseTensor xpu_mom2_out;
   float* mom2_out_ptr = nullptr;
-  const phi::DenseTensorMeta meta_mom2(DataType::FLOAT32, moment2_out->dims());
+  const DenseTensorMeta meta_mom2(DataType::FLOAT32, moment2_out->dims());
   xpu_mom2_out.set_meta(meta_mom2);
   funcs::GetOutDataPointer<Context, float>(
       moment2_out, &xpu_mom2_out, &mom2_out_ptr, dev_ctx);
@@ -139,18 +150,18 @@ void AdamDenseKernel(
         errors::InvalidArgument("Input(SkipUpdate) size must be 1, but get %d",
                                 skip_update->numel()));
     std::vector<bool> skip_update_vec;
-    phi::TensorToVector(*skip_update, dev_ctx, &skip_update_vec);
+    TensorToVector(*skip_update, dev_ctx, &skip_update_vec);
     skip_update_ = skip_update_vec[0];
   }
 
   if (skip_update_) {
     VLOG(4) << "Adam skip update";
-    phi::Copy(dev_ctx, param, dev_ctx.GetPlace(), false, param_out);
-    phi::Copy(dev_ctx, moment1, dev_ctx.GetPlace(), false, moment1_out);
-    phi::Copy(dev_ctx, moment2, dev_ctx.GetPlace(), false, moment2_out);
+    Copy(dev_ctx, param, dev_ctx.GetPlace(), false, param_out);
+    Copy(dev_ctx, moment1, dev_ctx.GetPlace(), false, moment1_out);
+    Copy(dev_ctx, moment2, dev_ctx.GetPlace(), false, moment2_out);
     if (!use_global_beta_pow) {
-      phi::Copy(dev_ctx, beta1_pow, beta1_pow.place(), false, beta1_pow_out);
-      phi::Copy(dev_ctx, beta2_pow, beta2_pow.place(), false, beta2_pow_out);
+      Copy(dev_ctx, beta1_pow, beta1_pow.place(), false, beta1_pow_out);
+      Copy(dev_ctx, beta2_pow, beta2_pow.place(), false, beta2_pow_out);
     }
     return;
   }
@@ -269,11 +280,10 @@ void MergedAdamKernel(
     const std::vector<const DenseTensor*>& learning_rate,
     const std::vector<const DenseTensor*>& moment1,
     const std::vector<const DenseTensor*>& moment2,
-    const paddle::optional<std::vector<const DenseTensor*>>&
-        moment2_max,  // UNUSED
+    const optional<std::vector<const DenseTensor*>>& moment2_max,  // UNUSED
     const std::vector<const DenseTensor*>& beta1_pow,
     const std::vector<const DenseTensor*>& beta2_pow,
-    const paddle::optional<std::vector<const DenseTensor*>>& master_param,
+    const optional<std::vector<const DenseTensor*>>& master_param,
     const Scalar& beta1,
     const Scalar& beta2,
     const Scalar& epsilon,
@@ -302,11 +312,20 @@ void MergedAdamKernel(
   int64_t bias_correction_ = 1;
   float weight_decay_ = 0.0;
 
-  DenseTensor lr_host;
-  lr_host.Resize(learning_rate[0]->dims());
-  dev_ctx.template HostAlloc<float>(&lr_host);
-  phi::Copy(dev_ctx, *learning_rate[0], CPUPlace(), false, &lr_host);
-  float lr_ = *(lr_host.template data<float>());
+  float lr_;
+  {
+    DenseTensor lr_host;
+    lr_host.Resize(learning_rate[0]->dims());
+    if (learning_rate[0]->dtype() == DataType::FLOAT64) {
+      dev_ctx.template HostAlloc<double>(&lr_host);
+      Copy(dev_ctx, *learning_rate[0], CPUPlace(), false, &lr_host);
+      lr_ = static_cast<float>(*(lr_host.template data<double>()));
+    } else {
+      dev_ctx.template HostAlloc<float>(&lr_host);
+      Copy(dev_ctx, *learning_rate[0], CPUPlace(), false, &lr_host);
+      lr_ = *(lr_host.template data<float>());
+    }
+  }
 
   float beta1_pow_data;
   if (beta1_pow[0]->place() == CPUPlace()) {
@@ -315,7 +334,7 @@ void MergedAdamKernel(
     DenseTensor beta1_pow_host;
     beta1_pow_host.Resize(beta1_pow[0]->dims());
     dev_ctx.template HostAlloc<float>(&beta1_pow_host);
-    phi::Copy(dev_ctx, *beta1_pow[0], CPUPlace(), false, &beta1_pow_host);
+    Copy(dev_ctx, *beta1_pow[0], CPUPlace(), false, &beta1_pow_host);
     beta1_pow_data = *(beta1_pow_host.template data<float>());
   }
 
@@ -326,7 +345,7 @@ void MergedAdamKernel(
     DenseTensor beta2_pow_host;
     beta2_pow_host.Resize(beta2_pow[0]->dims());
     dev_ctx.template HostAlloc<float>(&beta2_pow_host);
-    phi::Copy(dev_ctx, *beta2_pow[0], CPUPlace(), false, &beta2_pow_host);
+    Copy(dev_ctx, *beta2_pow[0], CPUPlace(), false, &beta2_pow_host);
     beta2_pow_data = *(beta2_pow_host.template data<float>());
   }
 
@@ -450,9 +469,9 @@ void MergedAdamKernel(
 
   // update param, moment1, moment2
   for (int i = 0; i < param_num; i++) {
-    phi::Copy(dev_ctx, *param[i], dev_ctx.GetPlace(), false, param_out[i]);
-    phi::Copy(dev_ctx, *moment1[i], dev_ctx.GetPlace(), false, moment1_out[i]);
-    phi::Copy(dev_ctx, *moment2[i], dev_ctx.GetPlace(), false, moment2_out[i]);
+    Copy(dev_ctx, *param[i], dev_ctx.GetPlace(), false, param_out[i]);
+    Copy(dev_ctx, *moment1[i], dev_ctx.GetPlace(), false, moment1_out[i]);
+    Copy(dev_ctx, *moment2[i], dev_ctx.GetPlace(), false, moment2_out[i]);
   }
 
   if (!use_global_beta_pow) {
@@ -496,6 +515,7 @@ void MergedAdamKernel(
 
 PD_REGISTER_KERNEL(
     adam, XPU, ALL_LAYOUT, phi::AdamDenseKernel, float, phi::float16) {
+  kernel->InputAt(2).SetDataType(phi::DataType::FLOAT64);
   // Skip beta1_pow, beta2_pow, skip_update data transform
   kernel->InputAt(6).SetBackend(phi::Backend::ALL_BACKEND);
   kernel->InputAt(7).SetBackend(phi::Backend::ALL_BACKEND);
@@ -506,6 +526,7 @@ PD_REGISTER_KERNEL(
 }
 
 PD_REGISTER_KERNEL(merged_adam, XPU, ALL_LAYOUT, phi::MergedAdamKernel, float) {
+  kernel->InputAt(2).SetDataType(phi::DataType::FLOAT64);
   // Skip beta1_pow, beta2_pow data transform
   kernel->InputAt(6).SetBackend(phi::Backend::ALL_BACKEND);
   kernel->InputAt(7).SetBackend(phi::Backend::ALL_BACKEND);

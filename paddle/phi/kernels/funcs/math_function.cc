@@ -39,7 +39,6 @@ limitations under the License. */
 #include "paddle/phi/common/data_type.h"
 #include "paddle/phi/kernels/funcs/eigen/common.h"
 #include "paddle/phi/kernels/funcs/math_function_impl.h"
-#include "unsupported/Eigen/CXX11/Tensor"
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
 #include "paddle/phi/api/lib/kernel_dispatch.h"
 #include "paddle/phi/core/kernel_factory.h"
@@ -49,59 +48,57 @@ namespace phi::funcs {
 
 using float16 = phi::float16;
 
-template struct SetConstant<phi::CPUContext, phi::float8_e4m3fn>;
-template struct SetConstant<phi::CPUContext, phi::float8_e5m2>;
-template struct SetConstant<phi::CPUContext, phi::float16>;
-template struct SetConstant<phi::CPUContext, phi::bfloat16>;
-template struct SetConstant<phi::CPUContext, float>;
-template struct SetConstant<phi::CPUContext, double>;
-template struct SetConstant<phi::CPUContext, int16_t>;
-template struct SetConstant<phi::CPUContext, int>;
-template struct SetConstant<phi::CPUContext, int64_t>;
-template struct SetConstant<phi::CPUContext, bool>;
-template struct SetConstant<phi::CPUContext, uint8_t>;
-template struct SetConstant<phi::CPUContext, uint16_t>;
-template struct SetConstant<phi::CPUContext, uint32_t>;
-template struct SetConstant<phi::CPUContext, uint64_t>;
-template struct SetConstant<phi::CPUContext, int8_t>;
-template struct SetConstant<phi::CPUContext, phi::complex64>;
-template struct SetConstant<phi::CPUContext, phi::complex128>;
+template struct SetConstant<CPUContext, phi::float8_e4m3fn>;
+template struct SetConstant<CPUContext, phi::float8_e5m2>;
+template struct SetConstant<CPUContext, phi::float16>;
+template struct SetConstant<CPUContext, phi::bfloat16>;
+template struct SetConstant<CPUContext, float>;
+template struct SetConstant<CPUContext, double>;
+template struct SetConstant<CPUContext, int16_t>;
+template struct SetConstant<CPUContext, int>;
+template struct SetConstant<CPUContext, int64_t>;
+template struct SetConstant<CPUContext, bool>;
+template struct SetConstant<CPUContext, uint8_t>;
+template struct SetConstant<CPUContext, uint16_t>;
+template struct SetConstant<CPUContext, uint32_t>;
+template struct SetConstant<CPUContext, uint64_t>;
+template struct SetConstant<CPUContext, int8_t>;
+template struct SetConstant<CPUContext, phi::complex64>;
+template struct SetConstant<CPUContext, phi::complex128>;
 
 #ifdef PADDLE_WITH_XPU
-template struct SetConstant<phi::XPUContext, phi::float16>;
-template struct SetConstant<phi::XPUContext, phi::bfloat16>;
-template struct SetConstant<phi::XPUContext, float>;
-template struct SetConstant<phi::XPUContext, double>;
-template struct SetConstant<phi::XPUContext, uint8_t>;
-template struct SetConstant<phi::XPUContext, int8_t>;
-template struct SetConstant<phi::XPUContext, int16_t>;
-template struct SetConstant<phi::XPUContext, int>;
-template struct SetConstant<phi::XPUContext, int64_t>;
-template struct SetConstant<phi::XPUContext, bool>;
-template struct SetConstant<phi::XPUContext, phi::complex64>;
-template struct SetConstant<phi::XPUContext, phi::complex128>;
+template struct SetConstant<XPUContext, phi::float16>;
+template struct SetConstant<XPUContext, phi::bfloat16>;
+template struct SetConstant<XPUContext, float>;
+template struct SetConstant<XPUContext, double>;
+template struct SetConstant<XPUContext, uint8_t>;
+template struct SetConstant<XPUContext, int8_t>;
+template struct SetConstant<XPUContext, int16_t>;
+template struct SetConstant<XPUContext, int>;
+template struct SetConstant<XPUContext, int64_t>;
+template struct SetConstant<XPUContext, bool>;
+template struct SetConstant<XPUContext, phi::complex64>;
+template struct SetConstant<XPUContext, phi::complex128>;
 #endif  // PADDLE_WITH_XPU
 
-#define DEFINE_CPU_TRANS(RANK)                                                 \
-  template struct PADDLE_API Transpose<phi::CPUContext, phi::float16, RANK>;   \
-  template struct PADDLE_API Transpose<phi::CPUContext, phi::bfloat16, RANK>;  \
-  template struct PADDLE_API                                                   \
-      Transpose<phi::CPUContext, phi::float8_e4m3fn, RANK>;                    \
-  template struct PADDLE_API                                                   \
-      Transpose<phi::CPUContext, phi::float8_e5m2, RANK>;                      \
-  template struct PADDLE_API Transpose<phi::CPUContext, float, RANK>;          \
-  template struct PADDLE_API Transpose<phi::CPUContext, double, RANK>;         \
-  template struct PADDLE_API Transpose<phi::CPUContext, int, RANK>;            \
-  template struct PADDLE_API Transpose<phi::CPUContext, int64_t, RANK>;        \
-  template struct PADDLE_API Transpose<phi::CPUContext, bool, RANK>;           \
-  template struct PADDLE_API Transpose<phi::CPUContext, int16_t, RANK>;        \
-  template struct PADDLE_API Transpose<phi::CPUContext, uint8_t, RANK>;        \
-  template struct PADDLE_API Transpose<phi::CPUContext, uint16_t, RANK>;       \
-  template struct PADDLE_API Transpose<phi::CPUContext, uint32_t, RANK>;       \
-  template struct PADDLE_API Transpose<phi::CPUContext, uint64_t, RANK>;       \
-  template struct PADDLE_API Transpose<phi::CPUContext, int8_t, RANK>;         \
-  template struct PADDLE_API Transpose<phi::CPUContext, phi::complex64, RANK>; \
-  template struct PADDLE_API Transpose<phi::CPUContext, phi::complex128, RANK>;
+#define DEFINE_CPU_TRANS(RANK)                                                \
+  template struct PADDLE_API Transpose<CPUContext, phi::float16, RANK>;       \
+  template struct PADDLE_API Transpose<CPUContext, phi::bfloat16, RANK>;      \
+  template struct PADDLE_API Transpose<CPUContext, phi::float8_e4m3fn, RANK>; \
+  template struct PADDLE_API Transpose<CPUContext, phi::float8_e5m2, RANK>;   \
+  template struct PADDLE_API Transpose<CPUContext, float, RANK>;              \
+  template struct PADDLE_API Transpose<CPUContext, double, RANK>;             \
+  template struct PADDLE_API Transpose<CPUContext, int, RANK>;                \
+  template struct PADDLE_API Transpose<CPUContext, int64_t, RANK>;            \
+  template struct PADDLE_API Transpose<CPUContext, bool, RANK>;               \
+  template struct PADDLE_API Transpose<CPUContext, int16_t, RANK>;            \
+  template struct PADDLE_API Transpose<CPUContext, uint8_t, RANK>;            \
+  template struct PADDLE_API Transpose<CPUContext, uint16_t, RANK>;           \
+  template struct PADDLE_API Transpose<CPUContext, uint32_t, RANK>;           \
+  template struct PADDLE_API Transpose<CPUContext, uint64_t, RANK>;           \
+  template struct PADDLE_API Transpose<CPUContext, int8_t, RANK>;             \
+  template struct PADDLE_API Transpose<CPUContext, phi::complex64, RANK>;     \
+  template struct PADDLE_API Transpose<CPUContext, phi::complex128, RANK>;
 
 DEFINE_CPU_TRANS(1);
 DEFINE_CPU_TRANS(2);
@@ -111,12 +108,12 @@ DEFINE_CPU_TRANS(5);
 DEFINE_CPU_TRANS(6);
 
 #ifdef PADDLE_WITH_XPU
-#define DEFINE_XPU_TRANS(RANK)                                          \
-  template struct PADDLE_API Transpose<phi::XPUContext, bool, RANK>;    \
-  template struct PADDLE_API Transpose<phi::XPUContext, float, RANK>;   \
-  template struct PADDLE_API Transpose<phi::XPUContext, int, RANK>;     \
-  template struct PADDLE_API Transpose<phi::XPUContext, int64_t, RANK>; \
-  template struct PADDLE_API Transpose<phi::XPUContext, phi::complex64, RANK>;
+#define DEFINE_XPU_TRANS(RANK)                                     \
+  template struct PADDLE_API Transpose<XPUContext, bool, RANK>;    \
+  template struct PADDLE_API Transpose<XPUContext, float, RANK>;   \
+  template struct PADDLE_API Transpose<XPUContext, int, RANK>;     \
+  template struct PADDLE_API Transpose<XPUContext, int64_t, RANK>; \
+  template struct PADDLE_API Transpose<XPUContext, phi::complex64, RANK>;
 
 DEFINE_XPU_TRANS(1);
 DEFINE_XPU_TRANS(2);
@@ -129,8 +126,8 @@ DEFINE_XPU_TRANS(6);
 template <typename DeviceContext, typename T>
 void TransposeNormal<DeviceContext, T>::operator()(
     const DeviceContext& dev_ctx UNUSED,
-    const phi::DenseTensor& in,
-    phi::DenseTensor* out,
+    const DenseTensor& in,
+    DenseTensor* out,
     const std::vector<int>& axis) {
   const int rank = static_cast<const int>(axis.size());
   auto in_stride = common::stride(in.dims());
@@ -156,7 +153,7 @@ void TransposeNormal<DeviceContext, T>::operator()(
 
 // define transpose normal
 #define DEFINE_CPU_TRANS_NORMAL(TYPE) \
-  template struct TransposeNormal<phi::CPUContext, TYPE>
+  template struct TransposeNormal<CPUContext, TYPE>
 DEFINE_CPU_TRANS_NORMAL(phi::float8_e4m3fn);
 DEFINE_CPU_TRANS_NORMAL(phi::float8_e5m2);
 DEFINE_CPU_TRANS_NORMAL(phi::float16);
@@ -177,7 +174,7 @@ DEFINE_CPU_TRANS_NORMAL(phi::complex128);
 
 #ifdef PADDLE_WITH_XPU
 #define DEFINE_XPU_TRANS_NORMAL(TYPE) \
-  template struct TransposeNormal<phi::XPUContext, TYPE>
+  template struct TransposeNormal<XPUContext, TYPE>
 DEFINE_XPU_TRANS_NORMAL(bool);
 DEFINE_XPU_TRANS_NORMAL(float);
 DEFINE_XPU_TRANS_NORMAL(int);
@@ -186,21 +183,21 @@ DEFINE_XPU_TRANS_NORMAL(phi::complex64);
 #endif  // PADDLE_WITH_XPU
 
 struct TensorSetConstantCPU {
-  TensorSetConstantCPU(phi::DenseTensor* tensor, float value)
+  TensorSetConstantCPU(DenseTensor* tensor, float value)
       : tensor_(tensor), value_(value) {}
   template <typename T>
   void apply() const {
-    auto cpu = phi::CPUPlace();
+    auto cpu = CPUPlace();
     auto* begin = tensor_->mutable_data<T>(cpu);
     std::fill(begin, begin + tensor_->numel(), static_cast<T>(value_));
   }
-  phi::DenseTensor* tensor_;
+  DenseTensor* tensor_;
   float value_;
 };
 
 template <>
-void set_constant_with_place<phi::XPUPlace>(const phi::DeviceContext& dev_ctx,
-                                            phi::DenseTensor* tensor,
+void set_constant_with_place<phi::XPUPlace>(const DeviceContext& dev_ctx,
+                                            DenseTensor* tensor,
                                             float value) {
 #ifdef PADDLE_WITH_XPU
   phi::VisitDataType(
@@ -212,30 +209,31 @@ void set_constant_with_place<phi::XPUPlace>(const phi::DeviceContext& dev_ctx,
 }
 
 template <>
-void set_constant_with_place<phi::IPUPlace>(const phi::DeviceContext& dev_ctx,
-                                            phi::DenseTensor* tensor,
+void set_constant_with_place<phi::IPUPlace>(const DeviceContext& dev_ctx,
+                                            DenseTensor* tensor,
                                             float value) {
   PADDLE_THROW(common::errors::Unimplemented("IPUPlace is not supported"));
 }
 
 template <>
-void set_constant_with_place<phi::CustomPlace>(
-    const phi::DeviceContext& dev_ctx, phi::DenseTensor* tensor, float value) {
+void set_constant_with_place<CustomPlace>(const DeviceContext& dev_ctx,
+                                          DenseTensor* tensor,
+                                          float value) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
   auto kernel_result = phi::KernelFactory::Instance().SelectKernelOrThrowError(
       "full",
       {paddle::experimental::ParseBackend(tensor->place()),
-       phi::DataLayout::ALL_LAYOUT,
+       DataLayout::ALL_LAYOUT,
        paddle::experimental::ParseDataType(tensor->dtype())});
   const auto& kernel = kernel_result.kernel;
-  using kernel_signature = void (*)(const phi::DeviceContext&,
+  using kernel_signature = void (*)(const DeviceContext&,
                                     const phi::IntArray&,
                                     const phi::Scalar&,
                                     DataType,
-                                    phi::DenseTensor*);
+                                    DenseTensor*);
   auto* kernel_fn = kernel.GetVariadicKernelFn<kernel_signature>();
   (*kernel_fn)(dev_ctx,
-               phi::IntArray(common::vectorize(tensor->dims())),
+               phi::IntArray(vectorize(tensor->dims())),
                phi::Scalar(value),
                tensor->dtype(),
                tensor);
@@ -245,23 +243,24 @@ void set_constant_with_place<phi::CustomPlace>(
 }
 
 template <>
-void set_constant_with_place<phi::CPUPlace>(const phi::DeviceContext& dev_ctx,
-                                            phi::DenseTensor* tensor,
-                                            float value) {
+void set_constant_with_place<CPUPlace>(const DeviceContext& dev_ctx,
+                                       DenseTensor* tensor,
+                                       float value) {
   phi::VisitDataType(tensor->dtype(), TensorSetConstantCPU(tensor, value));
 }
 
 template <>
-void set_constant_with_place<phi::GPUPinnedPlace>(
-    const phi::DeviceContext& dev_ctx, phi::DenseTensor* tensor, float value) {
+void set_constant_with_place<phi::GPUPinnedPlace>(const DeviceContext& dev_ctx,
+                                                  DenseTensor* tensor,
+                                                  float value) {
   phi::VisitDataType(tensor->dtype(), TensorSetConstantCPU(tensor, value));
 }
 
 struct TensorSetConstantWithPlace {
   using argument_type = phi::Place;
   using result_type = void;
-  TensorSetConstantWithPlace(const phi::DeviceContext& dev_ctx,
-                             phi::DenseTensor* tensor,
+  TensorSetConstantWithPlace(const DeviceContext& dev_ctx,
+                             DenseTensor* tensor,
                              float value)
       : dev_ctx_(dev_ctx), tensor_(tensor), value_(value) {}
 
@@ -270,18 +269,18 @@ struct TensorSetConstantWithPlace {
     set_constant_with_place<Place>(dev_ctx_, tensor_, value_);
   }
 
-  const phi::DeviceContext& dev_ctx_;
-  phi::DenseTensor* tensor_;
+  const DeviceContext& dev_ctx_;
+  DenseTensor* tensor_;
   float value_;
 };
 
-void set_constant(const phi::DeviceContext& dev_ctx,
-                  phi::DenseTensor* tensor,
+void set_constant(const DeviceContext& dev_ctx,
+                  DenseTensor* tensor,
                   float value) {
   TensorSetConstantWithPlace func(dev_ctx, tensor, value);
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
-  if (dev_ctx.GetPlace().GetType() == phi::AllocationType::CUSTOM) {
-    func(phi::CustomPlace());
+  if (dev_ctx.GetPlace().GetType() == AllocationType::CUSTOM) {
+    func(CustomPlace());
     return;
   }
 #endif
@@ -289,31 +288,31 @@ void set_constant(const phi::DeviceContext& dev_ctx,
   // tensor->place().apply_visitor(func);
   phi::VisitPlace(tensor->place(), func);
 #elif defined(PADDLE_WITH_XPU)
-  if (dev_ctx.GetPlace().GetType() == phi::AllocationType::XPU) {
+  if (dev_ctx.GetPlace().GetType() == AllocationType::XPU) {
     func(phi::XPUPlace());
     return;
   } else {
-    func(phi::CPUPlace());
+    func(CPUPlace());
   }
 #else
-  func(phi::CPUPlace());
+  func(CPUPlace());
 #endif
 }
 
-template struct ColwiseSum<phi::CPUContext, float>;
-template struct ColwiseSum<phi::CPUContext, double>;
-template struct ColwiseSum<phi::CPUContext, int>;
-template struct ColwiseSum<phi::CPUContext, int64_t>;
+template struct ColwiseSum<CPUContext, float>;
+template struct ColwiseSum<CPUContext, double>;
+template struct ColwiseSum<CPUContext, int>;
+template struct ColwiseSum<CPUContext, int64_t>;
 
-template struct RowwiseMean<phi::CPUContext, float>;
-template struct RowwiseMean<phi::CPUContext, double>;
+template struct RowwiseMean<CPUContext, float>;
+template struct RowwiseMean<CPUContext, double>;
 
 template <typename T>
-struct RowwiseAdd<phi::CPUContext, T> {
-  void operator()(const phi::CPUContext& dev_ctx UNUSED,
-                  const phi::DenseTensor& input,
-                  const phi::DenseTensor& vector,
-                  phi::DenseTensor* output) {
+struct RowwiseAdd<CPUContext, T> {
+  void operator()(const CPUContext& dev_ctx UNUSED,
+                  const DenseTensor& input,
+                  const DenseTensor& vector,
+                  DenseTensor* output) {
     auto in_dims = input.dims();
     const auto& out_dims = output->dims();
     auto size = input.numel() / in_dims[0];
@@ -335,9 +334,9 @@ struct RowwiseAdd<phi::CPUContext, T> {
                           in_dims.to_str().c_str(),
                           out_dims.to_str().c_str()));
 
-    auto in = phi::EigenMatrix<T>::From(input);
-    auto vec = phi::EigenVector<T>::Flatten(vector);
-    auto out = phi::EigenMatrix<T>::From(*output);
+    auto in = EigenMatrix<T>::From(input);
+    auto vec = EigenVector<T>::Flatten(vector);
+    auto out = EigenMatrix<T>::From(*output);
 
     for (int64_t i = 0; i < in_dims[0]; ++i) {
       out.chip(i, 0) = in.chip(i, 0) + vec;
@@ -345,7 +344,7 @@ struct RowwiseAdd<phi::CPUContext, T> {
   }
 };
 
-template struct RowwiseAdd<phi::CPUContext, float>;
-template struct RowwiseAdd<phi::CPUContext, double>;
+template struct RowwiseAdd<CPUContext, float>;
+template struct RowwiseAdd<CPUContext, double>;
 
 }  // namespace phi::funcs

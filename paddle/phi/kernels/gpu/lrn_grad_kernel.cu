@@ -75,7 +75,7 @@ __global__ void KeCMRNormDiff(int img_size,
 }
 
 template <typename T>
-void CrossMapNormalGrad(const phi::GPUContext& dev_ctx,
+void CrossMapNormalGrad(const GPUContext& dev_ctx,
                         const T* x,
                         const T* out,
                         const T* mid,
@@ -114,13 +114,13 @@ void CrossMapNormalGrad(const phi::GPUContext& dev_ctx,
 }
 
 template <typename T>
-struct LRNGradFunctor<phi::GPUContext, T> {
-  void operator()(const phi::GPUContext& dev_ctx,
-                  const phi::DenseTensor& x,
-                  const phi::DenseTensor& out,
-                  const phi::DenseTensor& mid,
-                  phi::DenseTensor* x_g,
-                  const phi::DenseTensor& out_g,
+struct LRNGradFunctor<GPUContext, T> {
+  void operator()(const GPUContext& dev_ctx,
+                  const DenseTensor& x,
+                  const DenseTensor& out,
+                  const DenseTensor& mid,
+                  DenseTensor* x_g,
+                  const DenseTensor& out_g,
                   int64_t N,
                   int64_t C,
                   int64_t H,
@@ -146,8 +146,8 @@ struct LRNGradFunctor<phi::GPUContext, T> {
   }
 };
 
-template struct LRNGradFunctor<phi::GPUContext, float>;
-template struct LRNGradFunctor<phi::GPUContext, double>;
+template struct LRNGradFunctor<GPUContext, float>;
+template struct LRNGradFunctor<GPUContext, double>;
 }  // namespace phi
 
 PD_REGISTER_KERNEL(lrn_grad, GPU, ALL_LAYOUT, phi::LRNGradKernel, float) {}

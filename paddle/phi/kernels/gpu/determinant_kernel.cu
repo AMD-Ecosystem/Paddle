@@ -84,7 +84,7 @@ struct DeterminantCudaFunctor {
                   DenseTensor* output) {
     std::vector<T> input_vec;
     std::vector<T> output_vec;
-    phi::TensorToVector(input, dev_ctx, &input_vec);
+    TensorToVector(input, dev_ctx, &input_vec);
     using MPType = typename phi::dtype::MPTypeTrait<T>::Type;
     for (int64_t i = 0; i < batch_count; ++i) {  // maybe can be parallel
       auto begin_iter = input_vec.begin() + i * rank * rank;
@@ -100,7 +100,7 @@ struct DeterminantCudaFunctor {
       output_vec.push_back(
           static_cast<T>(matrix.template cast<MPType>().determinant()));
     }
-    phi::TensorFromVector(output_vec, dev_ctx, output);
+    TensorFromVector(output_vec, dev_ctx, output);
   }
 };
 
@@ -168,7 +168,7 @@ struct DeterminantCudaFunctor<phi::dtype::complex<T>, Context> {
         phi::Stream(reinterpret_cast<phi::StreamId>(dev_ctx.stream())));
     memory_utils::Copy(dev_ctx.GetPlace(),
                        tmp_gpu_ptrs_data->ptr(),
-                       phi::CPUPlace(),
+                       CPUPlace(),
                        static_cast<void*>(cpu_ptrs.data()),
                        cpu_ptrs.size() * sizeof(phi::dtype::complex<T>*),
                        dev_ctx.stream());
@@ -195,7 +195,7 @@ struct DeterminantCudaFunctor<phi::dtype::complex<T>, Context> {
         Eigen::Matrix<std::complex<T>, Eigen::Dynamic, Eigen::Dynamic>;
     std::vector<phi::dtype::complex<T>> input_vec;
     std::vector<phi::dtype::complex<T>> output_vec;
-    phi::TensorToVector(a, dev_ctx, &input_vec);
+    TensorToVector(a, dev_ctx, &input_vec);
     for (int64_t i = 0; i < batch_size; ++i) {  // maybe can be parallel
       auto begin_iter = input_vec.begin() + i * n * n;
       auto end_iter = input_vec.begin() + (i + 1) * n * n;
@@ -211,7 +211,7 @@ struct DeterminantCudaFunctor<phi::dtype::complex<T>, Context> {
       output_vec.push_back(
           static_cast<phi::dtype::complex<T>>(matrix.determinant()));
     }
-    phi::TensorFromVector(output_vec, dev_ctx, output);
+    TensorFromVector(output_vec, dev_ctx, output);
 #endif
   }
 };
@@ -224,7 +224,7 @@ void DeterminantKernel(const Context& dev_ctx,
     dev_ctx.template Alloc<T>(out);
     return;
   }
-  auto input_dim = common::vectorize(x.dims());
+  auto input_dim = vectorize(x.dims());
   auto input_dim_size = input_dim.size();
 
   auto batch_count = detail::GetBatchCount(x.dims());
@@ -240,12 +240,12 @@ void DeterminantKernel(const Context& dev_ctx,
                         "the input matrix should be square matrix."));
   auto rank = input_dim[input_dim_size - 1];  // square matrix length
   DeterminantCudaFunctor<T, Context>()(dev_ctx, x, rank, batch_count, out);
-  auto output_dims = common::slice_ddim(x.dims(), 0, input_dim_size - 2);
+  auto output_dims = slice_ddim(x.dims(), 0, input_dim_size - 2);
   if (input_dim_size > 2) {
     out->Resize(output_dims);
   } else {
     // when input is a two-dimension matrix, The det value is a number.
-    out->Resize(common::make_ddim({}));
+    out->Resize({});
   }
   VLOG(10) << "output dim:" << out->dims();
 }

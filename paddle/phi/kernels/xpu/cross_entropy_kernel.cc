@@ -40,19 +40,18 @@ void CrossEntropyWithSoftmaxKernel(const Context& dev_ctx,
 
     // When soft_label is True, the axis column is 1.
     if (soft_label) {
-      phi::Full<T, Context>(
-          dev_ctx, phi::IntArray(common::vectorize(loss->dims())), 0, loss);
+      Full<T, Context>(dev_ctx, loss->dims(), 0, loss);
     }
     return;
   }
 
   using XPUType = typename XPUTypeTrait<T>::Type;
   const int rank = logits.dims().size();
-  const int axis = phi::funcs::CanonicalAxis(axis_in, rank);
+  const int axis = funcs::CanonicalAxis(axis_in, rank);
   dev_ctx.template Alloc<T>(softmax);
   dev_ctx.template Alloc<T>(loss);
-  const int64_t n = phi::funcs::SizeToAxis(axis, logits.dims());
-  const int64_t d = phi::funcs::SizeOutAxis(axis, logits.dims());
+  const int64_t n = funcs::SizeToAxis(axis, logits.dims());
+  const int64_t d = funcs::SizeOutAxis(axis, logits.dims());
   const int64_t t = logits.dims()[axis];
   int64_t len = logits.numel();
 
@@ -114,9 +113,9 @@ void CrossEntropyWithSoftmaxKernel(const Context& dev_ctx,
   } else {
     // 2. soft_cross_entropy only
     const int* labels_data = nullptr;
-    if (labels.dtype() == phi::DataType::INT32) {
+    if (labels.dtype() == DataType::INT32) {
       labels_data = labels.data<int>();
-    } else if (labels.dtype() == phi::DataType::INT64) {
+    } else if (labels.dtype() == DataType::INT64) {
       int* labels_tmp = RAII_GUARD.alloc_l3_or_gm<int>(labels.numel());
       r = xpu::cast<int64_t, int>(dev_ctx.x_context(),
                                   labels.data<int64_t>(),

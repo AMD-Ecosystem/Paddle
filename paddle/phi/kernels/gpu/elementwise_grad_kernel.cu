@@ -41,15 +41,13 @@ void SubtractGradKernel(const Context& dev_ctx,
     if (dx) {
       dev_ctx.template Alloc<T>(dx);
       if (dx->numel() != 0) {
-        phi::Full<T, Context>(
-            dev_ctx, phi::IntArray(common::vectorize(dx->dims())), 0, dx);
+        Full<T, Context>(dev_ctx, dx->dims(), 0, dx);
       }
     }
     if (dy) {
       dev_ctx.template Alloc<T>(dy);
       if (dy->numel() != 0) {
-        phi::Full<T, Context>(
-            dev_ctx, phi::IntArray(common::vectorize(dy->dims())), 0, dy);
+        Full<T, Context>(dev_ctx, dy->dims(), 0, dy);
       }
     }
     return;
@@ -65,8 +63,8 @@ template <typename T, typename Context>
 void SubtractDoubleGradKernel(const Context& dev_ctx,
                               const DenseTensor& y,
                               const DenseTensor& dout,
-                              const paddle::optional<DenseTensor>& ddx,
-                              const paddle::optional<DenseTensor>& ddy,
+                              const optional<DenseTensor>& ddx,
+                              const optional<DenseTensor>& ddy,
                               int axis,
                               DenseTensor* ddout) {
   phi::SubtractDoubleGradImpl<T>(dev_ctx, y, ddx, ddy, dout, axis, ddout);
@@ -130,35 +128,31 @@ void MixedPrecisionAddGradFunc(const GPUContext& dev_ctx,
       (dx && dy && dx->dims() == dy->dims() && dx->dims() == dout.dims());
   if (no_broadcast) {
     // Dispatch to non-broadcast (elementwise) kernels
-    if (x_dtype == phi::DataType::FLOAT32 &&
-        y_dtype == phi::DataType::FLOAT16) {
+    if (x_dtype == DataType::FLOAT32 && y_dtype == DataType::FLOAT16) {
       ElementwiseMixedPrecisionAddGrad<phi::float16>(dev_ctx, dout, dx, dy);
-    } else if (x_dtype == phi::DataType::FLOAT32 &&
-               y_dtype == phi::DataType::BFLOAT16) {
+    } else if (x_dtype == DataType::FLOAT32 && y_dtype == DataType::BFLOAT16) {
       ElementwiseMixedPrecisionAddGrad<phi::bfloat16>(dev_ctx, dout, dx, dy);
     } else {
       PADDLE_THROW(common::errors::Unimplemented(
           "Unsupported mixed precision combination for AddGrad non-broadcast "
           "path: x_dtype=%s, y_dtype=%s",
-          phi::DataTypeToString(x_dtype),
-          phi::DataTypeToString(y_dtype)));
+          DataTypeToString(x_dtype),
+          DataTypeToString(y_dtype)));
     }
   } else {
     // Dispatch to broadcast-aware kernels
-    if (x_dtype == phi::DataType::FLOAT32 &&
-        y_dtype == phi::DataType::FLOAT16) {
+    if (x_dtype == DataType::FLOAT32 && y_dtype == DataType::FLOAT16) {
       DefaultMixedPrecisionAddGrad<phi::float16>(
           dev_ctx, x, y, dout, dx, dy, axis);
-    } else if (x_dtype == phi::DataType::FLOAT32 &&
-               y_dtype == phi::DataType::BFLOAT16) {
+    } else if (x_dtype == DataType::FLOAT32 && y_dtype == DataType::BFLOAT16) {
       DefaultMixedPrecisionAddGrad<phi::bfloat16>(
           dev_ctx, x, y, dout, dx, dy, axis);
     } else {
       PADDLE_THROW(common::errors::Unimplemented(
           "Unsupported mixed precision combination for AddGrad broadcast path: "
           "x_dtype=%s, y_dtype=%s",
-          phi::DataTypeToString(x_dtype),
-          phi::DataTypeToString(y_dtype)));
+          DataTypeToString(x_dtype),
+          DataTypeToString(y_dtype)));
     }
   }
 }
@@ -202,8 +196,8 @@ template <typename T, typename Context>
 void AddDoubleGradKernel(const Context& dev_ctx,
                          const DenseTensor& y,
                          const DenseTensor& dout,
-                         const paddle::optional<DenseTensor>& ddx,
-                         const paddle::optional<DenseTensor>& ddy,
+                         const optional<DenseTensor>& ddx,
+                         const optional<DenseTensor>& ddy,
                          int axis,
                          DenseTensor* ddout) {
   phi::AddDoubleGradImpl<T>(dev_ctx, y, ddx, ddy, dout, axis, ddout);
@@ -233,16 +227,14 @@ void MaximumGradKernel(const Context& dev_ctx,
       if (dx->numel() == 0) {
         dev_ctx.template Alloc<T>(dx);
       } else {
-        phi::Full<T, Context>(
-            dev_ctx, phi::IntArray(common::vectorize(dx->dims())), 0, dx);
+        Full<T, Context>(dev_ctx, dx->dims(), 0, dx);
       }
     }
     if (dy) {
       if (dy->numel() == 0) {
         dev_ctx.template Alloc<T>(dy);
       } else {
-        phi::Full<T, Context>(
-            dev_ctx, phi::IntArray(common::vectorize(dy->dims())), 0, dy);
+        Full<T, Context>(dev_ctx, dy->dims(), 0, dy);
       }
     }
     return;
@@ -282,16 +274,14 @@ void MinimumGradKernel(const Context& dev_ctx,
       if (dx->numel() == 0) {
         dev_ctx.template Alloc<T>(dx);
       } else {
-        phi::Full<T, Context>(
-            dev_ctx, phi::IntArray(common::vectorize(dx->dims())), 0, dx);
+        Full<T, Context>(dev_ctx, dx->dims(), 0, dx);
       }
     }
     if (dy) {
       if (dy->numel() == 0) {
         dev_ctx.template Alloc<T>(dy);
       } else {
-        phi::Full<T, Context>(
-            dev_ctx, phi::IntArray(common::vectorize(dy->dims())), 0, dy);
+        Full<T, Context>(dev_ctx, dy->dims(), 0, dy);
       }
     }
     return;
@@ -332,16 +322,14 @@ void RemainderGradKernel(const Context& dev_ctx,
       if (dx->numel() == 0) {
         dev_ctx.template Alloc<T>(dx);
       } else {
-        phi::Full<T, Context>(
-            dev_ctx, phi::IntArray(common::vectorize(dx->dims())), 0, dx);
+        Full<T, Context>(dev_ctx, dx->dims(), 0, dx);
       }
     }
     if (dy) {
       if (dy->numel() == 0) {
         dev_ctx.template Alloc<T>(dy);
       } else {
-        phi::Full<T, Context>(
-            dev_ctx, phi::IntArray(common::vectorize(dy->dims())), 0, dy);
+        Full<T, Context>(dev_ctx, dy->dims(), 0, dy);
       }
     }
     return;

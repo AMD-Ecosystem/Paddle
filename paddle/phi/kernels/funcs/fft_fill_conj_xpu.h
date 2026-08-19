@@ -22,9 +22,11 @@
 #include "paddle/phi/core/dense_tensor.h"
 
 namespace xfft_internal::xpu {
-int FFTFillConj(int64_t N,
-                float2* src_data,
-                float2* dst_data,
+template <typename T>  // T supports float2, double2
+int FFTFillConj(const XPUStream stream,
+                int64_t N,
+                const T* src_data,
+                T* dst_data,
                 const int64_t* src_strides,
                 const int64_t* dst_strides,
                 const int64_t* dst_shape,
@@ -32,8 +34,11 @@ int FFTFillConj(int64_t N,
                 int64_t last_axis,
                 int64_t last_axis_size,
                 int64_t rank);
-int FFTFillConjGrad(int N,
-                    float2* input,
+
+template <typename T>  // T supports float2, double2
+int FFTFillConjGrad(const XPUStream stream,
+                    int N,
+                    T* input,
                     int64_t axis,
                     int64_t stride_second_to_last_axis,
                     int64_t stride_to_last_axis,
@@ -48,10 +53,10 @@ void FFTFillConj(const DeviceContext& dev_ctx,
                  DenseTensor* dst,
                  const std::vector<int64_t>& axes) {
   std::vector<int64_t> src_strides_v =
-      common::vectorize<int64_t>(common::stride(src->dims()));
+      vectorize<int64_t>(common::stride(src->dims()));
   std::vector<int64_t> dst_strides_v =
-      common::vectorize<int64_t>(common::stride(dst->dims()));
-  std::vector<int64_t> dst_shape_v = common::vectorize<int64_t>(dst->dims());
+      vectorize<int64_t>(common::stride(dst->dims()));
+  std::vector<int64_t> dst_shape_v = vectorize<int64_t>(dst->dims());
   auto src_data = src->data<C>();
   auto dst_data = dst->data<C>();
   auto last_axis = axes.back();
@@ -94,8 +99,8 @@ void FFTFillConj(const DeviceContext& dev_ctx,
              _is_fft_axis.get(),
              rank * sizeof(bool),
              XPUMemcpyKind::XPU_HOST_TO_DEVICE);
-
   int r = xfft_internal::xpu::FFTFillConj(
+      dev_ctx.x_context()->xpu_stream,
       dst->numel(),
       reinterpret_cast<cuFloatComplex*>(src_data),
       reinterpret_cast<cuFloatComplex*>(dst_data),
@@ -123,6 +128,7 @@ void FFTFillConjGrad(const DeviceContext& dev_ctx,
   }
   int64_t stride_second_to_last_axis = stride_to_last_axis * ddim[axes.back()];
   int r = xfft_internal::xpu::FFTFillConjGrad(
+      dev_ctx.x_context()->xpu_stream,
       x_grad->numel(),
       reinterpret_cast<cuFloatComplex*>(x_grad->data<C>()),
       axes.back(),

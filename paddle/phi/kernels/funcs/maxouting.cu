@@ -112,8 +112,8 @@ __global__ void KernelMaxoutGrad(const int64_t nthreads,
 
 template <typename DeviceContext, typename T>
 void MaxOutFunctor<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
-                                                 const phi::DenseTensor& input,
-                                                 phi::DenseTensor* output,
+                                                 const DenseTensor& input,
+                                                 DenseTensor* output,
                                                  const int groups,
                                                  const int axis) {
   const int64_t batch_size = input.dims()[0];
@@ -141,10 +141,10 @@ void MaxOutFunctor<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
 template <typename DeviceContext, typename T>
 void MaxOutGradFunctor<DeviceContext, T>::operator()(
     const DeviceContext& dev_ctx,
-    const phi::DenseTensor& input,
-    phi::DenseTensor* input_grad,
-    const phi::DenseTensor& output,
-    const phi::DenseTensor& output_grad,
+    const DenseTensor& input,
+    DenseTensor* input_grad,
+    const DenseTensor& output,
+    const DenseTensor& output_grad,
     const int groups,
     const int axis) {
   const int64_t input_channels = input.dims()[axis];
@@ -172,13 +172,13 @@ void MaxOutGradFunctor<DeviceContext, T>::operator()(
                                                               axis);
 }
 
-template class MaxOutGradFunctor<phi::GPUContext, float>;
-template class MaxOutGradFunctor<phi::GPUContext, phi::float16>;
-template class MaxOutGradFunctor<phi::GPUContext, double>;
+template class MaxOutGradFunctor<GPUContext, float>;
+template class MaxOutGradFunctor<GPUContext, phi::float16>;
+template class MaxOutGradFunctor<GPUContext, double>;
 
-template class MaxOutFunctor<phi::GPUContext, float>;
-template class MaxOutFunctor<phi::GPUContext, phi::float16>;
-template class MaxOutFunctor<phi::GPUContext, double>;
+template class MaxOutFunctor<GPUContext, float>;
+template class MaxOutFunctor<GPUContext, phi::float16>;
+template class MaxOutFunctor<GPUContext, double>;
 
 }  // namespace funcs
 }  // namespace phi

@@ -401,31 +401,30 @@ static __global__ void KeBNBackwardData(
 }
 
 template <typename T, typename Context>
-void SyncBatchNormGradFunctor(
-    const Context &dev_ctx,
-    const DenseTensor *input_x,
-    const DenseTensor *input_y,
-    const DenseTensor &scale,
-    const DenseTensor &bias,
-    // const paddle::optional<DenseTensor>& mean,
-    // const paddle::optional<DenseTensor>& variance,
-    const DenseTensor &saved_mean,
-    const DenseTensor &saved_variance,
-    // const paddle::optional<DenseTensor>& reserve_space,
-    const DenseTensor &y_grad,
-    // float momentum,
-    float epsilon_f,
-    const std::string &data_layout_str,
-    // bool is_test,
-    // bool use_global_stats,
-    // bool trainable_statistics,
-    // bool fuse_with_relu,
-    DenseTensor *x_grad,
-    DenseTensor *scale_grad,
-    DenseTensor *bias_grad) {
+void SyncBatchNormGradFunctor(const Context &dev_ctx,
+                              const DenseTensor *input_x,
+                              const DenseTensor *input_y,
+                              const DenseTensor &scale,
+                              const DenseTensor &bias,
+                              // const optional<DenseTensor>& mean,
+                              // const optional<DenseTensor>& variance,
+                              const DenseTensor &saved_mean,
+                              const DenseTensor &saved_variance,
+                              // const optional<DenseTensor>& reserve_space,
+                              const DenseTensor &y_grad,
+                              // float momentum,
+                              float epsilon_f,
+                              const std::string &data_layout_str,
+                              // bool is_test,
+                              // bool use_global_stats,
+                              // bool trainable_statistics,
+                              // bool fuse_with_relu,
+                              DenseTensor *x_grad,
+                              DenseTensor *scale_grad,
+                              DenseTensor *bias_grad) {
   double epsilon = static_cast<double>(epsilon_f);
 
-  const DataLayout layout = common::StringToDataLayout(data_layout_str);
+  const DataLayout layout = StringToDataLayout(data_layout_str);
 
   const auto *d_y = &y_grad;
 
@@ -501,7 +500,7 @@ void SyncBatchNormGradFunctor(
   const auto *saved_inv_var =
       saved_variance.template data<BatchNormParamType<T>>();
   const int bytes = (C * 2 + 1) * sizeof(BatchNormParamType<T>);
-  phi::DenseTensor stats_tensor;
+  DenseTensor stats_tensor;
   stats_tensor.Resize({static_cast<int64_t>(bytes)});
   dev_ctx.template Alloc<BatchNormParamType<T>>(&stats_tensor);
   auto *stats_data = stats_tensor.data<BatchNormParamType<T>>();

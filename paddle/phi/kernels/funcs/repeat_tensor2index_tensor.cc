@@ -25,12 +25,17 @@ namespace funcs {
 template <typename Context, typename RepeatsT>
 void RepeatsTensor2IndexTensorFunctor<Context, RepeatsT>::operator()(
     const Context &dev_ctx, const DenseTensor &repeats, DenseTensor *index) {
+  if (repeats.dims()[0] == 0) {
+    index->Resize({0});
+    dev_ctx.template Alloc<RepeatsT>(index);
+    return;
+  }
   DenseTensor repeats_cpu_copy;
-  if (repeats.place().GetType() != phi::AllocationType::CPU) {
-    phi::Copy(dev_ctx, repeats, phi::CPUPlace(), true, &repeats_cpu_copy);
+  if (repeats.place().GetType() != AllocationType::CPU) {
+    phi::Copy(dev_ctx, repeats, CPUPlace(), true, &repeats_cpu_copy);
   }
   const RepeatsT *repeats_data =
-      repeats.place().GetType() == phi::AllocationType::CPU
+      repeats.place().GetType() == AllocationType::CPU
           ? repeats.data<RepeatsT>()
           : repeats_cpu_copy.data<RepeatsT>();
 
@@ -49,16 +54,19 @@ void RepeatsTensor2IndexTensorFunctor<Context, RepeatsT>::operator()(
     std::fill_n(index_vec.begin() + offset, repeats_data[i], i);
     offset += repeats_data[i];
   }
-  index->Resize(common::make_ddim({index_size}));
+  index->Resize({index_size});
 
-  phi::TensorFromVector<RepeatsT>(index_vec, dev_ctx, index);
+  TensorFromVector<RepeatsT>(index_vec, dev_ctx, index);
 }
 
 template <typename RepeatsT>
-void RepeatsTensor2IndexTensorFunctor<phi::CPUContext, RepeatsT>::operator()(
-    const phi::CPUContext &dev_ctx,
-    const DenseTensor &repeats,
-    DenseTensor *index) {
+void RepeatsTensor2IndexTensorFunctor<CPUContext, RepeatsT>::operator()(
+    const CPUContext &dev_ctx, const DenseTensor &repeats, DenseTensor *index) {
+  if (repeats.dims()[0] == 0) {
+    index->Resize({0});
+    dev_ctx.template Alloc<RepeatsT>(index);
+    return;
+  }
   const RepeatsT *repeats_data = repeats.data<RepeatsT>();
 
   int64_t index_size = 0;
@@ -76,22 +84,25 @@ void RepeatsTensor2IndexTensorFunctor<phi::CPUContext, RepeatsT>::operator()(
     std::fill_n(index_vec.begin() + offset, repeats_data[i], i);
     offset += repeats_data[i];
   }
-  index->Resize(common::make_ddim({index_size}));
+  index->Resize({index_size});
 
-  phi::TensorFromVector<RepeatsT>(index_vec, dev_ctx, index);
+  TensorFromVector<RepeatsT>(index_vec, dev_ctx, index);
 }
 
-template class RepeatsTensor2IndexTensorFunctor<phi::CPUContext, int>;
-template class RepeatsTensor2IndexTensorFunctor<phi::CPUContext, int64_t>;
+template class RepeatsTensor2IndexTensorFunctor<CPUContext, int>;
+template class RepeatsTensor2IndexTensorFunctor<CPUContext, int64_t>;
 
 #ifdef PADDLE_WITH_XPU
 template <typename RepeatsT>
-void RepeatsTensor2IndexTensorFunctor<phi::XPUContext, RepeatsT>::operator()(
-    const phi::XPUContext &dev_ctx,
-    const DenseTensor &repeats,
-    DenseTensor *index) {
+void RepeatsTensor2IndexTensorFunctor<XPUContext, RepeatsT>::operator()(
+    const XPUContext &dev_ctx, const DenseTensor &repeats, DenseTensor *index) {
+  if (repeats.dims()[0] == 0) {
+    index->Resize({0});
+    dev_ctx.template Alloc<RepeatsT>(index);
+    return;
+  }
   DenseTensor repeats_cpu_copy;
-  phi::Copy(dev_ctx, repeats, phi::CPUPlace(), true, &repeats_cpu_copy);
+  phi::Copy(dev_ctx, repeats, CPUPlace(), true, &repeats_cpu_copy);
   const RepeatsT *repeats_data = repeats_cpu_copy.data<RepeatsT>();
 
   int64_t index_size = 0;
@@ -109,13 +120,13 @@ void RepeatsTensor2IndexTensorFunctor<phi::XPUContext, RepeatsT>::operator()(
     std::fill_n(index_vec.begin() + offset, repeats_data[i], i);
     offset += repeats_data[i];
   }
-  index->Resize(common::make_ddim({index_size}));
+  index->Resize({index_size});
 
-  phi::TensorFromVector<RepeatsT>(index_vec, dev_ctx, index);
+  TensorFromVector<RepeatsT>(index_vec, dev_ctx, index);
 }
 
-template class RepeatsTensor2IndexTensorFunctor<phi::XPUContext, int>;
-template class RepeatsTensor2IndexTensorFunctor<phi::XPUContext, int64_t>;
+template class RepeatsTensor2IndexTensorFunctor<XPUContext, int>;
+template class RepeatsTensor2IndexTensorFunctor<XPUContext, int64_t>;
 #endif
 
 }  // namespace funcs

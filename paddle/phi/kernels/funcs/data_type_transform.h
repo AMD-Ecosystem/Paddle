@@ -24,31 +24,31 @@ namespace phi {
 namespace funcs {
 
 template <typename Context>
-phi::DenseTensor TransDataType(const Context& dev_ctx,
-                               const phi::DenseTensor& x,
-                               DataType dtype) {
+DenseTensor TransDataType(const Context& dev_ctx,
+                          const DenseTensor& x,
+                          DataType dtype) {
   VLOG(3) << "TransDataType "
           << "src type:" << x.dtype() << "; dst type: " << dtype;
 
   switch (x.dtype()) {
     case DataType::FLOAT32:
-      return phi::Cast<float>(dev_ctx, x, dtype);
+      return Cast<float>(dev_ctx, x, dtype);
     case DataType::FLOAT64:
-      return phi::Cast<double>(dev_ctx, x, dtype);
+      return Cast<double>(dev_ctx, x, dtype);
     case DataType::INT32:
-      return phi::Cast<int32_t>(dev_ctx, x, dtype);
+      return Cast<int32_t>(dev_ctx, x, dtype);
     case DataType::INT64:
-      return phi::Cast<int64_t>(dev_ctx, x, dtype);
+      return Cast<int64_t>(dev_ctx, x, dtype);
     case DataType::FLOAT16:
-      return phi::Cast<phi::float16>(dev_ctx, x, dtype);
+      return Cast<phi::float16>(dev_ctx, x, dtype);
     case DataType::BFLOAT16:
-      return phi::Cast<phi::bfloat16>(dev_ctx, x, dtype);
+      return Cast<phi::bfloat16>(dev_ctx, x, dtype);
     case DataType::BOOL:
-      return phi::Cast<bool>(dev_ctx, x, dtype);
+      return Cast<bool>(dev_ctx, x, dtype);
     case DataType::INT16:
-      return phi::Cast<int16_t>(dev_ctx, x, dtype);
+      return Cast<int16_t>(dev_ctx, x, dtype);
     case DataType::UINT8:
-      return phi::Cast<uint8_t>(dev_ctx, x, dtype);
+      return Cast<uint8_t>(dev_ctx, x, dtype);
     default:
       PADDLE_THROW(common::errors::Unimplemented(
           "Data type (%s) is not supported when casting data type.",

@@ -45,6 +45,7 @@
 #include "paddle/common/flags.h"
 
 COMMON_DECLARE_bool(manually_trans_conv_filter);
+COMMON_DECLARE_bool(use_accuracy_compatible_kernel);
 
 namespace phi {
 template <typename T, typename Context>
@@ -230,12 +231,6 @@ void ConvCudnnKernelImplV8(const DenseTensor* input_tensor,
   auto& plan_cache = phi::autotune::AutoTuneCache::Instance().GetConvV8(
       phi::autotune::AlgorithmType::kConvForwardV8);
 
-  PADDLE_ENFORCE_EQ(
-      groups,
-      1,
-      common::errors::Unimplemented(
-          "Group concolution using CUDNNv8 API unsupported for now"));
-
   T* input_data = const_cast<T*>(input_tensor->data<T>());
   T* filter_data = const_cast<T*>(filter_channel_tensor->data<T>());
   T* output_data = output_tensor->data<T>();
@@ -285,7 +280,8 @@ void ConvCudnnKernelImplV8(const DenseTensor* input_tensor,
                                           output_data,
                                           filter_data,
                                           handle,
-                                          &workspace_handle);
+                                          &workspace_handle,
+                                          input_tensor->dtype());
 
   helper::ExecutePlansAndCache(handle,
                                &workspace_handle,
@@ -311,8 +307,7 @@ void ConvCudnnKernel(const Context& dev_ctx,
                      const std::string& data_format,
                      DenseTensor* output) {
   if (input.numel() == 0 || filter.numel() == 0) {
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(output->dims())), 0, output);
+    Full<T, Context>(dev_ctx, output->dims(), 0, output);
     return;
   }
   dev_ctx.template Alloc<T>(output);
@@ -343,11 +338,11 @@ void ConvCudnnKernel(const Context& dev_ctx,
   auto compute_format = DataLayout::NCHW;
 #else
 #if CUDNN_VERSION_MIN(8, 1, 0)
-  // Tensor Core introduced from Volta GPUs supports more faster conv op
-  // with FP16 or BF16 in NHWC data format.
   const bool compute_in_nhwc =
-      (dtype == CUDNN_DATA_HALF || dtype == CUDNN_DATA_BFLOAT16) &&
-      IsVoltaOrLater(dev_ctx);
+      FLAGS_use_accuracy_compatible_kernel
+          ? channel_last
+          : ((dtype == CUDNN_DATA_HALF || dtype == CUDNN_DATA_BFLOAT16) &&
+             IsVoltaOrLater(dev_ctx));
 #else
   // Tensor Core introduced from Volta GPUs supports more faster conv op
   // with FP16 in NHWC data format. (BF16 require cudnn >= 8.1.0)
@@ -405,7 +400,7 @@ void ConvCudnnKernel(const Context& dev_ctx,
     filter_data_dims = slice_ddim(filter_dims, 1, filter_dims.size() - 1);
   }
 
-  std::vector<int> ksize = common::vectorize<int>(filter_data_dims);
+  std::vector<int> ksize = vectorize<int>(filter_data_dims);
   UpdatePaddingAndDilation(
       &paddings, &dilations, padding_algorithm, in_data_dims, strides, ksize);
 
@@ -445,7 +440,7 @@ void ConvCudnnKernel(const Context& dev_ctx,
         input_pad[2 * i + 2 + 1] = paddings[2 * i + 1] - padding_common[i];
       }
     }
-    DDim new_input_shape(common::make_ddim(new_input_shape_vec));
+    DDim new_input_shape(make_ddim(new_input_shape_vec));
     transformed_input.Resize(new_input_shape);
     dev_ctx.template Alloc<T>(&transformed_input);
 
@@ -495,7 +490,8 @@ void ConvCudnnKernel(const Context& dev_ctx,
   CUDNN_ENFORCE_TENSOR_SIZE_SUPPORTED(transformed_filter_channel);
   CUDNN_ENFORCE_TENSOR_SIZE_SUPPORTED(transformed_output);
 #ifdef PADDLE_WITH_CUDNN_FRONTEND
-  if (dynload::IsCudnnFrontendEnabled() && (groups == 1))
+  if (dynload ::IsCudnnFrontendEnabled() &&
+      (FLAGS_use_accuracy_compatible_kernel || groups == 1))
     ConvCudnnKernelImplV8<T>(&transformed_input,
                              &transformed_filter_channel,
                              dev_ctx,
@@ -565,18 +561,29 @@ void Conv3DCudnnKernel(const Context& dev_ctx,
 }  // namespace phi
 
 #ifdef PADDLE_WITH_HIP
-PD_REGISTER_KERNEL(
-    conv2d, GPUDNN, ALL_LAYOUT, phi::ConvCudnnKernel, float, phi::float16) {}
+PD_REGISTER_KERNEL(conv2d,
+                   GPUDNN,
+                   ALL_LAYOUT,
+                   phi::ConvCudnnKernel,
+                   float,
+                   phi::float16,
+                   phi::bfloat16) {}
 
-PD_REGISTER_KERNEL(
-    conv3d, GPUDNN, ALL_LAYOUT, phi::Conv3DCudnnKernel, float, phi::float16) {}
+PD_REGISTER_KERNEL(conv3d,
+                   GPUDNN,
+                   ALL_LAYOUT,
+                   phi::Conv3DCudnnKernel,
+                   float,
+                   phi::float16,
+                   phi::bfloat16) {}
 
 PD_REGISTER_KERNEL(depthwise_conv2d,
                    GPUDNN,
                    ALL_LAYOUT,
                    phi::DepthwiseConvCudnnKernel,
                    float,
-                   phi::float16) {}
+                   phi::float16,
+                   phi::bfloat16) {}
 
 #else
 #if CUDNN_VERSION_MIN(8, 1, 0)
@@ -627,5 +634,3 @@ PD_REGISTER_KERNEL(conv3d,
 #endif
 
 #endif
-
-// todo register bfloat16

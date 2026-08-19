@@ -96,7 +96,7 @@ struct OneHotGenerator<GPUContext, T> {
     DenseTensor input_tensor;
     input_tensor.Resize(out->dims());
     dev_ctx.template Alloc<T>(&input_tensor);
-    phi::Copy(dev_ctx, *out, dev_ctx.GetPlace(), false, &input_tensor);
+    Copy(dev_ctx, *out, dev_ctx.GetPlace(), false, &input_tensor);
     funcs::set_constant(dev_ctx, out, static_cast<T>(0.0));
     OneHotCUDAKernel<T, thread_size>
         <<<block_size, thread_size, 0, dev_ctx.stream()>>>(
@@ -136,7 +136,7 @@ struct GumbleNoiseGenerator<GPUContext, T> {
                         const float temperature) {
     DenseTensor random_tensor;
     int64_t size = size_to_axis * size_from_axis;
-    random_tensor.Resize(common::make_ddim({size}));
+    random_tensor.Resize({size});
     using MPType = typename phi::dtype::MPTypeTrait<T>::Type;
     MPType* random_data = dev_ctx.template Alloc<MPType>(&random_tensor);
 

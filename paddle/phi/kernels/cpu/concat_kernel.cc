@@ -71,8 +71,8 @@ void ConcatKernel(const Context& dev_ctx,
     if (lod_size) {
       auto* out_lod = out->mutable_lod();
       for (size_t i = 1; i < x.size(); ++i) {
-        auto in_lod = phi::ConvertToLengthBasedLegacyLoD(x[i]->lod());
-        phi::AppendLegacyLoD(out_lod, in_lod);
+        auto in_lod = ConvertToLengthBasedLegacyLoD(x[i]->lod());
+        AppendLegacyLoD(out_lod, in_lod);
       }
     }
   }
@@ -98,7 +98,7 @@ void ConcatKernel(const Context& dev_ctx,
     }
   } else {
     // TODO(chenweihang): concat functor support vector<DenseTensor*> input
-    std::vector<phi::DenseTensor> inputs;
+    std::vector<DenseTensor> inputs;
     inputs.reserve(x.size());
     for (auto item : x) {
       if (item->numel() > 0) {

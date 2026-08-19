@@ -30,20 +30,20 @@ struct StridedMemcpyFunctor;
 
 template <typename T>
 struct StridedMemcpyFunctor<T, 0> {
-  void operator()(const phi::DeviceContext& dev_ctx,
+  void operator()(const DeviceContext& dev_ctx,
                   const T* src,
                   const int64_t* src_stride UNUSED,
                   const int64_t* dst_dim UNUSED,
                   const int64_t* dst_stride UNUSED,
                   T* dst) const {
     auto place = dev_ctx.GetPlace();
-    if (place.GetType() == phi::AllocationType::CPU) {
+    if (place.GetType() == AllocationType::CPU) {
       auto& cpu_place = place;
       memory_utils::Copy(cpu_place, dst, cpu_place, src, sizeof(T));
     } else {
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
       auto& gpu_place = place;
-      auto& cuda_ctx = reinterpret_cast<const phi::GPUContext&>(dev_ctx);
+      auto& cuda_ctx = reinterpret_cast<const GPUContext&>(dev_ctx);
       memory_utils::Copy(
           gpu_place, dst, gpu_place, src, sizeof(T), cuda_ctx.stream());
 #else
@@ -56,21 +56,21 @@ struct StridedMemcpyFunctor<T, 0> {
 
 template <typename T>
 struct StridedMemcpyFunctor<T, 1> {
-  void operator()(const phi::DeviceContext& dev_ctx,
+  void operator()(const DeviceContext& dev_ctx,
                   const T* src,
                   const int64_t* src_stride UNUSED,
                   const int64_t* dst_dim,
                   const int64_t* dst_stride UNUSED,
                   T* dst) const {
     auto place = dev_ctx.GetPlace();
-    if (place.GetType() == phi::AllocationType::CPU) {
+    if (place.GetType() == AllocationType::CPU) {
       auto& cpu_place = place;
       memory_utils::Copy(
           cpu_place, dst, cpu_place, src, sizeof(T) * dst_dim[0]);
     } else {
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
       auto& gpu_place = place;
-      auto& cuda_ctx = reinterpret_cast<const phi::GPUContext&>(dev_ctx);
+      auto& cuda_ctx = reinterpret_cast<const GPUContext&>(dev_ctx);
       memory_utils::Copy(gpu_place,
                          dst,
                          gpu_place,
@@ -87,7 +87,7 @@ struct StridedMemcpyFunctor<T, 1> {
 
 template <typename T, int Rank>
 struct StridedMemcpyFunctor {
-  void operator()(const phi::DeviceContext& dev_ctx,
+  void operator()(const DeviceContext& dev_ctx,
                   const T* src,
                   const int64_t* src_stride,
                   const int64_t* dst_dim,
@@ -104,7 +104,7 @@ struct StridedMemcpyFunctor {
 
 template <typename T>
 struct StridedCopyDimVisitor {
-  StridedCopyDimVisitor(const phi::DeviceContext& dev_ctx,
+  StridedCopyDimVisitor(const DeviceContext& dev_ctx,
                         const T* src,
                         const phi::DDim& src_stride,
                         const phi::DDim& dst_stride,
@@ -116,7 +116,7 @@ struct StridedCopyDimVisitor {
         dst_(dst) {}
 
   template <int D>
-  void operator()(const phi::Dim<D>& dst_dim) const {
+  void operator()(const Dim<D>& dst_dim) const {
     StridedMemcpyFunctor<T, D> functor;
     functor(dev_ctx_,
             src_,
@@ -126,7 +126,7 @@ struct StridedCopyDimVisitor {
             dst_);
   }
 
-  const phi::DeviceContext& dev_ctx_;
+  const DeviceContext& dev_ctx_;
   const T* src_;
   const phi::DDim& src_stride_;
   const phi::DDim& dst_stride_;

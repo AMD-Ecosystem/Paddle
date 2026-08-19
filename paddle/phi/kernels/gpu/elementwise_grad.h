@@ -172,7 +172,7 @@ void ElementwiseMixedPrecisionAddGrad(const GPUContext &dev_ctx,
   if (dx_data == dout_data) {
     VLOG(7) << "Special case when dx_data is the same as dout_data, "
                "need cast dout to dy.";
-    phi::CastKernel<T_dout>(dev_ctx, dout, dy->dtype(), dy);
+    CastKernel<T_dout>(dev_ctx, dout, dy->dtype(), dy);
     return;
   }
 
@@ -218,7 +218,7 @@ void DefaultMixedPrecisionAddGrad(const GPUContext &dev_ctx,
     auto *dx_data = dev_ctx.template Alloc<T_dx>(dx);
     if (dx->dims() == dout.dims()) {
       if (dx_data != dout_data) {
-        phi::Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dx);
+        Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dx);
       }
     } else {
       if (dx->IsSharedBufferWith(dout)) {
@@ -237,7 +237,7 @@ void DefaultMixedPrecisionAddGrad(const GPUContext &dev_ctx,
   if (dy != nullptr) {
     auto *dy_data = dev_ctx.template Alloc<T_dy>(dy);
     if (dy->dims() == dout.dims()) {
-      phi::CastKernel<T_dout>(dev_ctx, dout, dy->dtype(), dy);
+      CastKernel<T_dout>(dev_ctx, dout, dy->dtype(), dy);
     } else {
       DenseTensor dy_fp32;
       dy_fp32.Resize(dout.dims());
@@ -246,7 +246,7 @@ void DefaultMixedPrecisionAddGrad(const GPUContext &dev_ctx,
           funcs::GetReduceDim(y.dims(), dout.dims(), axis);
       phi::SumKernel<float, GPUContext>(
           dev_ctx, dout, reduce_dims, dout.dtype(), false, &dy_fp32);
-      phi::CastKernel<float>(dev_ctx, dy_fp32, dy->dtype(), dy);
+      CastKernel<float>(dev_ctx, dy_fp32, dy->dtype(), dy);
     }
   }
 }
@@ -297,7 +297,7 @@ void DefaultElementwiseAddGrad(const GPUContext &dev_ctx,
     auto *dx_data = dev_ctx.template Alloc<T>(dx);
     if (dx->dims() == dout.dims()) {
       if (dx_data != dout_data) {
-        phi::Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dx);
+        Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dx);
       }
     } else {
       // For inplace strategy, dx will be stored in addr of dout, which makes
@@ -318,7 +318,7 @@ void DefaultElementwiseAddGrad(const GPUContext &dev_ctx,
     auto *dy_data = dev_ctx.template Alloc<T>(dy);
     if (dy->dims() == dout.dims()) {
       if (dy_data != dout_data) {
-        phi::Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dy);
+        Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dy);
       }
     } else {
       std::vector<int> reduce_dims =
@@ -345,11 +345,11 @@ void ElementwiseAddGrad(const GPUContext &dev_ctx,
   if (dx_data == dout_data && dy_data != dout_data) {
     VLOG(4) << "Special case when dx_data is the same as dout_data, "
                "only need copy dout to dy";
-    phi::Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dy);
+    Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dy);
   } else if (dx_data != dout_data && dy_data == dout_data) {
     VLOG(4) << "Special case when dy_data is the same as dout_data, "
                "only need copy dout to dx";
-    phi::Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dx);
+    Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dx);
   } else if (dx_data != dout_data && dy_data != dout_data) {
     auto size = x.numel();
     int vec_size = max(static_cast<int>(sizeof(float4) / sizeof(T)), 1);
@@ -420,7 +420,7 @@ void default_elementwise_sub_grad(const GPUContext &dev_ctx,
     auto *dx_data = dev_ctx.template Alloc<T>(dx);
     if (dx->dims() == dout.dims()) {
       if (dx_data != dout_data) {
-        phi::Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dx);
+        Copy(dev_ctx, dout, dev_ctx.GetPlace(), false, dx);
       }
     } else {
       // For inplace strategy, dx will be stored in addr of dout, which makes
@@ -534,16 +534,14 @@ void ElementwiseMulGrad(const GPUContext &dev_ctx,
       if (dx->numel() == 0) {
         dev_ctx.template Alloc<T>(dx);
       } else {
-        phi::Full<T, GPUContext>(
-            dev_ctx, phi::IntArray(common::vectorize(dx->dims())), 0, dx);
+        Full<T, GPUContext>(dev_ctx, dx->dims(), 0, dx);
       }
     }
     if (dy) {
       if (dy->numel() == 0) {
         dev_ctx.template Alloc<T>(dy);
       } else {
-        phi::Full<T, GPUContext>(
-            dev_ctx, phi::IntArray(common::vectorize(dy->dims())), 0, dy);
+        Full<T, GPUContext>(dev_ctx, dy->dims(), 0, dy);
       }
     }
     return;

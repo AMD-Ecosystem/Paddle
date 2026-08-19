@@ -50,7 +50,8 @@ static dim3 GetDesiredGridDim(int64_t grid_size) {
   int64_t grid_y = 1;
   if (grid_x > 2147483648LL) {
     grid_y = 1024;
-    grid_x = (grid_x + grid_y - 1) / grid_x;
+    grid_x = (grid_x + grid_y - 1) / grid_y;
+    PADDLE_ENFORCE_LE_INT_MAX(grid_x, "grid_x");
   }
   grid_dim.x = static_cast<uint32_t>(grid_x);
   grid_dim.y = static_cast<uint32_t>(grid_y);
@@ -591,9 +592,9 @@ __global__ __launch_bounds__(THREADS_PER_CTA) void fused_ln_bwd_fast_kernel(
       !IsFusedDropoutResidualLn || NeedDDropoutSrcPtr,
       "When IsFusedDropoutResidualLn = true, NeedDDropoutSrcPtr must be true.");
 
-  using Vec = phi::AlignedVector<T, VecSize>;
-  using Vec_scale = phi::AlignedVector<ScaleT, VecSize>;
-  using MaskLoadT = phi::AlignedVector<MaskType, VecSize>;
+  using Vec = AlignedVector<T, VecSize>;
+  using Vec_scale = AlignedVector<ScaleT, VecSize>;
+  using MaskLoadT = AlignedVector<MaskType, VecSize>;
 
   const int64_t tidx = threadIdx.x;
   const int64_t bidx = blockIdx.x;
@@ -857,7 +858,7 @@ __global__ __launch_bounds__(THREADS_PER_CTA) void ln_bwd_fast_final_kernel(
     U *__restrict__ db_part_,
     ScaleT *__restrict__ dg_,
     ScaleT *__restrict__ db_) {
-  using Vec = phi::AlignedVector<U, VecSize>;
+  using Vec = AlignedVector<U, VecSize>;
   static_assert(VEC_COLS == ELTS_PER_ROW / VecSize, "");
 
   const int tidx = threadIdx.x;
@@ -980,7 +981,7 @@ template <typename T,
           typename U,
           typename ScaleT = U,
           typename MaskType = uint8_t>
-void ln_bwd_fast_kernel_driver(const phi::GPUContext &dev_ctx,
+void ln_bwd_fast_kernel_driver(const GPUContext &dev_ctx,
                                const int64_t rows,
                                const int64_t cols,
                                float epsilon,
@@ -1015,12 +1016,12 @@ void ln_bwd_fast_kernel_driver(const phi::GPUContext &dev_ctx,
     const int gridx = 2 * dev_ctx.GetSMCount();
 
     // get temp space for dscale and dbias.
-    phi::DenseTensor dscale_temp;
+    DenseTensor dscale_temp;
     dscale_temp.Resize({gridx, cols});
     dev_ctx.template Alloc<U>(&dscale_temp);
     U *dscale_temp_ptr = dscale_temp.data<U>();
 
-    phi::DenseTensor dbias_temp;
+    DenseTensor dbias_temp;
     dbias_temp.Resize({gridx, cols});
     dev_ctx.template Alloc<U>(&dbias_temp);
     U *dbias_temp_ptr = dbias_temp.data<U>();
@@ -1483,8 +1484,8 @@ __global__ void LayerNormBackwardComputeGradInputWithSmallFeatureSize(
     T *k_grad_input = grad_input + bid * n2;
 
     // Data storage location in local register.
-    using VecT = phi::AlignedVector<T, DataPerTid>;
-    using VecScaleT = phi::AlignedVector<ScaleT, DataPerTid>;
+    using VecT = AlignedVector<T, DataPerTid>;
+    using VecScaleT = AlignedVector<ScaleT, DataPerTid>;
 
     const VecT *__restrict__ v_k_dout =
         reinterpret_cast<const VecT *__restrict__>(k_dout);
@@ -1905,15 +1906,21 @@ static void LayerNormBackward(
     float epsilon,
     int64_t batch_size,
     int64_t feature_size,
-    const phi::GPUContext &dev_ctx) {
+    const GPUContext &dev_ctx) {
   auto stream = dev_ctx.stream();
   const int kMaxBlockDim = 512;
   const int kMaxBlockNum = 128;
+  // TODO(large-tensor): generic backward kernel launch uses int32 grid dim
+  PADDLE_ENFORCE_LE_INT_MAX(batch_size, "batch_size");
   int gradient_flag = ((d_x != nullptr ? 1 : 0) << 2) |
                       ((d_scale != nullptr ? 1 : 0) << 1) |
                       ((d_bias != nullptr ? 1 : 0));
   if (gradient_flag == 0) return;
   if (batch_size == 1) {
+    // TODO(large-tensor): batch_size==1 path uses int32 grid dim
+    PADDLE_ENFORCE_LE_INT_MAX(
+        (feature_size + kMaxBlockDim - 1) / kMaxBlockDim,
+        "(feature_size + kMaxBlockDim - 1) / kMaxBlockDim");
     LayerNormBackwardWhenBatchSizeIsOne<T, U, ScaleBiasWithSameTypeX>
         <<<(feature_size + kMaxBlockDim - 1) / kMaxBlockDim,
            kMaxBlockDim,

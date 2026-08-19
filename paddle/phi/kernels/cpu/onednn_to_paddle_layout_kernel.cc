@@ -20,14 +20,13 @@ limitations under the License. */
 #include "glog/logging.h"
 
 #include "paddle/phi/backends/all_context.h"
+#include "paddle/phi/backends/onednn/onednn_helper.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/core/visit_type.h"
 #include "paddle/phi/kernels/funcs/data_layout_transform.h"
 #include "paddle/phi/kernels/funcs/math_function.h"
 #include "paddle/phi/kernels/memcpy_kernel.h"
-#ifdef PADDLE_WITH_DNNL
-#include "paddle/phi/backends/onednn/onednn_helper.h"
-#endif
+
 namespace phi {
 
 template <typename Context>
@@ -58,7 +57,7 @@ void OneDNN2PaddleLayout(const Context& dev_ctx,
   DataLayout tmp_layout = static_cast<DataLayout>(dst_layout);
 
   if (tmp_layout == DataLayout::ANY) {
-    tmp_layout = phi::OneDNNContext::tls().get_cur_paddle_data_layout();
+    tmp_layout = OneDNNContext::tls().get_cur_paddle_data_layout();
   }
 
   VLOG(4) << "src_layout: " << src_layout << ", tmp_layout: " << tmp_layout;

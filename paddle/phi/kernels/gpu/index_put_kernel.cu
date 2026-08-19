@@ -55,7 +55,7 @@ __global__ void IndexPutCudaKernel(const T* x,
   }
 
   if (accumulate) {
-    phi::CudaAtomicAdd(out + offset, *(vals + (idx & is_single_val_tensor)));
+    CudaAtomicAdd(out + offset, *(vals + (idx & is_single_val_tensor)));
   } else {
     *(out + offset) = *(vals + (idx & is_single_val_tensor));
   }
@@ -74,7 +74,7 @@ void LaunchIndexPutCudaKernel(const Context& dev_ctx,
   bool is_initialized = out->initialized();
   T* out_data = dev_ctx.template Alloc<T>(out);
   if (!is_initialized) {
-    phi::Copy(dev_ctx, x, dev_ctx.GetPlace(), false, out);
+    Copy(dev_ctx, x, dev_ctx.GetPlace(), false, out);
   }
 
   auto x_dims = x.dims();
@@ -131,18 +131,18 @@ void IndexPutKernel(const Context& dev_ctx,
       false,
       common::errors::InvalidArgument("Indices cannot be empty."));
   std::vector<DenseTensor> tmp_args;
-  std::vector<const phi::DenseTensor*> int_indices_v =
+  std::vector<const DenseTensor*> int_indices_v =
       funcs::DealWithBoolIndices<T, Context>(dev_ctx, indices, &tmp_args);
   if (int_indices_v.empty()) {
     if (!out->initialized()) {
-      phi::Copy(dev_ctx, x, dev_ctx.GetPlace(), false, out);
+      Copy(dev_ctx, x, dev_ctx.GetPlace(), false, out);
     }
     return;
   }
   auto bd_dim = funcs::BroadCastTensorsDims(int_indices_v);
 
-  std::vector<int64_t> res_dim_v(common::vectorize(bd_dim));
-  std::vector<const phi::DenseTensor*> res_indices_v(x.dims().size(), nullptr);
+  std::vector<int64_t> res_dim_v(vectorize(bd_dim));
+  std::vector<const DenseTensor*> res_indices_v(x.dims().size(), nullptr);
   std::vector<DenseTensor> tmp_res_indices_v;
   std::vector<DenseTensor> tmp_value_v;
   std::vector<DenseTensor> range_tensor_v;
@@ -150,7 +150,7 @@ void IndexPutKernel(const Context& dev_ctx,
 
   for (int i = int_indices_v.size(); i < x.dims().size(); ++i) {
     range_tensor_v.emplace_back(funcs::GetRangeCudaTensor<int64_t, Context>(
-        dev_ctx, x.dims()[i], phi::DataType::INT64));
+        dev_ctx, x.dims()[i], DataType::INT64));
   }
 
   funcs::DealWithIndices<T, Context>(dev_ctx,
@@ -163,8 +163,7 @@ void IndexPutKernel(const Context& dev_ctx,
                                      &res_dim_v);
 
   if (value.numel() != 1) {
-    tmp_value_v.emplace_back(
-        DenseTensor(value.dtype()).Resize(common::make_ddim(res_dim_v)));
+    tmp_value_v.emplace_back(DenseTensor(value.dtype()).Resize(res_dim_v));
     ExpandKernel<T, Context>(
         dev_ctx, value, IntArray(res_dim_v), &tmp_value_v[0]);
     ptr_value = &tmp_value_v[0];

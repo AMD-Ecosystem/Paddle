@@ -20,6 +20,7 @@
 #ifdef PADDLE_WITH_CUDA
 #include "paddle/phi/backends/dynload/cublas.h"
 #include "paddle/phi/backends/dynload/cusolver.h"
+#include "paddle/phi/backends/gpu/cuda/cuda_graph_with_memory_pool.h"
 #endif  // PADDLE_WITH_CUDA
 
 #ifdef PADDLE_WITH_HIP
@@ -55,7 +56,7 @@ void SolveLinearSystemGPU(const GPUContext& dev_ctx,
 #ifdef PADDLE_WITH_CUDA
 template <>
 void SolveLinearSystemGPU<phi::dtype::complex<float>>(
-    const phi::GPUContext& dev_ctx,
+    const GPUContext& dev_ctx,
     const phi::dtype::complex<float>*
         matrix_data,  // device ptr, row-major, size batch*order*order
     const phi::dtype::complex<float>*
@@ -115,25 +116,25 @@ void SolveLinearSystemGPU<phi::dtype::complex<float>>(
     cuComplex* B_col = dB_col + static_cast<size_t>(i) * order * rhs_cols;
 
     // transpose A_row (row-major) -> A_col (column-major) via C = A^T
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasCgeam(
-        cublas_handle,
-        CUBLAS_OP_T,
-        CUBLAS_OP_N,
-        order,
-        order,
-        &kAlpha,
-        A_row,
-        order,  // lda: when interpreting A_row as (order x order) row-major,
-                // using order
-        &kZero,
-        nullptr,
-        order,
-        A_col,
-        order));  // ldc = order (column-major leading dim)
+    PADDLE_ENFORCE_GPU_SUCCESS(
+        dynload::cublasCgeam(cublas_handle,
+                             CUBLAS_OP_T,
+                             CUBLAS_OP_N,
+                             order,
+                             order,
+                             &kAlpha,
+                             A_row,
+                             order,  // lda: when interpreting A_row as (order x
+                                     // order) row-major, using order
+                             &kZero,
+                             nullptr,
+                             order,
+                             A_col,
+                             order));  // ldc = order (column-major leading dim)
 
     // transpose B_row (row-major order x rhs_cols) -> B_col (column-major order
     // x rhs_cols)
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasCgeam(
+    PADDLE_ENFORCE_GPU_SUCCESS(dynload::cublasCgeam(
         cublas_handle,
         CUBLAS_OP_T,
         CUBLAS_OP_N,
@@ -151,7 +152,7 @@ void SolveLinearSystemGPU<phi::dtype::complex<float>>(
 
   int lwork = 0;
   cuComplex* dA_col0 = dA_col;
-  PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cusolverDnCgetrf_bufferSize(
+  PADDLE_ENFORCE_GPU_SUCCESS(dynload::cusolverDnCgetrf_bufferSize(
       cusolver_handle, order, order, dA_col0, order, &lwork));
 
   size_t work_bytes = static_cast<size_t>(lwork) * sizeof(cuComplex);
@@ -166,11 +167,11 @@ void SolveLinearSystemGPU<phi::dtype::complex<float>>(
     int* info_i = d_info + i;
 
     // getrf (LU factorization) on A_col (column-major)
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cusolverDnCgetrf(
+    PADDLE_ENFORCE_GPU_SUCCESS(dynload::cusolverDnCgetrf(
         cusolver_handle, order, order, A_col, order, d_work, pivots_i, info_i));
 
     // getrs: solve A_col * X_col = B_col
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cusolverDnCgetrs(
+    PADDLE_ENFORCE_GPU_SUCCESS(dynload::cusolverDnCgetrs(
         cusolver_handle,
         CUBLAS_OP_N,  // no transpose on column-major matrix
         order,
@@ -194,7 +195,7 @@ void SolveLinearSystemGPU<phi::dtype::complex<float>>(
     // will be (rhs_cols x order), but we want X_row with shape (order x
     // rhs_cols) in row-major; calling cublasCgeam with op=T and adjusted dims
     // works:
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasCgeam(
+    PADDLE_ENFORCE_GPU_SUCCESS(dynload::cublasCgeam(
         cublas_handle,
         CUBLAS_OP_T,
         CUBLAS_OP_N,
@@ -211,7 +212,15 @@ void SolveLinearSystemGPU<phi::dtype::complex<float>>(
   }
 
   std::vector<int> h_info(batch_count, 0);
-  phi::memory_utils::Copy(phi::CPUPlace(),
+  PADDLE_ENFORCE_EQ(
+      phi::backends::gpu::IsCUDAGraphCapturing(),
+      false,
+      common::errors::InvalidArgument(
+          "EigGradKernel does not support CUDA Graph capture: async D2H copy "
+          "to local vector 'h_info' will bake the destination address into the "
+          "graph; on replay the vector is re-created at a different address, "
+          "causing a dangling-pointer write."));
+  phi::memory_utils::Copy(CPUPlace(),
                           h_info.data(),
                           dev_ctx.GetPlace(),
                           d_info,
@@ -230,7 +239,7 @@ void SolveLinearSystemGPU<phi::dtype::complex<float>>(
 
 template <>
 void SolveLinearSystemGPU<phi::dtype::complex<double>>(
-    const phi::GPUContext& dev_ctx,
+    const GPUContext& dev_ctx,
     const phi::dtype::complex<double>*
         matrix_data,  // device ptr, row-major, size batch*order*order
     const phi::dtype::complex<double>*
@@ -295,25 +304,25 @@ void SolveLinearSystemGPU<phi::dtype::complex<double>>(
     cuDoubleComplex* B_col = dB_col + static_cast<size_t>(i) * order * rhs_cols;
 
     // transpose A_row (row-major) -> A_col (column-major) via C = A^T
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasZgeam(
-        cublas_handle,
-        CUBLAS_OP_T,
-        CUBLAS_OP_N,
-        order,
-        order,
-        &kAlpha,
-        A_row,
-        order,  // lda: when interpreting A_row as (order x order) row-major,
-                // using order
-        &kZero,
-        nullptr,
-        order,
-        A_col,
-        order));  // ldc = order (column-major leading dim)
+    PADDLE_ENFORCE_GPU_SUCCESS(
+        dynload::cublasZgeam(cublas_handle,
+                             CUBLAS_OP_T,
+                             CUBLAS_OP_N,
+                             order,
+                             order,
+                             &kAlpha,
+                             A_row,
+                             order,  // lda: when interpreting A_row as (order x
+                                     // order) row-major, using order
+                             &kZero,
+                             nullptr,
+                             order,
+                             A_col,
+                             order));  // ldc = order (column-major leading dim)
 
     // transpose B_row (row-major order x rhs_cols) -> B_col (column-major order
     // x rhs_cols)
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasZgeam(
+    PADDLE_ENFORCE_GPU_SUCCESS(dynload::cublasZgeam(
         cublas_handle,
         CUBLAS_OP_T,
         CUBLAS_OP_N,
@@ -331,7 +340,7 @@ void SolveLinearSystemGPU<phi::dtype::complex<double>>(
 
   int lwork = 0;
   cuDoubleComplex* dA_col0 = dA_col;
-  PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cusolverDnZgetrf_bufferSize(
+  PADDLE_ENFORCE_GPU_SUCCESS(dynload::cusolverDnZgetrf_bufferSize(
       cusolver_handle, order, order, dA_col0, order, &lwork));
 
   size_t work_bytes = static_cast<size_t>(lwork) * sizeof(cuDoubleComplex);
@@ -347,11 +356,11 @@ void SolveLinearSystemGPU<phi::dtype::complex<double>>(
     int* info_i = d_info + i;
 
     // getrf (LU factorization) on A_col (column-major)
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cusolverDnZgetrf(
+    PADDLE_ENFORCE_GPU_SUCCESS(dynload::cusolverDnZgetrf(
         cusolver_handle, order, order, A_col, order, d_work, pivots_i, info_i));
 
     // getrs: solve A_col * X_col = B_col
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cusolverDnZgetrs(
+    PADDLE_ENFORCE_GPU_SUCCESS(dynload::cusolverDnZgetrs(
         cusolver_handle,
         CUBLAS_OP_N,  // no transpose on column-major matrix
         order,
@@ -375,7 +384,7 @@ void SolveLinearSystemGPU<phi::dtype::complex<double>>(
     // will be (rhs_cols x order), but we want X_row with shape (order x
     // rhs_cols) in row-major; calling cublasZgeam with op=T and adjusted dims
     // works:
-    PADDLE_ENFORCE_GPU_SUCCESS(phi::dynload::cublasZgeam(
+    PADDLE_ENFORCE_GPU_SUCCESS(dynload::cublasZgeam(
         cublas_handle,
         CUBLAS_OP_T,
         CUBLAS_OP_N,
@@ -392,7 +401,15 @@ void SolveLinearSystemGPU<phi::dtype::complex<double>>(
   }
 
   std::vector<int> h_info(batch_count, 0);
-  phi::memory_utils::Copy(phi::CPUPlace(),
+  PADDLE_ENFORCE_EQ(
+      phi::backends::gpu::IsCUDAGraphCapturing(),
+      false,
+      common::errors::InvalidArgument(
+          "EigGradKernel does not support CUDA Graph capture: async D2H copy "
+          "to local vector 'h_info' will bake the destination address into the "
+          "graph; on replay the vector is re-created at a different address, "
+          "causing a dangling-pointer write."));
+  phi::memory_utils::Copy(CPUPlace(),
                           h_info.data(),
                           dev_ctx.GetPlace(),
                           d_info,
@@ -413,7 +430,7 @@ void SolveLinearSystemGPU<phi::dtype::complex<double>>(
 #ifdef PADDLE_WITH_HIP
 template <>
 void SolveLinearSystemGPU<phi::dtype::complex<float>>(
-    const phi::GPUContext& dev_ctx,
+    const GPUContext& dev_ctx,
     const phi::dtype::complex<float>*
         matrix_data,  // device ptr, row-major, size batch*order*order
     const phi::dtype::complex<float>*
@@ -565,13 +582,13 @@ void SolveLinearSystemGPU<phi::dtype::complex<float>>(
   }
 
   // Check error info
-  phi::CPUPlace cpu_place;
-  phi::DeviceContextPool& pool = phi::DeviceContextPool::Instance();
-  auto* cpu_ctx = static_cast<phi::CPUContext*>(pool.Get(cpu_place));
+  CPUPlace cpu_place;
+  DeviceContextPool& pool = DeviceContextPool::Instance();
+  auto* cpu_ctx = static_cast<CPUContext*>(pool.Get(cpu_place));
 
   std::vector<rocblas_int> h_info(batch_count, 0);
   phi::memory_utils::Copy(
-      phi::CPUPlace(),
+      CPUPlace(),
       h_info.data(),
       dev_ctx.GetPlace(),
       d_info,
@@ -591,7 +608,7 @@ void SolveLinearSystemGPU<phi::dtype::complex<float>>(
 
 template <>
 void SolveLinearSystemGPU<phi::dtype::complex<double>>(
-    const phi::GPUContext& dev_ctx,
+    const GPUContext& dev_ctx,
     const phi::dtype::complex<double>*
         matrix_data,  // device ptr, row-major, size batch*order*order
     const phi::dtype::complex<double>*
@@ -741,13 +758,13 @@ void SolveLinearSystemGPU<phi::dtype::complex<double>>(
         X_row,
         rhs_cols));  // X_row ldc = rhs_cols (row-major leading dimension)
   }
-  phi::CPUPlace cpu_place;
-  phi::DeviceContextPool& pool = phi::DeviceContextPool::Instance();
-  auto* cpu_ctx = static_cast<phi::CPUContext*>(pool.Get(cpu_place));
+  CPUPlace cpu_place;
+  DeviceContextPool& pool = DeviceContextPool::Instance();
+  auto* cpu_ctx = static_cast<CPUContext*>(pool.Get(cpu_place));
 
   std::vector<rocblas_int> h_info(batch_count, 0);
   phi::memory_utils::Copy(
-      phi::CPUPlace(),
+      CPUPlace(),
       h_info.data(),
       dev_ctx.GetPlace(),
       d_info,
@@ -769,8 +786,8 @@ void SolveLinearSystemGPU<phi::dtype::complex<double>>(
 template <typename T, typename Context>
 void ComputeBackwardForComplexInputGPU(const DenseTensor& L,
                                        const DenseTensor& V,
-                                       const paddle::optional<DenseTensor>& gL,
-                                       const paddle::optional<DenseTensor>& gV,
+                                       const optional<DenseTensor>& gL,
+                                       const optional<DenseTensor>& gV,
                                        T* x_grad_data,
                                        int batch_count,
                                        int order,
@@ -779,18 +796,16 @@ void ComputeBackwardForComplexInputGPU(const DenseTensor& L,
   if (gL.get_ptr()) {
     gL_safe = gL.get();
   } else {
-    gL_safe =
-        Fill<T, Context>(dev_ctx, common::vectorize<int64_t>(L.dims()), T(0));
+    gL_safe = Fill<T, Context>(dev_ctx, vectorize<int64_t>(L.dims()), T(0));
   }
 
   DenseTensor gV_safe;
   if (gV.get_ptr()) {
     gV_safe = gV.get();
   } else {
-    gV_safe =
-        Fill<T, Context>(dev_ctx, common::vectorize<int64_t>(V.dims()), T(0));
+    gV_safe = Fill<T, Context>(dev_ctx, vectorize<int64_t>(V.dims()), T(0));
   }
-  DenseTensor trans_v = phi::TransposeLast2Dim<T>(dev_ctx, V);
+  DenseTensor trans_v = TransposeLast2Dim<T>(dev_ctx, V);
   DenseTensor Vh = phi::Conj<T>(dev_ctx, trans_v);
   DenseTensor Lconj = phi::Conj<T>(dev_ctx, L);
   DenseTensor Econj = phi::Subtract<T>(dev_ctx,
@@ -799,20 +814,20 @@ void ComputeBackwardForComplexInputGPU(const DenseTensor& L,
   DenseTensor VhgV = phi::Matmul<T>(dev_ctx, Vh, gV_safe);
   DenseTensor diag_real = phi::Real<T>(dev_ctx, VhgV);
 
-  auto cpu_place = phi::CPUPlace();
-  phi::DeviceContextPool& pool = phi::DeviceContextPool::Instance();
-  auto* cpu_ctx = static_cast<phi::CPUContext*>(pool.Get(cpu_place));
+  auto cpu_place = CPUPlace();
+  DeviceContextPool& pool = DeviceContextPool::Instance();
+  auto* cpu_ctx = static_cast<CPUContext*>(pool.Get(cpu_place));
 
   DenseTensor diag_real_cpu;
   diag_real_cpu.Resize(diag_real.dims());
-  phi::Copy(dev_ctx, diag_real, cpu_place, false, &diag_real_cpu);
+  Copy(dev_ctx, diag_real, cpu_place, false, &diag_real_cpu);
 
   DenseTensor diag_res_cpu =
       phi::funcs::BatchDiag<T>((*cpu_ctx), diag_real_cpu, batch_count);
 
   DenseTensor diag_res;
   dev_ctx.template Alloc<T>(&diag_res);
-  phi::Copy(dev_ctx, diag_res_cpu, phi::GPUPlace(), false, &diag_res);
+  Copy(dev_ctx, diag_res_cpu, GPUPlace(), false, &diag_res);
 
   DenseTensor diag_unsqueezed = phi::funcs::Unsqueeze(diag_res, -2);
 
@@ -859,8 +874,8 @@ template <typename T, typename Context>
 void EigGradKernel(const Context& dev_ctx,
                    const DenseTensor& out_w,
                    const DenseTensor& out_v,
-                   const paddle::optional<DenseTensor>& dout_w,
-                   const paddle::optional<DenseTensor>& dout_v,
+                   const optional<DenseTensor>& dout_w,
+                   const optional<DenseTensor>& dout_v,
                    DenseTensor* dx) {
   auto* dx_data = dev_ctx.template Alloc<phi::dtype::Complex<T>>(dx);
   if (dx->numel() == 0) {

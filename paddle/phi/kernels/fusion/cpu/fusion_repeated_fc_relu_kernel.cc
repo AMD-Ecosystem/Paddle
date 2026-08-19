@@ -28,11 +28,11 @@ static void fc_relu(const T* x,
                     T* y,
                     const phi::jit::matmul_attr_t& attr) {
   auto matmul =
-      phi::jit::KernelFuncs<phi::jit::MatMulTuple<T>, phi::CPUPlace>::Cache()
-          .At(attr);
+      phi::jit::KernelFuncs<phi::jit::MatMulTuple<T>, CPUPlace>::Cache().At(
+          attr);
   auto addbias_relu =
-      phi::jit::KernelFuncs<phi::jit::VAddReluTuple<T>, phi::CPUPlace>::Cache()
-          .At(attr.n);
+      phi::jit::KernelFuncs<phi::jit::VAddReluTuple<T>, CPUPlace>::Cache().At(
+          attr.n);
   matmul(x, w, y, &attr);
   T* dst = y;
   for (int i = 0; i < attr.m; ++i) {
@@ -50,7 +50,7 @@ void FusionRepeatedFCReluKernel(const Context& dev_ctx,
                                 DenseTensor* out) {
   int weight_sz = static_cast<int>(w.size());
 
-  auto i_dims = common::vectorize<int>(x.dims());
+  auto i_dims = vectorize<int>(x.dims());
   const auto& w_dims = w[0]->dims();
   phi::jit::matmul_attr_t attr;
   attr.m = i_dims[0];

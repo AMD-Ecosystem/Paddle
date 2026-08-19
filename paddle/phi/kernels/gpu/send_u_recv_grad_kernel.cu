@@ -102,8 +102,8 @@ void SendURecvGradKernel(const Context& dev_ctx,
                          const DenseTensor& x,
                          const DenseTensor& src_index,
                          const DenseTensor& dst_index,
-                         const paddle::optional<DenseTensor>& out,
-                         const paddle::optional<DenseTensor>& dst_count,
+                         const optional<DenseTensor>& out,
+                         const optional<DenseTensor>& dst_count,
                          const DenseTensor& out_grad,
                          const std::string& reduce_op,
                          DenseTensor* x_grad) {
@@ -111,12 +111,11 @@ void SendURecvGradKernel(const Context& dev_ctx,
 
   if (out_grad.numel() == 0 || x.numel() == 0 || src_index.numel() == 0 ||
       dst_index.numel() == 0) {
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(x_grad->dims())), 0, x_grad);
+    Full<T, Context>(dev_ctx, x_grad->dims(), 0, x_grad);
     return;
   }
 
-  if (index_type == phi::DataType::INT32) {
+  if (index_type == DataType::INT32) {
     GraphSendRecvGradOpCUDAKernelLaunchHelper<Context, T, int32_t>(
         dev_ctx,
         out_grad,
@@ -127,7 +126,7 @@ void SendURecvGradKernel(const Context& dev_ctx,
         x_grad,
         dst_count.get_ptr(),
         out.get_ptr());
-  } else if (index_type == phi::DataType::INT64) {
+  } else if (index_type == DataType::INT64) {
     GraphSendRecvGradOpCUDAKernelLaunchHelper<Context, T, int64_t>(
         dev_ctx,
         out_grad,

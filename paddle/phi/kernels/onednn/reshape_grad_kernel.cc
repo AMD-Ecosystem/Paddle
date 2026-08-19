@@ -21,13 +21,12 @@ void ReshapeGradKernel(const Context& dev_ctx,
                        const DenseTensor& out_grad,
                        DenseTensor* x_grad) {
   if ((x_grad && x_grad->numel() == 0) || out_grad.numel() == 0) {
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(x_grad->dims())), 0, x_grad);
+    Full<T, Context>(dev_ctx, x_grad->dims(), 0, x_grad);
     return;
   }
 
   auto out_grad_vec_dims = out_grad.dims().size() != 0
-                               ? common::vectorize(out_grad.dims())
+                               ? vectorize(out_grad.dims())
                                : std::vector<int64_t>{1};
 
   auto out_grad_type = funcs::ToOneDNNDataType(out_grad.dtype());
@@ -49,7 +48,7 @@ void ReshapeGradKernel(const Context& dev_ctx,
   astream.wait();
 
   auto grad_shape = x.dims().size() == 0 ? std::vector<int64_t>{1}
-                                         : phi::vectorize<int64_t>(x.dims());
+                                         : vectorize<int64_t>(x.dims());
   reorder_dst_memory_p->get_desc().reshape(grad_shape);
 }
 

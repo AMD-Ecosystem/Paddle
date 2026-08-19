@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import collections
 import copyreg
+import dataclasses
 import os
 import pickle
 import sys
@@ -50,8 +51,10 @@ from .io_utils import (
     _open_file_buffer,
     _pack_loaded_dict,
     _pickle_loads_mac,
+    _reconstruct_dense_tensor_data,
     _unpack_saved_dict,
 )
+from .restricted_unpickler import safe_load_pickle
 
 if TYPE_CHECKING:
     from io import BytesIO
@@ -113,7 +116,7 @@ def async_save(
         sync_other_task(bool) : Determine whether to wait other async save task to be finished before this one be put in queue.
         **configs(dict, optional): compatible argument to paddle.save, but will be overridden by default setting.
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
             :name: code-example-1
 
             import paddle
@@ -229,7 +232,7 @@ def _load_state_dict_from_save_inference_model(model_path, config):
         var_info_path = os.path.join(model_path, var_info_filename)
         if os.path.exists(var_info_path):
             with open(var_info_path, 'rb') as f:
-                extra_var_info = pickle.load(f)
+                extra_var_info = safe_load_pickle(f)
             structured_para_dict = {}
             for var_name in load_param_dict:
                 structured_name = extra_var_info[var_name].get(
@@ -450,7 +453,7 @@ def _pickle_save(obj, f, protocol):
         else:
             data = np.array(self._copy(p))
 
-        return (eval, ('data', {'data': data}))
+        return (_reconstruct_dense_tensor_data, (data,))
 
     def reduce_Layer(self):
         raise ValueError(
@@ -636,6 +639,9 @@ def _parse_every_object(obj, condition_func, convert_func):
     elif type(obj) == set:
         return set(_parse_every_object(list(obj), condition_func, convert_func))
     else:
+        # Support dataclass objects - return as-is without further parsing
+        if dataclasses.is_dataclass(obj):
+            return obj
         if isinstance(obj, Iterable) and not isinstance(
             obj,
             (str, np.ndarray, core.eager.Tensor, core.DenseTensor),
@@ -817,7 +823,7 @@ def save(
         None
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
             :name: code-example-1
 
             >>> # example 1: dynamic graph
@@ -828,11 +834,8 @@ def save(
             >>> # save state_dict of emb
             >>> paddle.save(layer_state_dict, "emb.pdparams")
 
-            >>> scheduler = paddle.optimizer.lr.NoamDecay(
-            ...     d_model=100, warmup_steps=100, verbose=True)
-            >>> adam = paddle.optimizer.Adam(
-            ...     learning_rate=scheduler,
-            ...     parameters=emb.parameters())
+            >>> scheduler = paddle.optimizer.lr.NoamDecay(d_model=100, warmup_steps=100, verbose=True)
+            >>> adam = paddle.optimizer.Adam(learning_rate=scheduler, parameters=emb.parameters())
             >>> opt_state_dict = adam.state_dict()
 
             >>> # save state_dict of optimizer
@@ -840,7 +843,7 @@ def save(
             >>> # save weight of emb
             >>> paddle.save(emb.weight, "emb.weight.pdtensor")
 
-        .. code-block:: python
+        .. code-block:: pycon
             :name: code-example-2
 
             >>> # example 2: Save multiple state_dict at the same time
@@ -854,7 +857,7 @@ def save(
             >>> path = 'example/model.pdparams'
             >>> paddle.save(obj, path)
 
-        .. code-block:: python
+        .. code-block:: pycon
             :name: code-example-3
 
             >>> # example 3: static graph
@@ -873,7 +876,7 @@ def save(
             >>> prog = paddle.static.default_main_program()
             >>> for var in prog.list_vars():
             ...     if list(var.shape) == [224, 10]:
-            ...         tensor = var.get_value()
+            ...         tensor = paddle.static.global_scope().find_var(var.name).get_tensor()
             ...         break
 
             >>> # save/load tensor
@@ -884,7 +887,7 @@ def save(
             >>> path_state_dict = 'temp/model.pdparams'
             >>> paddle.save(prog.state_dict("param"), path_tensor)
 
-        .. code-block:: python
+        .. code-block:: pycon
             :name: code-example-4
 
             >>> # example 4: save program
@@ -892,14 +895,13 @@ def save(
 
             >>> paddle.enable_static()
 
-            >>> data = paddle.static.data(
-            ...     name='x_static_save', shape=(None, 224), dtype='float32')
+            >>> data = paddle.static.data(name='x_static_save', shape=(None, 224), dtype='float32')
             >>> y_static = z = paddle.static.nn.fc(data, 10)
             >>> main_program = paddle.static.default_main_program()
             >>> path = "example/main_program.pdmodel"
             >>> paddle.save(main_program, path)
 
-        .. code-block:: python
+        .. code-block:: pycon
             :name: code-example-5
 
             >>> # example 5: save object to memory
@@ -1270,7 +1272,7 @@ def load(path: str | BytesIO, **configs: Unpack[_LoadOptions]) -> Any:
                 ):
                     load_result = _pickle_loads_mac(path, f)
                 else:
-                    load_result = pickle.load(f, encoding='latin1')
+                    load_result = safe_load_pickle(f, encoding='latin1')
 
                 # TODO(weixin):If `obj` is any object, the judgment condition should be more precise.
                 if isinstance(load_result, dict):
@@ -1387,7 +1389,7 @@ def _legacy_load(path, **configs):
             load_result = load_file(path)
         else:
             with _open_file_buffer(path, 'rb') as f:
-                load_result = pickle.load(f, encoding='latin1')
+                load_result = safe_load_pickle(f, encoding='latin1')
         load_result = _pack_loaded_dict(load_result)
         if (
             not config.keep_name_table

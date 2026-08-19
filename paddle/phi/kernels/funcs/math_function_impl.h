@@ -23,21 +23,19 @@ limitations under the License. */
 namespace phi {
 namespace funcs {
 
-using phi::To32BitIndex;
-
 template <typename DeviceContext, typename T>
 void SetConstant<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
-                                               phi::DenseTensor* tensor,
+                                               DenseTensor* tensor,
                                                T num) {
-  auto t = phi::EigenVector<T>::Flatten(*tensor);
+  auto t = EigenVector<T>::Flatten(*tensor);
   t.device(*dev_ctx.eigen_device()) = t.constant(static_cast<T>(num));
 }
 
 #ifdef PADDLE_WITH_XPU
 template <typename T>
-void SetConstant<phi::XPUContext, T>::operator()(const phi::XPUContext& dev_ctx,
-                                                 phi::DenseTensor* tensor,
-                                                 T num) {
+void SetConstant<XPUContext, T>::operator()(const XPUContext& dev_ctx,
+                                            DenseTensor* tensor,
+                                            T num) {
   phi::VisitDataType(tensor->dtype(),
                      TensorSetConstantXPU<T>(tensor, num, dev_ctx.GetPlace()));
 }
@@ -46,31 +44,23 @@ void SetConstant<phi::XPUContext, T>::operator()(const phi::XPUContext& dev_ctx,
 template <typename DeviceContext, typename T, int Rank>
 void Transpose<DeviceContext, T, Rank>::operator()(
     const DeviceContext& dev_ctx,
-    const phi::DenseTensor& in,
-    phi::DenseTensor* out,
+    const DenseTensor& in,
+    DenseTensor* out,
     const std::vector<int>& axis) {
   Eigen::array<int, Rank> permute;
   for (int i = 0; i < Rank; i++) {
     permute[i] = axis[i];
   }
-  auto eigen_in = phi::EigenTensor<T, Rank>::From(in);
-  auto eigen_out = phi::EigenTensor<T, Rank>::From(*out);
+  auto eigen_in = EigenTensor<T, Rank>::From(in);
+  auto eigen_out = EigenTensor<T, Rank>::From(*out);
   auto* dev = dev_ctx.eigen_device();
-  // use 32bit index to speed up computation
-  bool use_32bit_index = eigen_out.size() < Eigen::NumTraits<int>::highest();
-  bool is_gpu_place = dev_ctx.GetPlace().GetType() == phi::AllocationType::GPU;
-  if (use_32bit_index && is_gpu_place) {
-    To32BitIndex(eigen_out).device(*dev) =
-        To32BitIndex(eigen_in).shuffle(permute);
-  } else {
-    eigen_out.device(*dev) = eigen_in.shuffle(permute);
-  }
+  eigen_out.device(*dev) = eigen_in.shuffle(permute);
 }
 
 template <typename DeviceContext, typename T>
 void ColwiseSum<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
-                                              const phi::DenseTensor& input,
-                                              phi::DenseTensor* out) {
+                                              const DenseTensor& input,
+                                              DenseTensor* out) {
   auto in_dims = input.dims();
   auto size = input.numel() / in_dims[0];
   PADDLE_ENFORCE_EQ(out->numel(),
@@ -82,8 +72,8 @@ void ColwiseSum<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
                         size,
                         out->numel()));
 
-  auto in = phi::EigenMatrix<T>::From(input);
-  auto vec = phi::EigenVector<T>::Flatten(*out);
+  auto in = EigenMatrix<T>::From(input);
+  auto vec = EigenVector<T>::Flatten(*out);
 
   vec.device(*dev_ctx.eigen_device()) = in.sum(Eigen::array<int, 1>({{0}}));
 }
@@ -92,11 +82,11 @@ void ColwiseSum<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
 // colwise-sum can be easily implemented. General reduce has a huge overhead in
 // CPU
 template <typename T>
-class ColwiseSum<phi::CPUContext, T> {
+class ColwiseSum<CPUContext, T> {
  public:
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const phi::DenseTensor& input,
-                  phi::DenseTensor* out) {
+  void operator()(const CPUContext& dev_ctx,
+                  const DenseTensor& input,
+                  DenseTensor* out) {
     auto& in_dims = input.dims();
     auto height = in_dims[0];
     auto size = in_dims[1];
@@ -127,8 +117,8 @@ class ColwiseSum<phi::CPUContext, T> {
 
 template <typename DeviceContext, typename T>
 void RowwiseMean<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
-                                               const phi::DenseTensor& input,
-                                               phi::DenseTensor* out) {
+                                               const DenseTensor& input,
+                                               DenseTensor* out) {
   auto in_dims = input.dims();
   PADDLE_ENFORCE_EQ(
       in_dims.size(),
@@ -145,8 +135,8 @@ void RowwiseMean<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
                         in_dims[0],
                         out->numel()));
 
-  auto in = phi::EigenMatrix<T>::From(input);
-  auto vec = phi::EigenVector<T>::Flatten(*out);
+  auto in = EigenMatrix<T>::From(input);
+  auto vec = EigenVector<T>::Flatten(*out);
 
   vec.device(*dev_ctx.eigen_device()) = in.mean(Eigen::array<int, 1>({{1}}));
 }
@@ -155,11 +145,11 @@ void RowwiseMean<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
 // rowwise-sum can be easily implemented. General reduce has a huge overhead in
 // CPU
 template <typename T>
-class RowwiseMean<phi::CPUContext, T> {
+class RowwiseMean<CPUContext, T> {
  public:
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const phi::DenseTensor& input,
-                  phi::DenseTensor* out) {
+  void operator()(const CPUContext& dev_ctx,
+                  const DenseTensor& input,
+                  DenseTensor* out) {
     auto& in_dims = input.dims();
     PADDLE_ENFORCE_EQ(
         in_dims.size(),
@@ -194,8 +184,8 @@ class RowwiseMean<phi::CPUContext, T> {
 
 template <typename DeviceContext, typename T>
 void RowwiseSum<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
-                                              const phi::DenseTensor& input,
-                                              phi::DenseTensor* out) {
+                                              const DenseTensor& input,
+                                              DenseTensor* out) {
   auto in_dims = input.dims();
   PADDLE_ENFORCE_EQ(
       in_dims.size(),
@@ -212,8 +202,8 @@ void RowwiseSum<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
                         in_dims[0],
                         out->numel()));
 
-  auto in = phi::EigenMatrix<T>::From(input);
-  auto vec = phi::EigenVector<T>::Flatten(*out);
+  auto in = EigenMatrix<T>::From(input);
+  auto vec = EigenVector<T>::Flatten(*out);
 
   vec.device(*dev_ctx.eigen_device()) = in.sum(Eigen::array<int, 1>({{1}}));
 }
@@ -222,11 +212,11 @@ void RowwiseSum<DeviceContext, T>::operator()(const DeviceContext& dev_ctx,
 // rowwise-sum can be easily implemented. General reduce has a huge overhead in
 // CPU
 template <typename T>
-class RowwiseSum<phi::CPUContext, T> {
+class RowwiseSum<CPUContext, T> {
  public:
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const phi::DenseTensor& input,
-                  phi::DenseTensor* out) {
+  void operator()(const CPUContext& dev_ctx,
+                  const DenseTensor& input,
+                  DenseTensor* out) {
     auto& in_dims = input.dims();
     PADDLE_ENFORCE_EQ(
         in_dims.size(),

@@ -14,6 +14,7 @@
 
 #include "paddle/phi/kernels/yolo_box_kernel.h"
 
+#include "paddle/phi/backends/gpu/cuda/cuda_graph_with_memory_pool.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/backends/gpu/gpu_launch_config.h"
 #include "paddle/phi/common/memory_utils.h"
@@ -117,10 +118,8 @@ void YoloBoxKernel(const Context& dev_ctx,
                    DenseTensor* boxes,
                    DenseTensor* scores) {
   if (x.numel() == 0 || img_size.numel() == 0) {
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(boxes->dims())), 0, boxes);
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(scores->dims())), 0, scores);
+    Full<T, Context>(dev_ctx, boxes->dims(), 0, boxes);
+    Full<T, Context>(dev_ctx, scores->dims(), 0, scores);
     return;
   }
 
@@ -142,9 +141,12 @@ void YoloBoxKernel(const Context& dev_ctx,
   tmp_anchors.Resize(make_dim(anchors.size()));
   int* anchors_data = dev_ctx.template Alloc<int>(&tmp_anchors);
   const auto gplace = dev_ctx.GetPlace();
-  const auto cplace = phi::CPUPlace();
+  const auto cplace = CPUPlace();
+  const int* stable_anchors =
+      phi::backends::gpu::RestoreHostMemIfCapturingCUDAGraph(
+          const_cast<int*>(anchors.data()), anchors.size());
   memory_utils::Copy(
-      gplace, anchors_data, cplace, anchors.data(), bytes, dev_ctx.stream());
+      gplace, anchors_data, cplace, stable_anchors, bytes, dev_ctx.stream());
 
   const T* input_data = input->data<T>();
   const int* imgsize_data = img_size.data<int>();
@@ -152,7 +154,7 @@ void YoloBoxKernel(const Context& dev_ctx,
   T* boxes_data = dev_ctx.template Alloc<T>(boxes);
   scores->Resize({n, box_num, class_num});
   T* scores_data = dev_ctx.template Alloc<T>(scores);
-  funcs::SetConstant<phi::GPUContext, T> set_zero;
+  funcs::SetConstant<GPUContext, T> set_zero;
   set_zero(dev_ctx, boxes, static_cast<T>(0));
   set_zero(dev_ctx, scores, static_cast<T>(0));
   backends::gpu::GpuLaunchConfig config =

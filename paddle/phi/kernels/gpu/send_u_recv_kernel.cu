@@ -52,11 +52,11 @@ void GraphSendRecvOpCUDAKernelLaunchHelper(const Context& dev_ctx,
     }
   } else {
     // Set out dim following out_size.
-    std::vector<int64_t> dims_ = common::vectorize(out->dims());
+    std::vector<int64_t> dims_ = vectorize(out->dims());
     if (dims_.size() > 0) {
       dims_[0] = out_size;
     }
-    out->Resize(common::make_ddim(dims_));
+    out->Resize(dims_);
     memset_size = out_size;
     for (int i = 1; i < src_dims.size(); ++i) {
       memset_size *= src_dims[i];
@@ -161,24 +161,19 @@ void SendURecvKernel(const Context& dev_ctx,
     if (out_size_data[0] <= 0) {
       out->Resize(x.dims());
     } else {
-      out->Resize(common::make_ddim(out_size_data));
+      out->Resize(out_size_data);
     }
     if (reduce_op == "MEAN") {
       int64_t input_size =
           out_size_data[0] <= 0 ? x.dims()[0] : out_size_data[0];
       dst_count->Resize({input_size});
     }
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(out->dims())), 0, out);
-    phi::Full<int32_t, Context>(
-        dev_ctx,
-        phi::IntArray(common::vectorize(dst_count->dims())),
-        0,
-        dst_count);
+    Full<T, Context>(dev_ctx, out->dims(), 0, out);
+    Full<int32_t, Context>(dev_ctx, dst_count->dims(), 0, dst_count);
     return;
   }
 
-  if (index_type == phi::DataType::INT32) {
+  if (index_type == DataType::INT32) {
     GraphSendRecvOpCUDAKernelLaunchHelper<Context, T, int32_t>(dev_ctx,
                                                                x,
                                                                src_index,
@@ -187,7 +182,7 @@ void SendURecvKernel(const Context& dev_ctx,
                                                                out_size_data[0],
                                                                out,
                                                                dst_count);
-  } else if (index_type == phi::DataType::INT64) {
+  } else if (index_type == DataType::INT64) {
     GraphSendRecvOpCUDAKernelLaunchHelper<Context, T, int64_t>(dev_ctx,
                                                                x,
                                                                src_index,

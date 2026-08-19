@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <vector>
 
+#include "paddle/phi/backends/gpu/cuda/cuda_graph_with_memory_pool.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/common/memory_utils.h"
 #include "paddle/phi/core/kernel_registry.h"
@@ -54,7 +55,7 @@ void FillDiagonalTensorGradKernel(const Context &dev_ctx,
   if (x_grad) {
     auto *data = dev_ctx.template Alloc<T>(x_grad);
     auto dx_dims = x_grad->dims();
-    phi::Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, x_grad);
+    Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, x_grad);
 
     for (int i = 0; i < dx_dims.size(); i++) {
       if (i != dim1 && i != dim2) {
@@ -73,13 +74,15 @@ void FillDiagonalTensorGradKernel(const Context &dev_ctx,
 
     auto stream = dev_ctx.stream();
     DenseTensor tensor_tmp;
-    tensor_tmp.Resize(common::make_ddim({2 + matrows}));
+    tensor_tmp.Resize({2 + matrows});
     int64_t *memory_block_cu = dev_ctx.template Alloc<int64_t>(&tensor_tmp);
     const auto gpu_place = dev_ctx.GetPlace();
+    auto *stable_mb = phi::backends::gpu::RestoreHostMemIfCapturingCUDAGraph(
+        memory_block.data(), memory_block.size());
     memory_utils::Copy(gpu_place,
                        memory_block_cu,
                        CPUPlace(),
-                       memory_block.data(),
+                       stable_mb,
                        sizeof(int64_t) * (2 + matrows),
                        stream);
 

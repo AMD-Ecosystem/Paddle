@@ -53,6 +53,7 @@ PADDLE_API void BaddbmmInferMeta(const MetaTensor& input,
                                  const MetaTensor& y,
                                  float beta,
                                  float alpha,
+                                 DataType out_dtype,
                                  MetaTensor* out);
 
 PADDLE_API void AffineChannelInferMeta(const MetaTensor& x,
@@ -65,12 +66,24 @@ PADDLE_API void AffineChannelInferMeta(const MetaTensor& x,
 PADDLE_API void ArangeTensorInferMeta(const MetaTensor& start,
                                       const MetaTensor& end,
                                       const MetaTensor& step,
+                                      DataType dtype,
                                       MetaTensor* out);
 
 PADDLE_API void RangeTensorInferMeta(const MetaTensor& start,
                                      const MetaTensor& end,
                                      const MetaTensor& step,
+                                     DataType dtype,
                                      MetaTensor* out);
+
+PADDLE_API void ArangeTensorInferMetaLegacy(const MetaTensor& start,
+                                            const MetaTensor& end,
+                                            const MetaTensor& step,
+                                            MetaTensor* out);
+
+PADDLE_API void RangeTensorInferMetaLegacy(const MetaTensor& start,
+                                           const MetaTensor& end,
+                                           const MetaTensor& step,
+                                           MetaTensor* out);
 
 PADDLE_API void AssignPosInferMeta(const MetaTensor& x,
                                    const MetaTensor& cum_count,
@@ -232,7 +245,7 @@ PADDLE_API void AddGroupNormSiluInferMeta(const MetaTensor& x,
                                           const MetaTensor& residual,
                                           const MetaTensor& scale,
                                           const MetaTensor& bias,
-                                          float epsilon,
+                                          double epsilon,
                                           int groups,
                                           const std::string& data_layout,
                                           const std::string& activation,
@@ -244,7 +257,7 @@ PADDLE_API void AddGroupNormSiluInferMeta(const MetaTensor& x,
 PADDLE_API void GroupNormInferMeta(const MetaTensor& x,
                                    const MetaTensor& scale,
                                    const MetaTensor& bias,
-                                   float epsilon,
+                                   double epsilon,
                                    int groups,
                                    const std::string& data_layout,
                                    MetaTensor* y,
@@ -255,7 +268,7 @@ PADDLE_API void GroupNormInferMeta(const MetaTensor& x,
 PADDLE_API void LayerNormInferMeta(const MetaTensor& x,
                                    const MetaTensor& scale,
                                    const MetaTensor& bias,
-                                   float epsilon,
+                                   double epsilon,
                                    int begin_norm_axis,
                                    MetaTensor* out,
                                    MetaTensor* mean,
@@ -273,6 +286,13 @@ PADDLE_API void LerpInferMeta(const MetaTensor& x,
                               const MetaTensor& y,
                               const MetaTensor& weight,
                               MetaTensor* out);
+
+PADDLE_API void LinearV2InferMeta(const MetaTensor& input,
+                                  const MetaTensor& weight,
+                                  const MetaTensor& bias,
+                                  const bool transpose_weight,
+                                  MetaTensor* out,
+                                  MetaConfig config = MetaConfig());
 
 PADDLE_API void LinspaceRawInferMeta(const MetaTensor& start,
                                      const MetaTensor& stop,

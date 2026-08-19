@@ -183,12 +183,12 @@ struct DefaultComputeType<half> {
   using type = float;
 };
 
-#if CUDA_VERSION >= 11000
+#if defined(PADDLE_WITH_CUDA)
 template <>
 struct DefaultComputeType<nv_bfloat16> {
   using type = float;
 };
-#endif  // CUDA_VERSION >= 11000
+#endif
 
 template <typename T>
 class HasCanPackAs {
@@ -994,10 +994,10 @@ struct SkipLoadAndStoreResidual {
 template <typename T, typename Context>
 void FusedLayerNormKernel(const Context& dev_ctx,
                           const DenseTensor& x,
-                          const paddle::optional<DenseTensor>& bias,
-                          const paddle::optional<DenseTensor>& residual,
-                          const paddle::optional<DenseTensor>& norm_weight,
-                          const paddle::optional<DenseTensor>& norm_bias,
+                          const optional<DenseTensor>& bias,
+                          const optional<DenseTensor>& residual,
+                          const optional<DenseTensor>& norm_weight,
+                          const optional<DenseTensor>& norm_bias,
                           const float epsilon,
                           const float residual_alpha,
                           const int begin_norm_axis,
@@ -1042,7 +1042,7 @@ void FusedLayerNormKernel(const Context& dev_ctx,
                           quant_scale));
   }
 
-  using U = phi::funcs::LayerNormParamType<T>;
+  using U = funcs::LayerNormParamType<T>;
   if (x.numel() == 0) {
     dev_ctx.template Alloc<T>(out);
     if (residual_out) dev_ctx.template Alloc<T>(residual_out);

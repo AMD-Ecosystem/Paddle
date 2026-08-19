@@ -1088,10 +1088,10 @@ struct AffineQuantStore {
 template <typename T, typename Context>
 void RmsNormQuantKernel(const Context& dev_ctx,
                         const DenseTensor& x,
-                        const paddle::optional<DenseTensor>& bias,
-                        const paddle::optional<DenseTensor>& residual,
+                        const optional<DenseTensor>& bias,
+                        const optional<DenseTensor>& residual,
                         const DenseTensor& norm_weight,
-                        const paddle::optional<DenseTensor>& norm_bias,
+                        const optional<DenseTensor>& norm_bias,
                         const float epsilon,
                         const int begin_norm_axis,
                         const float quant_scale,
@@ -1105,16 +1105,12 @@ void RmsNormQuantKernel(const Context& dev_ctx,
     if (out) dev_ctx.template Alloc<T>(out);
     if (residual_out) dev_ctx.template Alloc<T>(residual_out);
     if (inv_var) {
-      phi::Full<float, Context>(
-          dev_ctx,
-          phi::IntArray(common::vectorize(inv_var->dims())),
-          0.f,
-          inv_var);
+      Full<float, Context>(dev_ctx, inv_var->dims(), 0.f, inv_var);
     }
     return;
   }
-  if (out->dtype() == phi::DataType::INT8 ||
-      out->dtype() == phi::DataType::FLOAT8_E4M3FN) {
+  if (out->dtype() == DataType::INT8 ||
+      out->dtype() == DataType::FLOAT8_E4M3FN) {
     PADDLE_ENFORCE_EQ(quant_scale != 0.0f,
                       true,
                       common::errors::InvalidArgument(
@@ -1169,7 +1165,7 @@ void RmsNormQuantKernel(const Context& dev_ctx,
     const T* bias_data = bias ? bias.get().data<T>() : nullptr;
     ResidualAddBiasLoad<T, ComputeType> load(
         x_data, residual_data, bias_data, residual_out_data, cols);
-    if (out->dtype() == phi::DataType::INT8) {
+    if (out->dtype() == DataType::INT8) {
       // Quantize and output int8.
       int8_t* out_data = dev_ctx.template Alloc<int8_t>(out);
       AffineQuantStore<int8_t, ComputeType, T, true, true> store(
@@ -1183,7 +1179,7 @@ void RmsNormQuantKernel(const Context& dev_ctx,
           quant_min_bound);
       DispatchRmsNorm<decltype(load), decltype(store), ComputeType>(
           dev_ctx.stream(), load, store, rows, cols, epsilon, inv_var_data);
-    } else if (out->dtype() == phi::DataType::FLOAT8_E4M3FN) {
+    } else if (out->dtype() == DataType::FLOAT8_E4M3FN) {
       // Quantize and output float8_e4m3fn.
       phi::float8_e4m3fn* out_data =
           dev_ctx.template Alloc<phi::float8_e4m3fn>(out);
@@ -1208,7 +1204,7 @@ void RmsNormQuantKernel(const Context& dev_ctx,
     }
   } else {
     DirectLoad<T, ComputeType> load(x_data, cols);
-    if (out->dtype() == phi::DataType::INT8) {
+    if (out->dtype() == DataType::INT8) {
       // Quantize and output int8.
       int8_t* out_data = dev_ctx.template Alloc<int8_t>(out);
       AffineQuantStore<int8_t, ComputeType, T, true, true> store(
@@ -1222,7 +1218,7 @@ void RmsNormQuantKernel(const Context& dev_ctx,
           quant_min_bound);
       DispatchRmsNorm<decltype(load), decltype(store), ComputeType>(
           dev_ctx.stream(), load, store, rows, cols, epsilon, inv_var_data);
-    } else if (out->dtype() == phi::DataType::FLOAT8_E4M3FN) {
+    } else if (out->dtype() == DataType::FLOAT8_E4M3FN) {
       // Quantize and output float8_e4m3fn.
       phi::float8_e4m3fn* out_data =
           dev_ctx.template Alloc<phi::float8_e4m3fn>(out);
@@ -1268,7 +1264,7 @@ void ResidualAddRmsNormWrapper(const Context& dev_ctx,
       dev_ctx.stream(), load, store, rows, cols, epsilon, nullptr);
 }
 
-template void ResidualAddRmsNormWrapper(const phi::GPUContext& dev_ctx,
+template void ResidualAddRmsNormWrapper(const GPUContext& dev_ctx,
                                         const phi::float16* x,
                                         const phi::float16* residual,
                                         const phi::float16* bias,
@@ -1280,7 +1276,7 @@ template void ResidualAddRmsNormWrapper(const phi::GPUContext& dev_ctx,
                                         phi::float16* residual_output,
                                         phi::float16* output);
 
-template void ResidualAddRmsNormWrapper(const phi::GPUContext& dev_ctx,
+template void ResidualAddRmsNormWrapper(const GPUContext& dev_ctx,
                                         const phi::bfloat16* x,
                                         const phi::bfloat16* residual,
                                         const phi::bfloat16* bias,
@@ -1292,7 +1288,7 @@ template void ResidualAddRmsNormWrapper(const phi::GPUContext& dev_ctx,
                                         phi::bfloat16* residual_output,
                                         phi::bfloat16* output);
 
-template void ResidualAddRmsNormWrapper(const phi::GPUContext& dev_ctx,
+template void ResidualAddRmsNormWrapper(const GPUContext& dev_ctx,
                                         const float* x,
                                         const float* residual,
                                         const float* bias,
@@ -1321,7 +1317,7 @@ void RmsNormWrapper(const Context& dev_ctx,
       dev_ctx.stream(), load, store, rows, cols, epsilon, nullptr);
 }
 
-template void RmsNormWrapper(const phi::GPUContext& dev_ctx,
+template void RmsNormWrapper(const GPUContext& dev_ctx,
                              const phi::float16* x,
                              const phi::float16* weight,
                              const phi::float16* bias,
@@ -1330,7 +1326,7 @@ template void RmsNormWrapper(const phi::GPUContext& dev_ctx,
                              const int cols,
                              phi::float16* output);
 
-template void RmsNormWrapper(const phi::GPUContext& dev_ctx,
+template void RmsNormWrapper(const GPUContext& dev_ctx,
                              const phi::bfloat16* x,
                              const phi::bfloat16* weight,
                              const phi::bfloat16* bias,
@@ -1339,7 +1335,7 @@ template void RmsNormWrapper(const phi::GPUContext& dev_ctx,
                              const int cols,
                              phi::bfloat16* output);
 
-template void RmsNormWrapper(const phi::GPUContext& dev_ctx,
+template void RmsNormWrapper(const GPUContext& dev_ctx,
                              const float* x,
                              const float* weight,
                              const float* bias,

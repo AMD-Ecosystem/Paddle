@@ -73,11 +73,11 @@ void moe_dispatch_grad(
 
   const std::vector<int32_t> axis = {1, 0};
   DenseTensor t_scatter_index;
-  phi::Transpose<int, Context>(dev_ctx, scatter_index, axis, &t_scatter_index);
+  Transpose<int, Context>(dev_ctx, scatter_index, axis, &t_scatter_index);
 
   // output
   DenseTensor x_grad_tmp =
-      phi::Empty<T, Context>(dev_ctx, {num_rows, k, hidden_size});
+      Empty<T, Context>(dev_ctx, {num_rows, k, hidden_size});
 
   // ctx
   using XPUType = typename XPUTypeTrait<T>::Type;

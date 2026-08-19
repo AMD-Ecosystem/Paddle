@@ -33,11 +33,7 @@ void ScatterNdAddGradKernel(const Context &dev_ctx,
       dev_ctx.template Alloc<T>(x_grad);
     }
     if (updates_grad) {
-      phi::Full<T, Context>(
-          dev_ctx,
-          phi::IntArray(common::vectorize(updates_grad->dims())),
-          0,
-          updates_grad);
+      Full<T, Context>(dev_ctx, updates_grad->dims(), 0, updates_grad);
     }
     return;
   }
@@ -48,7 +44,7 @@ void ScatterNdAddGradKernel(const Context &dev_ctx,
     dev_ctx.template Alloc<T>(updates_grad);
     // Gradient by Gather: dUpdates = dO[Ids]
     const auto &index_type = index.dtype();
-    if (index_type == phi::DataType::INT32) {
+    if (index_type == DataType::INT32) {
       funcs::CPUGatherNd<T, int32_t>(dev_ctx, out_grad, index, updates_grad);
     } else {
       funcs::CPUGatherNd<T, int64_t>(dev_ctx, out_grad, index, updates_grad);

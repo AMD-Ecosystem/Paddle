@@ -165,7 +165,10 @@ struct UniformKernelImpl<T, Context, false> {
     if (seed == 0) {
       using MT = typename phi::dtype::MPTypeTrait<T>::Type;
       funcs::uniform_distribution<MT> dist;
-      funcs::uniform_real_transform<MT> trans(min.to<float>(), max.to<float>());
+      // `range = MT(T(max)) - MT(T(min))`
+      MT min_val = static_cast<MT>(static_cast<T>(min.to<float>()));
+      MT max_val = static_cast<MT>(static_cast<T>(max.to<float>()));
+      funcs::uniform_real_transform<MT, T> trans(min_val, max_val);
       funcs::distribution_and_transform<T>(dev_ctx, out, dist, trans);
     } else {
       auto func = UniformGenerator<T>(
@@ -188,7 +191,7 @@ void UniformKernel(const Context& dev_ctx,
                    const Scalar& max,
                    int seed,
                    DenseTensor* out) {
-  out->Resize(common::make_ddim(shape.GetData()));
+  out->Resize(shape.GetData());
   dev_ctx.template Alloc<T>(out);
 
   constexpr bool is_complex =

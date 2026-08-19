@@ -20,7 +20,7 @@
 #include "paddle/phi/backends/gpu/gpu_launch_config.h"
 #include "paddle/phi/backends/gpu/gpu_primitives.h"
 #include "paddle/phi/core/kernel_registry.h"
-#include "paddle/phi/kernels/funcs/transpose_function.cu.h"
+#include "paddle/phi/kernels/funcs/transpose_function.cuh"
 #include "paddle/phi/kernels/impl/transpose_grad_kernel_impl.h"
 
 namespace phi {
@@ -42,7 +42,7 @@ void TransposeKernel(const Context& dev_ctx,
     return;
   }
   if (formatted_axis.size() == 0) {
-    phi::Copy<Context>(dev_ctx, x, dev_ctx.GetPlace(), false, out);
+    Copy<Context>(dev_ctx, x, dev_ctx.GetPlace(), false, out);
     return;
   }
   funcs::TransposeGPUKernelDriver<T>(dev_ctx, x, formatted_axis, out);

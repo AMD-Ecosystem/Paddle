@@ -46,7 +46,7 @@ static inline common::DDim InferSizeSymdimvector(const common::DDim& a,
   auto dimsA = a.size();
   auto dimsB = b.size();
   auto ndim = dimsA > dimsB ? dimsA : dimsB;
-  common::DDim expandedSizes = common::make_ddim(std::vector<int64_t>(ndim, 0));
+  common::DDim expandedSizes = make_ddim(std::vector<int64_t>(ndim, 0));
 
   for (int64_t i = ndim - 1; i >= 0; --i) {
     int64_t offset = ndim - 1 - i;
@@ -72,16 +72,16 @@ static inline common::DDim InferSizeSymdimvector(const common::DDim& a,
 }
 
 template <typename T, typename Context>
-std::vector<phi::DenseTensor*> ExpandTensors(
+std::vector<DenseTensor*> ExpandTensors(
     const Context& dev_ctx,
-    const std::vector<std::unique_ptr<phi::DenseTensor>>& indices) {
-  std::vector<phi::DenseTensor*> result;
+    const std::vector<std::unique_ptr<DenseTensor>>& indices) {
+  std::vector<DenseTensor*> result;
   for (auto& index : indices) {
     if (index->dtype() == paddle::DataType::BOOL) {
-      phi::DenseTensor bool_2_idx(phi::DataType::INT64);
+      DenseTensor bool_2_idx(phi::DataType::INT64);
       NonZeroKernel<bool, Context>(dev_ctx, *index, &bool_2_idx);
       if (bool_2_idx.numel() == 0) {
-        std::vector<phi::DenseTensor*> empty_result;
+        std::vector<DenseTensor*> empty_result;
         return empty_result;
       }
       for (int j = 0; j < index->dims().size(); j++) {
@@ -97,8 +97,8 @@ std::vector<phi::DenseTensor*> ExpandTensors(
 }
 
 template <typename T, typename Context>
-std::vector<phi::DenseTensor*> ExpandOutplace(
-    const Context& dev_ctx, const std::vector<phi::DenseTensor*>& to_expand) {
+std::vector<DenseTensor*> ExpandOutplace(
+    const Context& dev_ctx, const std::vector<DenseTensor*>& to_expand) {
   bool first = true;
   common::DDim sizes;
   for (size_t i = 0; i < to_expand.size(); i++) {
@@ -112,7 +112,7 @@ std::vector<phi::DenseTensor*> ExpandOutplace(
     }
   }
 
-  std::vector<phi::DenseTensor*> result(to_expand.size());
+  std::vector<DenseTensor*> result(to_expand.size());
   for (size_t i = 0; i < to_expand.size(); i++) {
     if (!to_expand[i]->initialized()) {
       continue;
@@ -120,21 +120,19 @@ std::vector<phi::DenseTensor*> ExpandOutplace(
       result[i] = to_expand[i];
     } else {
       if (to_expand[i]->dtype() == phi::DataType::INT32) {
-        phi::DenseTensor tmp_idx(phi::DataType::INT64);
-        ExpandKernel<int32_t, Context>(
-            dev_ctx,
-            *(to_expand[i]),
-            IntArray(common::vectorize<int32_t>(sizes)),
-            &tmp_idx);
+        DenseTensor tmp_idx(phi::DataType::INT64);
+        ExpandKernel<int32_t, Context>(dev_ctx,
+                                       *(to_expand[i]),
+                                       IntArray(vectorize<int32_t>(sizes)),
+                                       &tmp_idx);
         *(to_expand[i]) = tmp_idx;
         result[i] = to_expand[i];
       } else if (to_expand[i]->dtype() == phi::DataType::INT64) {
-        phi::DenseTensor tmp_idx(phi::DataType::INT64);
-        ExpandKernel<int64_t, Context>(
-            dev_ctx,
-            *(to_expand[i]),
-            IntArray(common::vectorize<int64_t>(sizes)),
-            &tmp_idx);
+        DenseTensor tmp_idx(phi::DataType::INT64);
+        ExpandKernel<int64_t, Context>(dev_ctx,
+                                       *(to_expand[i]),
+                                       IntArray(vectorize<int64_t>(sizes)),
+                                       &tmp_idx);
         *(to_expand[i]) = tmp_idx;
         result[i] = to_expand[i];
       } else {
@@ -149,12 +147,12 @@ std::vector<phi::DenseTensor*> ExpandOutplace(
 template <typename T, typename Context>
 struct AdvancedIndex {
   AdvancedIndex(const Context& dev_ctx,
-                const phi::DenseTensor& self,
-                const std::vector<const phi::DenseTensor*>& orig);
+                const DenseTensor& self,
+                const std::vector<const DenseTensor*>& orig);
   ~AdvancedIndex() = default;
-  phi::DenseTensor src;
-  std::vector<std::unique_ptr<phi::DenseTensor>> tmp_indices;
-  std::vector<const phi::DenseTensor*> indices;
+  DenseTensor src;
+  std::vector<std::unique_ptr<DenseTensor>> tmp_indices;
+  std::vector<const DenseTensor*> indices;
   std::vector<int64_t> indexed_sizes;
   std::vector<int64_t> indexed_strides;
   int64_t dims_before;
@@ -163,14 +161,13 @@ struct AdvancedIndex {
   bool empty_index = false;
 };
 
-inline static void RestrideSrc(const phi::DenseTensor& self,
+inline static void RestrideSrc(const DenseTensor& self,
                                const int64_t& dims_before,
                                const int64_t& dims_indexed,
                                const std::vector<int64_t>& replacement_shape,
-                               phi::DenseTensor* view_src) {
-  std::vector<int64_t> shape_vec = (common::vectorize<int64_t>(self.dims()));
-  std::vector<int64_t> strides_vec =
-      (common::vectorize<int64_t>(self.strides()));
+                               DenseTensor* view_src) {
+  std::vector<int64_t> shape_vec = (vectorize<int64_t>(self.dims()));
+  std::vector<int64_t> strides_vec = (vectorize<int64_t>(self.strides()));
   std::vector<int64_t>* shape = &shape_vec;
   std::vector<int64_t>* strides = &strides_vec;
   int64_t end = dims_before + dims_indexed;
@@ -181,33 +178,33 @@ inline static void RestrideSrc(const phi::DenseTensor& self,
                 replacement_shape.end());
   strides->insert(strides->begin() + dims_before, replacement_shape.size(), 0);
   auto meta = self.meta();
-  meta.dims = common::make_ddim(*shape);
-  meta.strides = common::make_ddim(*strides);
+  meta.dims = make_ddim(*shape);
+  meta.strides = make_ddim(*strides);
   meta.offset = self.offset();
   view_src->set_meta(meta);
   view_src->ResetHolder(self.Holder());
   view_src->ShareInplaceVersionCounterWith(self);
 }
 
-inline static void ReshapeIndexer(phi::DenseTensor* index,
+inline static void ReshapeIndexer(DenseTensor* index,
                                   const int64_t& dims_before,
                                   const int64_t& dims_after) {
-  auto orig_shape = common::vectorize<int64_t>(index->dims());
+  auto orig_shape = vectorize<int64_t>(index->dims());
   auto shape = std::vector<int64_t>{};
   shape.insert(shape.end(), dims_before, 1);
   shape.insert(shape.end(), orig_shape.begin(), orig_shape.end());
   shape.insert(shape.end(), dims_after, 1);
-  index->Resize(common::make_ddim(shape));
+  index->Resize(shape);
 }
 
 template <typename T, typename Context>
 inline AdvancedIndex<T, Context>::AdvancedIndex(
     const Context& dev_ctx,
-    const phi::DenseTensor& self,
-    const std::vector<const phi::DenseTensor*>& orig) {
+    const DenseTensor& self,
+    const std::vector<const DenseTensor*>& orig) {
   for (int i = 0; i < orig.size(); i++) {
-    tmp_indices.emplace_back(std::make_unique<phi::DenseTensor>());
-    *(tmp_indices.back()) = *(const_cast<phi::DenseTensor*>(orig[i]));
+    tmp_indices.emplace_back(std::make_unique<DenseTensor>());
+    *(tmp_indices.back()) = *(const_cast<DenseTensor*>(orig[i]));
   }
 
   auto indices = ExpandTensors<T, Context>(dev_ctx, this->tmp_indices);
@@ -221,20 +218,20 @@ inline AdvancedIndex<T, Context>::AdvancedIndex(
     indices.emplace_back();
   }
 
-  std::vector<phi::DenseTensor*> indices_int64;
+  std::vector<DenseTensor*> indices_int64;
   for (auto& indice : indices) {
     if (indice && indice->dtype() == paddle::DataType::INT32) {
-      *indice = phi::Cast<int, Context>(dev_ctx, *indice, phi::DataType::INT64);
+      *indice = Cast<int, Context>(dev_ctx, *indice, phi::DataType::INT64);
     }
     indices_int64.push_back(indice);
   }
 
-  std::vector<phi::DenseTensor*> indices_list = indices_int64;
+  std::vector<DenseTensor*> indices_list = indices_int64;
 
   uint32_t element_size_bytes = phi::SizeOf(self.dtype());
   int64_t dims_before = 0, dims_after = 0, dims_indexed = 0;
-  std::vector<int64_t> shape_vec = common::vectorize<int64_t>(self.dims());
-  std::vector<int64_t> stride_vec = common::vectorize<int64_t>(self.strides());
+  std::vector<int64_t> shape_vec = vectorize<int64_t>(self.dims());
+  std::vector<int64_t> stride_vec = vectorize<int64_t>(self.strides());
   std::vector<int64_t> replacement_shape;
   std::vector<int64_t> idx_shape_vec = {};
   std::vector<int64_t> idx_stride_vec = {};
@@ -247,7 +244,7 @@ inline AdvancedIndex<T, Context>::AdvancedIndex(
       }
     } else {
       dims_indexed++;
-      replacement_shape = common::vectorize<int64_t>(indices_list[dim]->dims());
+      replacement_shape = vectorize<int64_t>(indices_list[dim]->dims());
 
       indexed_sizes.push_back(shape_vec[dim]);
       indexed_strides.push_back(stride_vec[dim] * element_size_bytes);

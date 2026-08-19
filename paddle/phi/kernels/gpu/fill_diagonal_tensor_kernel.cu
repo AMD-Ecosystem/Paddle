@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <vector>
 
+#include "paddle/phi/backends/gpu/cuda/cuda_graph_with_memory_pool.h"
 #include "paddle/phi/common/memory_utils.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/core/tensor_utils.h"
@@ -51,7 +52,7 @@ void FillDiagonalTensorKernel(const Context &dev_ctx,
                               int dim2,
                               DenseTensor *out) {
   const int64_t kMaxBlockDim = 512;
-  phi::Copy(dev_ctx, x, dev_ctx.GetPlace(), false, out);
+  Copy(dev_ctx, x, dev_ctx.GetPlace(), false, out);
 
   T *out_data = dev_ctx.template Alloc<T>(out);
   const T *fill_data = y.data<T>();
@@ -89,13 +90,15 @@ void FillDiagonalTensorKernel(const Context &dev_ctx,
 
   auto stream = dev_ctx.stream();
   DenseTensor tensor_tmp;
-  tensor_tmp.Resize(common::make_ddim({2 + fill_dims[0]}));
+  tensor_tmp.Resize({2 + fill_dims[0]});
   int64_t *memory_block_cu = dev_ctx.template Alloc<int64_t>(&tensor_tmp);
   const auto gpu_place = dev_ctx.GetPlace();
+  auto *stable_mb = phi::backends::gpu::RestoreHostMemIfCapturingCUDAGraph(
+      memory_block.data(), memory_block.size());
   memory_utils::Copy(gpu_place,
                      memory_block_cu,
                      CPUPlace(),
-                     memory_block.data(),
+                     stable_mb,
                      sizeof(int64_t) * (2 + fill_dims[0]),
                      stream);
 

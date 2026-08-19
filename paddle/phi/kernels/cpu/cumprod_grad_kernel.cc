@@ -47,7 +47,7 @@ void CumprodGradKernel(const Context& dev_ctx,
   size_t inner_dim = 1;
   GetCumprodDimInfo(shape, dim, &outer_dim, &mid_dim, &inner_dim);
   if (shape.size() == 0) {
-    phi::Copy<Context>(dev_ctx, d_out, dev_ctx.GetPlace(), false, d_x);
+    Copy<Context>(dev_ctx, d_out, dev_ctx.GetPlace(), false, d_x);
     return;
   }
   size_t numel = outer_dim * mid_dim * inner_dim;
@@ -57,7 +57,7 @@ void CumprodGradKernel(const Context& dev_ctx,
   const T* out_data_deal = nullptr;
   Allocator::AllocationPtr x_conj;
   Allocator::AllocationPtr out_conj;
-  if (phi::IsComplexType(x.dtype())) {
+  if (IsComplexType(x.dtype())) {
     x_conj = const_cast<Allocator&>(dev_ctx.GetAllocator())  // NOLINT
                  .Allocate(numel * sizeof(T));
     auto* x_data_conj = reinterpret_cast<T*>(x_conj->ptr());

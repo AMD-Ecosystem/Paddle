@@ -105,7 +105,8 @@ ir::LoweredFunc Optimize(ir::LoweredFunc fn,
         VLOG(10) << "After Optimize TransBufferWithDynamicShape:" << copied;
 #endif
       },
-      [&](std::variant<common::HygonDCUArchHIP, common::HygonDCUArchSYCL>) {
+      [&](common::CustomDeviceArch) {
+#ifdef CINN_WITH_CUSTOM_DEVICE
         ir::SetCudaAxisInfo(copied);
         if (remove_gpu_for_loops) {
           VLOG(4) << "Before removing GPU for loops:\n" << copied;
@@ -124,6 +125,29 @@ ir::LoweredFunc Optimize(ir::LoweredFunc fn,
         func_pass_manager.AddPass(CreateTransBufferWithDynamicShapePass());
         func_pass_manager.Run(copied);
         VLOG(10) << "After Optimize TransBufferWithDynamicShape:" << copied;
+#endif
+      },
+      [&](std::variant<common::HygonDCUArchHIP, common::HygonDCUArchSYCL>) {
+#if defined(PADDLE_WITH_SYCL) || defined(PADDLE_WITH_HIP)
+        ir::SetCudaAxisInfo(copied);
+        if (remove_gpu_for_loops) {
+          VLOG(4) << "Before removing GPU for loops:\n" << copied;
+          FuncPassManager func_pass_manager;
+          func_pass_manager.AddPass(CreateRemoveGpuForLoopsPass());
+          func_pass_manager.Run(copied);
+          VLOG(4) << "After removing GPU for loops:\n" << copied;
+        }
+        VLOG(10) << "Before Optimize CudaSyncThreadsDropIfThenElse:" << copied;
+        BlockPassManager blk_pass_manager;
+        blk_pass_manager.AddPass(CreateCudaSyncThreadsDropIfThenElsePass());
+        blk_pass_manager.Run(copied->body_block);
+        VLOG(10) << "After Optimize CudaSyncThreadsDropIfThenElse:" << copied;
+        FuncPassManager func_pass_manager;
+        VLOG(10) << "Before Optimize TransBufferWithDynamicShape:" << copied;
+        func_pass_manager.AddPass(CreateTransBufferWithDynamicShapePass());
+        func_pass_manager.Run(copied);
+        VLOG(10) << "After Optimize TransBufferWithDynamicShape:" << copied;
+#endif
       },
       [&](std::variant<common::UnknownArch, common::X86Arch, common::ARMArch>) {
       });
@@ -154,6 +178,12 @@ ir::LoweredFunc Optimize(ir::LoweredFunc fn,
 
   target.arch.Match(
       [&](common::NVGPUArch) {
+        FuncPassManager func_pass_manager;
+        func_pass_manager.AddPass(CreateRearrangeLoadInstructionPass());
+        func_pass_manager.Run(copied);
+        VLOG(4) << "After Optimize RearrangeLoadInstruction:" << copied;
+      },
+      [&](common::CustomDeviceArch) {
         FuncPassManager func_pass_manager;
         func_pass_manager.AddPass(CreateRearrangeLoadInstructionPass());
         func_pass_manager.Run(copied);

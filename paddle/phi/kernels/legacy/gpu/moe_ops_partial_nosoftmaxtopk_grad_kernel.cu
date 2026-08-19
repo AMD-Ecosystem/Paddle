@@ -114,16 +114,12 @@ void MoeGateDispatchPartialNoSoftMaxTopkGradKernel(
     DenseTensor* combine_weights_grad) {
   dev_ctx.template Alloc<T>(x_grad);
   dev_ctx.template Alloc<float>(combine_weights_grad);
-  phi::Full<float, Context>(
-      dev_ctx,
-      phi::IntArray(common::vectorize(combine_weights_grad->dims())),
-      0,
-      combine_weights_grad);
+  Full<float, Context>(
+      dev_ctx, combine_weights_grad->dims(), 0, combine_weights_grad);
   DenseTensor t_scatter_index;
-  phi::Transpose<int, Context>(
-      dev_ctx, scatter_index, {1, 0}, &t_scatter_index);
+  Transpose<int, Context>(dev_ctx, scatter_index, {1, 0}, &t_scatter_index);
   DenseTensor t_scatter_index_out;
-  phi::ContiguousKernel<int, Context>(
+  ContiguousKernel<int, Context>(
       dev_ctx, t_scatter_index, &t_scatter_index_out);
   t_scatter_index = t_scatter_index_out;
   int64_t num_experts = expert_offset.dims()[0];

@@ -26,19 +26,19 @@ namespace phi {
 template <typename Context, typename T>
 struct SequenceExpandFunctor {
   void operator()(const Context& dev_ctx,
-                  const phi::DenseTensor& x,
-                  const phi::Vector<size_t>& x_lod,   /*expand source lod*/
-                  const phi::Vector<size_t>& ref_lod, /*expand referenced lod*/
-                  phi::DenseTensor* out);
+                  const DenseTensor& x,
+                  const Vector<size_t>& x_lod,   /*expand source lod*/
+                  const Vector<size_t>& ref_lod, /*expand referenced lod*/
+                  DenseTensor* out);
 };
 
 template <typename Context, typename T>
 struct SequenceExpandGradFunctor {
   void operator()(const Context& dev_ctx,
-                  const phi::DenseTensor& dout,
-                  const phi::Vector<size_t>& x_lod,   /*expand source lod*/
-                  const phi::Vector<size_t>& ref_lod, /*expand referenced lod*/
-                  phi::DenseTensor* dx);
+                  const DenseTensor& dout,
+                  const Vector<size_t>& x_lod,   /*expand source lod*/
+                  const Vector<size_t>& ref_lod, /*expand referenced lod*/
+                  DenseTensor* dx);
 };
 
 template <typename T, typename Context>
@@ -126,7 +126,7 @@ void SequenceExpandKernel(const Context& dev_ctx,
       y_lod.empty(),
       false,
       common::errors::InvalidArgument(
-          "Input(Y) phi::DenseTensor of SequenceExpandOp does not contain "
+          "Input(Y) DenseTensor of SequenceExpandOp does not contain "
           "LoD information."));
 
   if (ref_level == -1) ref_level = y_lod.size() - 1;
@@ -134,12 +134,12 @@ void SequenceExpandKernel(const Context& dev_ctx,
   dev_ctx.template Alloc<T>(out);
 
   if (y_lod[ref_level].size() <= 1) {
-    phi::Copy(dev_ctx, *x, dev_ctx.GetPlace(), false, out);
+    Copy(dev_ctx, *x, dev_ctx.GetPlace(), false, out);
     return;
   }
 
   // x lod level is at most 1.
-  phi::Vector<size_t> out_lod;
+  Vector<size_t> out_lod;
   if (x_lod.size() == 1) {
     out_lod.push_back(0);
     int out_offset = 0;
@@ -157,7 +157,7 @@ void SequenceExpandKernel(const Context& dev_ctx,
     auto& ref_lod = *out->mutable_lod();
     ref_lod[0] = out_lod;
   }
-  phi::Vector<size_t> ref_x_lod;
+  Vector<size_t> ref_x_lod;
   if (x->lod().size() == 1) {
     ref_x_lod = x->lod()[0];
   } else {
@@ -184,19 +184,19 @@ void SequenceExpandGradKernel(const Context& dev_ctx,
   dev_ctx.template Alloc<T>(g_x);
   g_x->set_lod(x->lod());
 
-  phi::funcs::SetConstant<Context, T> set_zero;
+  funcs::SetConstant<Context, T> set_zero;
   set_zero(dev_ctx, g_x, static_cast<T>(0));
 
   auto& y_lod = y->lod();
   if (ref_level == -1) ref_level = y_lod.size() - 1;
   // just copy the gradient
   if (y_lod[ref_level].size() <= 1) {
-    phi::Copy(dev_ctx, *g_out, dev_ctx.GetPlace(), false, g_x);
+    Copy(dev_ctx, *g_out, dev_ctx.GetPlace(), false, g_x);
     return;
   }
 
-  phi::Vector<size_t> ref_x_lod;
-  phi::Vector<size_t> ref_lod = y_lod[ref_level];
+  Vector<size_t> ref_x_lod;
+  Vector<size_t> ref_lod = y_lod[ref_level];
   if (x->lod().size() == 1) {
     ref_x_lod = x->lod()[0];
   } else {
@@ -209,9 +209,9 @@ void SequenceExpandGradKernel(const Context& dev_ctx,
 }
 
 // for GPU kernel
-inline void GetOutputOffset(const phi::Vector<size_t>& x_lod,
-                            const phi::Vector<size_t>& ref_lod,
-                            phi::Vector<size_t>* out_offset) {
+inline void GetOutputOffset(const Vector<size_t>& x_lod,
+                            const Vector<size_t>& ref_lod,
+                            Vector<size_t>* out_offset) {
   size_t offset = 0;
   int lod_size = static_cast<int>(x_lod.size());
   for (int i = 0; i < static_cast<int>(x_lod.size()); ++i) {

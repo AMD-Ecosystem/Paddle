@@ -189,15 +189,15 @@ __global__ void sequence_pool_kernel(Range_OP op,
 }
 
 template <typename T>
-class SequencePoolFunctor<phi::GPUContext, T> {
+class SequencePoolFunctor<GPUContext, T> {
  public:
-  void operator()(const phi::GPUContext& dev_ctx,
+  void operator()(const GPUContext& dev_ctx,
                   const std::string pooltype,
                   T pad_value,
-                  const phi::DenseTensor& input,
-                  phi::DenseTensor* output,
+                  const DenseTensor& input,
+                  DenseTensor* output,
                   bool is_test,
-                  phi::DenseTensor* index = nullptr) {
+                  DenseTensor* index = nullptr) {
     auto lod_level = input.lod().size();
     auto& lod = input.lod()[lod_level - 1];
     const size_t item_dim = output->numel() / output->dims()[0];
@@ -408,14 +408,14 @@ __global__ void sequence_pool_grad_kernel(Range_OP op,
 }
 
 template <typename T>
-class SequencePoolGradFunctor<phi::GPUContext, T> {
+class SequencePoolGradFunctor<GPUContext, T> {
  public:
-  void operator()(const phi::GPUContext& dev_ctx,
+  void operator()(const GPUContext& dev_ctx,
                   const std::string pooltype,
-                  const phi::DenseTensor& out_grad,
-                  phi::DenseTensor* in_grad,
+                  const DenseTensor& out_grad,
+                  DenseTensor* in_grad,
                   /* max pool has index */
-                  const phi::DenseTensor* index = nullptr) {
+                  const DenseTensor* index = nullptr) {
     auto lod_level = in_grad->lod().size();
     auto& lod = in_grad->lod()[lod_level - 1];
     const size_t item_dim = in_grad->numel() / in_grad->dims()[0];
@@ -493,10 +493,10 @@ class SequencePoolGradFunctor<phi::GPUContext, T> {
 };
 
 // sequence pooling
-template class SequencePoolFunctor<phi::GPUContext, float>;
-template class SequencePoolFunctor<phi::GPUContext, double>;
-template class PADDLE_API SequencePoolGradFunctor<phi::GPUContext, float>;
-template class SequencePoolGradFunctor<phi::GPUContext, double>;
+template class SequencePoolFunctor<GPUContext, float>;
+template class SequencePoolFunctor<GPUContext, double>;
+template class PADDLE_API SequencePoolGradFunctor<GPUContext, float>;
+template class SequencePoolGradFunctor<GPUContext, double>;
 
 }  // namespace funcs
 }  // namespace phi

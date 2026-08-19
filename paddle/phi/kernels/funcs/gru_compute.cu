@@ -20,13 +20,13 @@ namespace phi {
 namespace funcs {
 
 template <typename T>
-struct GRUUnitFunctor<phi::GPUContext, T> {
-  static void compute(const phi::GPUContext &dev_ctx,
+struct GRUUnitFunctor<GPUContext, T> {
+  static void compute(const GPUContext &dev_ctx,
                       GRUMetaValue<T> value,
                       int frame_size,
                       int batch_size,
-                      const phi::funcs::detail::ActivationType active_node,
-                      const phi::funcs::detail::ActivationType active_gate,
+                      const funcs::detail::ActivationType active_node,
+                      const funcs::detail::ActivationType active_gate,
                       bool origin_mode) {
     auto stream = dev_ctx.stream();
     dim3 threads;
@@ -93,7 +93,7 @@ struct GRUUnitFunctor<phi::GPUContext, T> {
       threads = dim3(32, 32);
       grid = dim3((frame_size + 32 - 1) / 32, (batch_size + 32 - 1) / 32);
     }
-    auto blas = phi::funcs::GetBlas<phi::GPUContext, T>(dev_ctx);
+    auto blas = funcs::GetBlas<GPUContext, T>(dev_ctx);
     if (value.prev_out_value) {
       blas.GEMM(false,
                 false,
@@ -112,10 +112,10 @@ struct GRUUnitFunctor<phi::GPUContext, T> {
 
     if (batch_size == 1) {
       detail::KeGruForwardResetOutput<
-          phi::funcs::detail::forward::gru_resetOutput<T>,
+          funcs::detail::forward::gru_resetOutput<T>,
           /* is_batch= */ false,
           T><<<grid, threads, 0, stream>>>(
-          phi::funcs::detail::forward::gru_resetOutput<T>(),
+          funcs::detail::forward::gru_resetOutput<T>(),
           value.gate_value,
           value.reset_output_value,
           value.prev_out_value,
@@ -124,10 +124,10 @@ struct GRUUnitFunctor<phi::GPUContext, T> {
           active_gate);
     } else {
       detail::KeGruForwardResetOutput<
-          phi::funcs::detail::forward::gru_resetOutput<T>,
+          funcs::detail::forward::gru_resetOutput<T>,
           /* is_batch= */ true,
           T><<<grid, threads, 0, stream>>>(
-          phi::funcs::detail::forward::gru_resetOutput<T>(),
+          funcs::detail::forward::gru_resetOutput<T>(),
           value.gate_value,
           value.reset_output_value,
           value.prev_out_value,
@@ -154,10 +154,10 @@ struct GRUUnitFunctor<phi::GPUContext, T> {
 
     if (batch_size == 1) {
       detail::KeGruForwardFinalOutput<
-          phi::funcs::detail::forward::gru_finalOutput<T>,
+          funcs::detail::forward::gru_finalOutput<T>,
           /* is_batch= */ false,
           T><<<grid, threads, 0, stream>>>(
-          phi::funcs::detail::forward::gru_finalOutput<T>(),
+          funcs::detail::forward::gru_finalOutput<T>(),
           value.gate_value,
           value.prev_out_value,
           value.output_value,
@@ -167,10 +167,10 @@ struct GRUUnitFunctor<phi::GPUContext, T> {
           origin_mode);
     } else {
       detail::KeGruForwardFinalOutput<
-          phi::funcs::detail::forward::gru_finalOutput<T>,
+          funcs::detail::forward::gru_finalOutput<T>,
           /* is_batch= */ true,
           T><<<grid, threads, 0, stream>>>(
-          phi::funcs::detail::forward::gru_finalOutput<T>(),
+          funcs::detail::forward::gru_finalOutput<T>(),
           value.gate_value,
           value.prev_out_value,
           value.output_value,
@@ -183,14 +183,14 @@ struct GRUUnitFunctor<phi::GPUContext, T> {
 };
 
 template <typename T>
-struct GRUUnitGradFunctor<phi::GPUContext, T> {
-  static void compute(const phi::GPUContext &dev_ctx,
+struct GRUUnitGradFunctor<GPUContext, T> {
+  static void compute(const GPUContext &dev_ctx,
                       GRUMetaValue<T> value,
                       GRUMetaGrad<T> grad,
                       int frame_size,
                       int batch_size,
-                      const phi::funcs::detail::ActivationType active_node,
-                      const phi::funcs::detail::ActivationType active_gate,
+                      const funcs::detail::ActivationType active_node,
+                      const funcs::detail::ActivationType active_gate,
                       bool origin_mode) {
     auto stream = dev_ctx.stream();
     dim3 threads;
@@ -206,36 +206,36 @@ struct GRUUnitGradFunctor<phi::GPUContext, T> {
     }
 
     if (batch_size == 1) {
-      detail::KeGruBackwardStateGrad<
-          phi::funcs::detail::backward::gru_stateGrad<T>,
-          /* is_batch= */ false><<<grid, threads, 0, stream>>>(
-          phi::funcs::detail::backward::gru_stateGrad<T>(),
-          value.gate_value,
-          grad.gate_grad,
-          value.prev_out_value,
-          grad.prev_out_grad,
-          grad.output_grad,
-          frame_size,
-          batch_size,
-          active_node,
-          origin_mode);
+      detail::KeGruBackwardStateGrad<funcs::detail::backward::gru_stateGrad<T>,
+                                     /* is_batch= */ false>
+          <<<grid, threads, 0, stream>>>(
+              funcs::detail::backward::gru_stateGrad<T>(),
+              value.gate_value,
+              grad.gate_grad,
+              value.prev_out_value,
+              grad.prev_out_grad,
+              grad.output_grad,
+              frame_size,
+              batch_size,
+              active_node,
+              origin_mode);
     } else {
-      detail::KeGruBackwardStateGrad<
-          phi::funcs::detail::backward::gru_stateGrad<T>,
-          /* is_batch= */ true><<<grid, threads, 0, stream>>>(
-          phi::funcs::detail::backward::gru_stateGrad<T>(),
-          value.gate_value,
-          grad.gate_grad,
-          value.prev_out_value,
-          grad.prev_out_grad,
-          grad.output_grad,
-          frame_size,
-          batch_size,
-          active_node,
-          origin_mode);
+      detail::KeGruBackwardStateGrad<funcs::detail::backward::gru_stateGrad<T>,
+                                     /* is_batch= */ true>
+          <<<grid, threads, 0, stream>>>(
+              funcs::detail::backward::gru_stateGrad<T>(),
+              value.gate_value,
+              grad.gate_grad,
+              value.prev_out_value,
+              grad.prev_out_grad,
+              grad.output_grad,
+              frame_size,
+              batch_size,
+              active_node,
+              origin_mode);
     }
 
-    auto blas = phi::funcs::GetBlas<phi::GPUContext, T>(dev_ctx);
+    auto blas = funcs::GetBlas<GPUContext, T>(dev_ctx);
 
     if (value.prev_out_value && grad.prev_out_grad) {
       blas.GEMM(false,
@@ -270,31 +270,31 @@ struct GRUUnitGradFunctor<phi::GPUContext, T> {
     }
 
     if (batch_size == 1) {
-      detail::KeGruBackwardResetGrad<
-          phi::funcs::detail::backward::gru_resetGrad<T>,
-          /* is_batch= */ false><<<grid, threads, 0, stream>>>(
-          phi::funcs::detail::backward::gru_resetGrad<T>(),
-          value.gate_value,
-          grad.gate_grad,
-          value.prev_out_value,
-          grad.prev_out_grad,
-          grad.reset_output_grad,
-          frame_size,
-          batch_size,
-          active_gate);
+      detail::KeGruBackwardResetGrad<funcs::detail::backward::gru_resetGrad<T>,
+                                     /* is_batch= */ false>
+          <<<grid, threads, 0, stream>>>(
+              funcs::detail::backward::gru_resetGrad<T>(),
+              value.gate_value,
+              grad.gate_grad,
+              value.prev_out_value,
+              grad.prev_out_grad,
+              grad.reset_output_grad,
+              frame_size,
+              batch_size,
+              active_gate);
     } else {
-      detail::KeGruBackwardResetGrad<
-          phi::funcs::detail::backward::gru_resetGrad<T>,
-          /* is_batch= */ true><<<grid, threads, 0, stream>>>(
-          phi::funcs::detail::backward::gru_resetGrad<T>(),
-          value.gate_value,
-          grad.gate_grad,
-          value.prev_out_value,
-          grad.prev_out_grad,
-          grad.reset_output_grad,
-          frame_size,
-          batch_size,
-          active_gate);
+      detail::KeGruBackwardResetGrad<funcs::detail::backward::gru_resetGrad<T>,
+                                     /* is_batch= */ true>
+          <<<grid, threads, 0, stream>>>(
+              funcs::detail::backward::gru_resetGrad<T>(),
+              value.gate_value,
+              grad.gate_grad,
+              value.prev_out_value,
+              grad.prev_out_grad,
+              grad.reset_output_grad,
+              frame_size,
+              batch_size,
+              active_gate);
     }
 
     if (grad.prev_out_grad && value.prev_out_value) {
@@ -331,10 +331,10 @@ struct GRUUnitGradFunctor<phi::GPUContext, T> {
   }
 };
 
-template struct GRUUnitFunctor<phi::GPUContext, float>;
-template struct GRUUnitFunctor<phi::GPUContext, double>;
-template struct GRUUnitGradFunctor<phi::GPUContext, float>;
-template struct GRUUnitGradFunctor<phi::GPUContext, double>;
+template struct GRUUnitFunctor<GPUContext, float>;
+template struct GRUUnitFunctor<GPUContext, double>;
+template struct GRUUnitGradFunctor<GPUContext, float>;
+template struct GRUUnitGradFunctor<GPUContext, double>;
 
 }  // namespace funcs
 }  // namespace phi

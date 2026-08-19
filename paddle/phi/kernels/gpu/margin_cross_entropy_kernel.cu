@@ -140,9 +140,8 @@ void MarginCrossEntropyKernel(const Context& dev_ctx,
                           "has ring_id attr."));
 
     // use global calculate stream
-    stream =
-        static_cast<GPUContext*>(phi::DeviceContextPool::Instance().Get(place))
-            ->stream();
+    stream = static_cast<GPUContext*>(DeviceContextPool::Instance().Get(place))
+                 ->stream();
   }
 #endif
 
@@ -163,7 +162,7 @@ void MarginCrossEntropyKernel(const Context& dev_ctx,
 
   // copy logits to softmax variable since we can't modify logits,
   // and it also be used when calculate grad
-  phi::Copy<Context>(dev_ctx, logits, dev_ctx.GetPlace(), true, softmax);
+  Copy<Context>(dev_ctx, logits, dev_ctx.GetPlace(), true, softmax);
 
   DenseTensor softmax_2d;
   softmax_2d.ShareDataWith(*softmax).Resize({N, D});
@@ -184,7 +183,7 @@ void MarginCrossEntropyKernel(const Context& dev_ctx,
   // theta = acos(x_i)
   // (cos(m1 * theta + m2) - m3)
   // save match_logits, used for gradient computation.
-  if (label_type == phi::DataType::INT32) {
+  if (label_type == DataType::INT32) {
     typedef int32_t LabelT;
     AddMarginToPositiveLogitsKernel<T, MPType>
         <<<NumBlocks(N), threads, 0, dev_ctx.stream()>>>(
@@ -198,7 +197,7 @@ void MarginCrossEntropyKernel(const Context& dev_ctx,
             N,
             D,
             class_interval.data<int>());
-  } else if (label_type == phi::DataType::INT64) {
+  } else if (label_type == DataType::INT64) {
     typedef int64_t LabelT;
     AddMarginToPositiveLogitsKernel<T, MPType>
         <<<NumBlocks(N), threads, 0, dev_ctx.stream()>>>(
@@ -231,7 +230,7 @@ void MarginCrossEntropyKernel(const Context& dev_ctx,
   T* logits_max_buff = dev_ctx.template Alloc<T>(&logits_max);
 
   funcs::ReduceKernel<T, T, phi::kps::MaxFunctor, phi::kps::IdentityFunctor<T>>(
-      static_cast<const phi::GPUContext&>(dev_ctx),
+      static_cast<const GPUContext&>(dev_ctx),
       softmax_2d,
       &logits_max,
       phi::kps::IdentityFunctor<T>(),
@@ -254,7 +253,7 @@ void MarginCrossEntropyKernel(const Context& dev_ctx,
   dev_ctx.template Alloc<T>(&sum_exp_logits);
   T* sum_exp_logits_buff = dev_ctx.template Alloc<T>(&sum_exp_logits);
   funcs::ReduceKernel<T, T, phi::kps::AddFunctor, phi::kps::ExpFunctor<T>>(
-      static_cast<const phi::GPUContext&>(dev_ctx),
+      static_cast<const GPUContext&>(dev_ctx),
       softmax_2d,
       &sum_exp_logits,
       phi::kps::ExpFunctor<T>(),
@@ -277,7 +276,7 @@ void MarginCrossEntropyKernel(const Context& dev_ctx,
 
   funcs::SetConstant<Context, T> functor;
   functor(dev_ctx, loss, static_cast<T>(0.0));
-  if (label_type == phi::DataType::INT32) {
+  if (label_type == DataType::INT32) {
     typedef int32_t LabelT;
     HardLabelSoftmaxWithCrossEntropyKernel<T, LabelT>
         <<<blocks, threads, 0, dev_ctx.stream()>>>(loss_ptr,
@@ -287,7 +286,7 @@ void MarginCrossEntropyKernel(const Context& dev_ctx,
                                                    N,
                                                    D,
                                                    class_interval.data<int>());
-  } else if (label_type == phi::DataType::INT64) {
+  } else if (label_type == DataType::INT64) {
     typedef int64_t LabelT;
     HardLabelSoftmaxWithCrossEntropyKernel<T, LabelT>
         <<<blocks, threads, 0, dev_ctx.stream()>>>(loss_ptr,

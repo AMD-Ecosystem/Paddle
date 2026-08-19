@@ -737,7 +737,7 @@ struct SimpleOpTypeSetTeller : public Teller {
       if (!desc.HasAttr("data_layout")) return false;
       auto data_layout = common::StringToDataLayout(
           PADDLE_GET_CONST(std::string, desc.GetAttr("data_layout")));
-      if (data_layout != phi::DataLayout::kNCHW) return false;
+      if (data_layout != phi::DataLayout::NCHW) return false;
 
       auto* block = desc.Block();
       if (block == nullptr) {
@@ -812,8 +812,8 @@ struct SimpleOpTypeSetTeller : public Teller {
       if (desc.HasAttr("data_layout")) {
         auto data_layout = common::StringToDataLayout(
             PADDLE_GET_CONST(std::string, desc.GetAttr("data_layout")));
-        if (data_layout != phi::DataLayout::kNCHW &&
-            data_layout != phi::DataLayout::kNHWC)
+        if (data_layout != phi::DataLayout::NCHW &&
+            data_layout != phi::DataLayout::NHWC)
           return false;
       }
       auto interp_method =
@@ -857,8 +857,8 @@ struct SimpleOpTypeSetTeller : public Teller {
       }
       auto data_layout = common::StringToDataLayout(
           PADDLE_GET_CONST(std::string, desc.GetAttr("data_layout")));
-      if (data_layout != phi::DataLayout::kNCHW &&
-          data_layout != phi::DataLayout::kNHWC)
+      if (data_layout != phi::DataLayout::NCHW &&
+          data_layout != phi::DataLayout::NHWC)
         return false;
       auto interp_method =
           PADDLE_GET_CONST(std::string, desc.GetAttr("interp_method"));
@@ -951,8 +951,8 @@ struct SimpleOpTypeSetTeller : public Teller {
 
       auto data_layout = common::StringToDataLayout(
           PADDLE_GET_CONST(std::string, desc.GetAttr("data_layout")));
-      if (data_layout != phi::DataLayout::kNCHW &&
-          data_layout != phi::DataLayout::kNHWC) {
+      if (data_layout != phi::DataLayout::NCHW &&
+          data_layout != phi::DataLayout::NHWC) {
         VLOG(3) << "The op_type " << op_type
                 << " is not NCHW or NHWC return false";
         return false;
@@ -1045,8 +1045,8 @@ struct SimpleOpTypeSetTeller : public Teller {
 
       auto data_layout = common::StringToDataLayout(
           PADDLE_GET_CONST(std::string, desc.GetAttr("data_layout")));
-      if (data_layout != phi::DataLayout::kNCHW &&
-          data_layout != phi::DataLayout::kNHWC) {
+      if (data_layout != phi::DataLayout::NCHW &&
+          data_layout != phi::DataLayout::NHWC) {
         VLOG(3) << "The op_type " << op_type
                 << " is not NCHW or NHWC return false";
         return false;
@@ -2806,8 +2806,8 @@ struct SimpleOpTypeSetTeller : public Teller {
       }
       bool asvector = PADDLE_GET_CONST(bool, desc.GetAttr("asvector"));
       int axis = PADDLE_GET_CONST(int, desc.GetAttr("axis"));
-      float porder = PADDLE_GET_CONST(float, desc.GetAttr("porder"));
-      if (asvector || porder != 2.0f || axis != -1) {
+      double porder = PADDLE_GET_CONST(double, desc.GetAttr("porder"));
+      if (asvector || porder != 2.0 || axis != -1) {
         VLOG(3) << op_type
                 << " op only support asvector=False, porder=2, axis = -1.";
         return false;

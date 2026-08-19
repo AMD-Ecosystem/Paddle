@@ -24,7 +24,7 @@ limitations under the License. */
 namespace phi {
 namespace funcs {
 
-static inline void GetBlockDims(const phi::GPUContext& dev_ctx,
+static inline void GetBlockDims(const GPUContext& dev_ctx,
                                 int64_t num_rows,
                                 int64_t num_cols,
                                 dim3* block_dims,
@@ -66,14 +66,14 @@ struct PointerWrapper {
   __device__ inline const void* operator[](int i) const { return ins_addr[i]; }
 
   PointerWrapper() = default;
-  PointerWrapper(const phi::GPUContext& dev_ctx,
-                 const std::vector<phi::DenseTensor>& ins,
+  PointerWrapper(const GPUContext& dev_ctx,
+                 const std::vector<DenseTensor>& ins,
                  const T** pre_alloced_host_ptr) {
     SetInputAddr(ins);
   }
 
  protected:
-  void SetInputAddr(const std::vector<phi::DenseTensor>& ins) {
+  void SetInputAddr(const std::vector<DenseTensor>& ins) {
     for (auto i = 0; i < ins.size(); ++i) {
       ins_addr[i] = ins[i].data();
     }
@@ -85,8 +85,8 @@ struct PADDLE_ALIGN(256) AlignedPointerWrapper
     : public PointerWrapper<T, Size> {
  public:
   AlignedPointerWrapper() = default;
-  AlignedPointerWrapper(const phi::GPUContext& dev_ctx,
-                        const std::vector<phi::DenseTensor>& ins,
+  AlignedPointerWrapper(const GPUContext& dev_ctx,
+                        const std::vector<DenseTensor>& ins,
                         const T** pre_alloced_host_ptr) {
     this->SetInputAddr(ins);
   }
@@ -99,8 +99,8 @@ struct PointerToPointer {
   __device__ inline const void* operator[](int i) const { return ins_addr[i]; }
 
   PointerToPointer() = default;
-  PointerToPointer(const phi::GPUContext& dev_ctx,
-                   const std::vector<phi::DenseTensor>& ins,
+  PointerToPointer(const GPUContext& dev_ctx,
+                   const std::vector<DenseTensor>& ins,
                    const T** pre_alloced_host_ptr,
                    phi::Allocator::AllocationPtr* dev_ins_ptr) {
     auto in_num = ins.size();
@@ -115,7 +115,7 @@ struct PointerToPointer {
         pre_alloced_host_ptr, in_num);
     memory_utils::Copy(dev_ctx.GetPlace(),
                        (*dev_ins_ptr)->ptr(),
-                       phi::CPUPlace(),
+                       CPUPlace(),
                        restored,
                        in_num * sizeof(T*),
                        dev_ctx.stream());
@@ -127,8 +127,8 @@ template <typename T, typename IndexT, int Size>
 struct PADDLE_ALIGN(256) PointerAndColWrapper {
  public:
   IndexT col_length[Size];
-  PointerAndColWrapper(const phi::GPUContext& dev_ctx,
-                       const std::vector<phi::DenseTensor>& ins,
+  PointerAndColWrapper(const GPUContext& dev_ctx,
+                       const std::vector<DenseTensor>& ins,
                        const IndexT& inputs_col_num,
                        const T** pre_alloced_host_ptr,
                        IndexT* inputs_col) {
@@ -151,8 +151,8 @@ template <typename T, typename IndexT>
 struct PointerToPointerAndCol {
  public:
   IndexT* col_length{nullptr};
-  PointerToPointerAndCol(const phi::GPUContext& dev_ctx,
-                         const std::vector<phi::DenseTensor>& ins,
+  PointerToPointerAndCol(const GPUContext& dev_ctx,
+                         const std::vector<DenseTensor>& ins,
                          const IndexT inputs_col_num,
                          const T** pre_alloced_host_ptr,
                          IndexT* inputs_col,
@@ -166,7 +166,7 @@ struct PointerToPointerAndCol {
         inputs_col, inputs_col_num);
     memory_utils::Copy(dev_ctx.GetPlace(),
                        (*dev_col_ptr)->ptr(),
-                       phi::CPUPlace(),
+                       CPUPlace(),
                        restored,
                        inputs_col_num * sizeof(IndexT),
                        dev_ctx.stream());
@@ -259,14 +259,14 @@ __global__ void ConcatTensorWithSameShape(const PointerWrapperT ins_data,
 
 template <typename T, typename IndexT, int MovSize>
 void DispatchConcatWithDifferentShapeKernelLimitNum(
-    const phi::GPUContext& dev_ctx,
-    const std::vector<phi::DenseTensor>& ins,
+    const GPUContext& dev_ctx,
+    const std::vector<DenseTensor>& ins,
     const IndexT inputs_col_num,
     const T** inputs_data,
     IndexT* inputs_col,
     const IndexT out_row,
     const IndexT out_col,
-    phi::DenseTensor* output,
+    DenseTensor* output,
     const IndexT in_num,
     const IndexT limit_num) {
   dim3 block_dims;
@@ -305,14 +305,14 @@ void DispatchConcatWithDifferentShapeKernelLimitNum(
 
 template <typename T, typename IndexT>
 void DispatchConcatWithDifferentShapeMovsize(
-    const phi::GPUContext& dev_ctx,
-    const std::vector<phi::DenseTensor>& ins,
+    const GPUContext& dev_ctx,
+    const std::vector<DenseTensor>& ins,
     const IndexT inputs_col_num,
     const T** inputs_data,
     IndexT* inputs_col,
     const IndexT out_row,
     const IndexT out_col,
-    phi::DenseTensor* output,
+    DenseTensor* output,
     const IndexT mov_size,
     const IndexT in_num,
     const IndexT limit_num) {
@@ -377,13 +377,13 @@ void DispatchConcatWithDifferentShapeMovsize(
 
 template <typename T, typename IndexT, int MovSize>
 void DispatchConcatWithSameShapeKernelLimitNum(
-    const phi::GPUContext& dev_ctx,
-    const std::vector<phi::DenseTensor>& ins,
+    const GPUContext& dev_ctx,
+    const std::vector<DenseTensor>& ins,
     const T** inputs_data,
     IndexT in_col,
     const IndexT out_row,
     const IndexT out_col,
-    phi::DenseTensor* output,
+    DenseTensor* output,
     const IndexT in_num,
     const IndexT limit_num) {
   dim3 block_dims;
@@ -416,17 +416,16 @@ void DispatchConcatWithSameShapeKernelLimitNum(
 #undef IMPL_CONCATE_CUDA_KERNEL_HELPER
 
 template <typename T, typename IndexT>
-void DispatchConcatWithSameShapeMovsize(
-    const phi::GPUContext& dev_ctx,
-    const std::vector<phi::DenseTensor>& ins,
-    const T** inputs_data,
-    IndexT in_col,
-    const IndexT out_row,
-    const IndexT out_col,
-    phi::DenseTensor* output,
-    const IndexT mov_size,
-    const IndexT in_num,
-    const IndexT limit_num) {
+void DispatchConcatWithSameShapeMovsize(const GPUContext& dev_ctx,
+                                        const std::vector<DenseTensor>& ins,
+                                        const T** inputs_data,
+                                        IndexT in_col,
+                                        const IndexT out_row,
+                                        const IndexT out_col,
+                                        DenseTensor* output,
+                                        const IndexT mov_size,
+                                        const IndexT in_num,
+                                        const IndexT limit_num) {
   if (mov_size == 16) {
     DispatchConcatWithSameShapeKernelLimitNum<T, IndexT, 16>(dev_ctx,
                                                              ins,
@@ -481,14 +480,14 @@ void DispatchConcatWithSameShapeMovsize(
 }
 
 template <typename T, typename IndexT>
-void DispatchConcatKernel(const phi::GPUContext& dev_ctx,
-                          const std::vector<phi::DenseTensor>& ins,
+void DispatchConcatKernel(const GPUContext& dev_ctx,
+                          const std::vector<DenseTensor>& ins,
                           const IndexT inputs_col_num,
                           const T** inputs_data,
                           IndexT* inputs_col,
                           const IndexT out_row,
                           const IndexT out_col,
-                          phi::DenseTensor* output,
+                          DenseTensor* output,
                           const IndexT in_num,
                           const IndexT limit_num,
                           bool has_same_shape) {
@@ -556,10 +555,10 @@ void DispatchConcatKernel(const phi::GPUContext& dev_ctx,
  * each dimension must be the same, except the axis dimension.
  */
 template <typename T, typename IndexT>
-void ConcatFunctorWithIndexType(const phi::GPUContext& dev_ctx,
-                                const std::vector<phi::DenseTensor>& ins,
+void ConcatFunctorWithIndexType(const GPUContext& dev_ctx,
+                                const std::vector<DenseTensor>& ins,
                                 int axis,
-                                phi::DenseTensor* output) {
+                                DenseTensor* output) {
   // TODO(zcd): Add input data validity checking
   IndexT in_num = ins.size();
   IndexT in_row = 1;
@@ -604,11 +603,11 @@ void ConcatFunctorWithIndexType(const phi::GPUContext& dev_ctx,
 }
 
 template <typename T>
-struct ConcatFunctor<phi::GPUContext, T> {
-  void operator()(const phi::GPUContext& dev_ctx,
-                  const std::vector<phi::DenseTensor>& input,
+struct ConcatFunctor<GPUContext, T> {
+  void operator()(const GPUContext& dev_ctx,
+                  const std::vector<DenseTensor>& input,
                   int axis,
-                  phi::DenseTensor* output) {
+                  DenseTensor* output) {
     if (output->numel() < std::numeric_limits<int32_t>::max()) {
       ConcatFunctorWithIndexType<T, int32_t>(dev_ctx, input, axis, output);
     } else {
@@ -619,22 +618,21 @@ struct ConcatFunctor<phi::GPUContext, T> {
 
 template <typename T, typename IndexT, funcs::SegmentedArraySize Size>
 struct PointerAndColArray
-    : public funcs::PointerArraySetter<phi::GPUContext, T, Size> {
+    : public funcs::PointerArraySetter<GPUContext, T, Size> {
  public:
   funcs::ValueArray<IndexT, Size> val_array;
 
   PointerAndColArray() = default;
-  PointerAndColArray(const phi::GPUContext& dev_ctx,
+  PointerAndColArray(const GPUContext& dev_ctx,
                      const int out_col_num,
                      IndexT* out_cols,
                      std::vector<DenseTensor*>* t,
                      T** pre_alloc_host_buf = nullptr)
-      : funcs::PointerArraySetter<phi::GPUContext, T, Size>(
-            dev_ctx,
-            t,
-            /*need_alloc=*/false,
-            /*use_cuda_graph=*/true,
-            pre_alloc_host_buf) {
+      : funcs::PointerArraySetter<GPUContext, T, Size>(dev_ctx,
+                                                       t,
+                                                       /*need_alloc=*/false,
+                                                       /*use_cuda_graph=*/true,
+                                                       pre_alloc_host_buf) {
     IndexT* dev_ptr = nullptr;
     if (Size == SegmentedArraySize::kVariableLength) {
       size_t num_bytes = out_col_num * sizeof(IndexT);
@@ -695,38 +693,36 @@ __global__ void SplitTensorWithDifferentShape(const T* input_data,
 }
 
 template <typename T, typename IndexT, funcs::SegmentedArraySize Size>
-void SplitFunctionDispatchWithSameShape(const phi::GPUContext& dev_ctx,
+void SplitFunctionDispatchWithSameShape(const GPUContext& dev_ctx,
                                         const IndexT out_col,
                                         const IndexT out_row,
                                         const IndexT cumulative_col,
                                         const T* input_data,
-                                        std::vector<phi::DenseTensor*>* outs,
+                                        std::vector<DenseTensor*>* outs,
                                         T** pre_alloc_host_buf) {
   dim3 grid_dims;
   dim3 block_dims;
   GetBlockDims(dev_ctx, out_row, cumulative_col, &block_dims, &grid_dims);
 
-  funcs::PointerArraySetter<phi::GPUContext, T, Size> setter(
-      dev_ctx,
-      outs,
-      /*need_alloc=*/false,
-      /*use_cuda_graph=*/true,
-      pre_alloc_host_buf);
+  funcs::PointerArraySetter<GPUContext, T, Size> setter(dev_ctx,
+                                                        outs,
+                                                        /*need_alloc=*/false,
+                                                        /*use_cuda_graph=*/true,
+                                                        pre_alloc_host_buf);
   SplitTensorWithSameShape<T, IndexT, decltype(setter.array)>
       <<<grid_dims, block_dims, 0, dev_ctx.stream()>>>(
           input_data, out_row, cumulative_col, out_col, setter.array);
 }
 
 template <typename T, typename IndexT, funcs::SegmentedArraySize Size>
-void SplitFunctionDispatchWithDifferentShape(
-    const phi::GPUContext& dev_ctx,
-    const int out_col_num,
-    const IndexT out_row,
-    const IndexT cumulative_col,
-    const T* input_data,
-    std::vector<phi::DenseTensor*>* outs,
-    IndexT* output_cols,
-    T** pre_alloc_host_buf) {
+void SplitFunctionDispatchWithDifferentShape(const GPUContext& dev_ctx,
+                                             const int out_col_num,
+                                             const IndexT out_row,
+                                             const IndexT cumulative_col,
+                                             const T* input_data,
+                                             std::vector<DenseTensor*>* outs,
+                                             IndexT* output_cols,
+                                             T** pre_alloc_host_buf) {
   dim3 grid_dims;
   dim3 block_dims;
   GetBlockDims(dev_ctx, out_row, cumulative_col, &block_dims, &grid_dims);
@@ -743,11 +739,11 @@ void SplitFunctionDispatchWithDifferentShape(
 
 template <typename T, typename IndexT>
 void SplitFunctorDispatchWithIndexType(
-    const phi::GPUContext& dev_ctx,
+    const GPUContext& dev_ctx,
     int axis,
-    const phi::DenseTensor& input,
-    const std::vector<const phi::DenseTensor*>& ref_ins,
-    std::vector<phi::DenseTensor*>* outs) {
+    const DenseTensor& input,
+    const std::vector<const DenseTensor*>& ref_ins,
+    std::vector<DenseTensor*>* outs) {
   // TODO(zcd): Add input data validity checking
   int out_num = outs->size();
   IndexT out_row = 1;
@@ -803,13 +799,13 @@ void SplitFunctorDispatchWithIndexType(
 }
 
 template <typename T>
-class SplitFunctor<phi::GPUContext, T> {
+class SplitFunctor<GPUContext, T> {
  public:
-  void operator()(const phi::GPUContext& dev_ctx,
-                  const phi::DenseTensor& input,
-                  const std::vector<const phi::DenseTensor*>& ref_inputs,
+  void operator()(const GPUContext& dev_ctx,
+                  const DenseTensor& input,
+                  const std::vector<const DenseTensor*>& ref_inputs,
                   int axis,
-                  std::vector<phi::DenseTensor*>* outputs) {
+                  std::vector<DenseTensor*>* outputs) {
     int64_t numel = input.numel();
     // NOTE(zhiqiu): split a tensor of shape [0,3,4] at axis=1, result in
     // 3 tensors of shape [0,1,4]
@@ -827,9 +823,9 @@ class SplitFunctor<phi::GPUContext, T> {
   }
 };
 
-#define DEFINE_FUNCTOR(type)                                      \
-  template class PADDLE_API ConcatFunctor<phi::GPUContext, type>; \
-  template class PADDLE_API SplitFunctor<phi::GPUContext, type>
+#define DEFINE_FUNCTOR(type)                                 \
+  template class PADDLE_API ConcatFunctor<GPUContext, type>; \
+  template class PADDLE_API SplitFunctor<GPUContext, type>
 
 FOR_ALL_TYPES(DEFINE_FUNCTOR);
 

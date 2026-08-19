@@ -37,24 +37,24 @@ void UnfoldKernel(const Context& dev_ctx,
     return;
   }
 
-  phi::funcs::Im2ColFunctor<phi::funcs::ColFormat::kCFO, Context, T> im2col;
+  funcs::Im2ColFunctor<funcs::ColFormat::CFO, Context, T> im2col;
   const auto& x_dims = x.dims();
 
-  int64_t out_height = phi::funcs::CalcOutputSize(x_dims[2],
-                                                  kernel_sizes[0],
-                                                  dilations[0],
-                                                  paddings[0],
-                                                  paddings[2],
-                                                  strides[0]);
-  int64_t out_width = phi::funcs::CalcOutputSize(x_dims[3],
-                                                 kernel_sizes[1],
-                                                 dilations[1],
-                                                 paddings[1],
-                                                 paddings[3],
-                                                 strides[1]);
+  int64_t out_height = funcs::CalcOutputSize(x_dims[2],
+                                             kernel_sizes[0],
+                                             dilations[0],
+                                             paddings[0],
+                                             paddings[2],
+                                             strides[0]);
+  int64_t out_width = funcs::CalcOutputSize(x_dims[3],
+                                            kernel_sizes[1],
+                                            dilations[1],
+                                            paddings[1],
+                                            paddings[3],
+                                            strides[1]);
 
-  DDim x_shape = common::make_ddim({x_dims[1], x_dims[2], x_dims[3]});
-  DDim out_matrix_shape = common::make_ddim(
+  DDim x_shape = make_ddim({x_dims[1], x_dims[2], x_dims[3]});
+  DDim out_matrix_shape = make_ddim(
       {x_dims[1], kernel_sizes[0], kernel_sizes[1], out_height, out_width});
 
   for (int64_t i = 0; i < batch_size; i++) {

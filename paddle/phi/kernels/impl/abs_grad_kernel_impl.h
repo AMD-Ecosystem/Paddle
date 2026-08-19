@@ -39,14 +39,14 @@ struct AbsGradCUDAFunctor {
 };
 
 template <>
-struct AbsGradCUDAFunctor<phi::bfloat16> {
+struct AbsGradCUDAFunctor<bfloat16> {
   HOSTDEVICE inline AbsGradCUDAFunctor() {}
 
-  HOSTDEVICE inline phi::bfloat16 operator()(const phi::bfloat16 x,
-                                             const phi::bfloat16 dout) const {
-    phi::bfloat16 output;
-    if (x == phi::bfloat16(0)) {
-      output = static_cast<phi::bfloat16>(0);
+  HOSTDEVICE inline bfloat16 operator()(const bfloat16 x,
+                                        const bfloat16 dout) const {
+    bfloat16 output;
+    if (x == bfloat16(0)) {
+      output = static_cast<bfloat16>(0);
     } else {
       output = (dout) * (x / abs(x));
     }
@@ -55,30 +55,30 @@ struct AbsGradCUDAFunctor<phi::bfloat16> {
 };
 
 template <>
-struct AbsGradCUDAFunctor<phi::complex64> {
+struct AbsGradCUDAFunctor<complex64> {
   HOSTDEVICE inline AbsGradCUDAFunctor() {}
-  HOSTDEVICE inline phi::complex64 operator()(const phi::complex64 x,
-                                              const float dout) const {
-    phi::complex64 output;
-    if (x == phi::complex64(0)) {
-      output = phi::complex64(0);
+  HOSTDEVICE inline complex64 operator()(const complex64 x,
+                                         const float dout) const {
+    complex64 output;
+    if (x == complex64(0)) {
+      output = complex64(0);
     } else {
-      output = phi::complex64(dout) * (x / phi::complex64(abs(x)));
+      output = complex64(dout) * (x / complex64(abs(x)));
     }
     return output;
   }
 };
 
 template <>
-struct AbsGradCUDAFunctor<phi::complex128> {
+struct AbsGradCUDAFunctor<complex128> {
   HOSTDEVICE inline AbsGradCUDAFunctor() {}
-  HOSTDEVICE inline phi::complex128 operator()(const phi::complex128 x,
-                                               const double dout) const {
-    phi::complex128 output;
-    if (x == phi::complex128(0)) {
-      output = phi::complex128(0);
+  HOSTDEVICE inline complex128 operator()(const complex128 x,
+                                          const double dout) const {
+    complex128 output;
+    if (x == complex128(0)) {
+      output = complex128(0);
     } else {
-      output = phi::complex128(dout) * (x / phi::complex128(abs(x)));
+      output = complex128(dout) * (x / complex128(abs(x)));
     }
     return output;
   }
@@ -93,7 +93,7 @@ void AbsGradKernelImpl(const GPUContext& dev_ctx,
   std::vector<DenseTensor*> outs = {dx};
   dev_ctx.Alloc<T>(dx);
   AbsGradCUDAFunctor<T> abs_grad_cuda_functor;
-  phi::funcs::ElementwiseKernel<T>(dev_ctx, ins, &outs, abs_grad_cuda_functor);
+  funcs::ElementwiseKernel<T>(dev_ctx, ins, &outs, abs_grad_cuda_functor);
 }
 
 template <typename T, typename Context>
@@ -110,14 +110,14 @@ void AbsGradKernel(const Context& dev_ctx,
                    const DenseTensor& dout,
                    DenseTensor* dx) {
   auto numel = dout.numel();
-  auto* dout_data = dout.data<phi::dtype::Real<T>>();
+  auto* dout_data = dout.data<dtype::Real<T>>();
   auto* x_data = x.data<T>();
 
   dev_ctx.template Alloc<T>(dx, static_cast<size_t>(numel * sizeof(T)));
   auto* dx_data = dx->data<T>();
 
-  phi::funcs::ForRange<Context> for_range(dev_ctx, numel);
-  phi::funcs::AbsGradFunctor<T> functor(dout_data, x_data, dx_data, numel);
+  funcs::ForRange<Context> for_range(dev_ctx, numel);
+  funcs::AbsGradFunctor<T> functor(dout_data, x_data, dx_data, numel);
   for_range(functor);
 }
 
@@ -133,9 +133,8 @@ void AbsDoubleGradKernel(const Context& dev_ctx,
   dev_ctx.template Alloc<T>(ddout, static_cast<size_t>(numel * sizeof(T)));
   auto* ddout_data = ddout->data<T>();
 
-  phi::funcs::ForRange<Context> for_range(dev_ctx, numel);
-  phi::funcs::AbsGradGradFunctor<T> functor(
-      ddx_data, x_data, ddout_data, numel);
+  funcs::ForRange<Context> for_range(dev_ctx, numel);
+  funcs::AbsGradGradFunctor<T> functor(ddx_data, x_data, ddout_data, numel);
   for_range(functor);
 }
 

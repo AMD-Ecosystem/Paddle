@@ -19,13 +19,10 @@
 #include "paddle/common/layout.h"
 #include "paddle/phi/backends/context_pool.h"
 #include "paddle/phi/backends/onednn/onednn_context.h"
-#include "paddle/phi/common/place.h"
-#include "paddle/phi/core/dense_tensor.h"
-
-#ifdef PADDLE_WITH_DNNL
 #include "paddle/phi/backends/onednn/onednn_helper.h"
 #include "paddle/phi/backends/onednn/onednn_reuse.h"
-#endif
+#include "paddle/phi/common/place.h"
+#include "paddle/phi/core/dense_tensor.h"
 
 namespace phi::funcs {
 
@@ -53,9 +50,9 @@ void* GetDataFromTensor(const DenseTensor& tensor,
 // reference dense tensor and a target layout. For 0-D tensor case, we will
 // construct a 1-D memory descriptor with shape [1], since oneDNN didn't support
 // 0-D now.
-dnnl::memory::desc make_memory_desc(const phi::DenseTensor& ref_tensor,
-                                    phi::DataLayout target_layout) {
-  auto ref_dims = common::vectorize<int64_t>(ref_tensor.dims());
+dnnl::memory::desc make_memory_desc(const DenseTensor& ref_tensor,
+                                    DataLayout target_layout) {
+  auto ref_dims = vectorize<int64_t>(ref_tensor.dims());
   auto ref_type = ToOneDNNDataType(ref_tensor.dtype());
   PADDLE_ENFORCE_NE(ref_type,
                     OneDNNDataType::undef,
@@ -82,7 +79,7 @@ void TransDataLayoutFromOneDNN(DataLayout in_layout,
   auto& pool = DeviceContextPool::Instance();
   auto* dev_ctx = dynamic_cast<OneDNNContext*>(pool.Get(place));
   auto& cpu_engine = dev_ctx->GetEngine();
-  auto in_dims = common::vectorize<int64_t>(in.dims());
+  auto in_dims = vectorize<int64_t>(in.dims());
 
   auto md_dims = !in_dims.empty() ? in_dims : std::vector<int64_t>{1};
   const auto src_mem_desc =
@@ -100,7 +97,7 @@ void TransDataLayoutFromOneDNN(DataLayout in_layout,
   // Note(0x45f): Using initialized() to support slice Tensors
   // with shapes like [0, 0, 0].
   if (in.initialized() && ((in.mem_desc() != out->mem_desc()) || always_copy)) {
-    auto in_tz = common::vectorize<int64_t>(in.dims());
+    auto in_tz = vectorize<int64_t>(in.dims());
     auto in_type = ToOneDNNDataType(in.dtype());
     void* in_data = GetDataFromTensor(in, in_type);
 

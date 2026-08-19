@@ -21,11 +21,11 @@ namespace phi::funcs {
  * each dimension must be the same, except the axis dimension.
  */
 template <typename T>
-struct ConcatFunctor<phi::CPUContext, T> {
-  void operator()(const phi::CPUContext& context,
-                  const std::vector<phi::DenseTensor>& input,
+struct ConcatFunctor<CPUContext, T> {
+  void operator()(const CPUContext& context,
+                  const std::vector<DenseTensor>& input,
                   int axis,
-                  phi::DenseTensor* output) {
+                  DenseTensor* output) {
     // TODO(zcd): Add input data validity checking
     size_t num = input.size();
 
@@ -72,13 +72,13 @@ struct ConcatFunctor<phi::CPUContext, T> {
  * each dimension must be the same, except the axis dimension.
  */
 template <typename T>
-struct SplitFunctor<phi::CPUContext, T> {
+struct SplitFunctor<CPUContext, T> {
  public:
-  void operator()(const phi::CPUContext& context,
-                  const phi::DenseTensor& input,
-                  const std::vector<const phi::DenseTensor*>& ref_inputs,
+  void operator()(const CPUContext& context,
+                  const DenseTensor& input,
+                  const std::vector<const DenseTensor*>& ref_inputs,
                   int axis,
-                  std::vector<phi::DenseTensor*>* outputs) {
+                  std::vector<DenseTensor*>* outputs) {
     // NOTE(zhiqiu): split a tensor of shape [0,3,4] at axis=1, result in 3
     // tensors of shape [0,1,4]
     if (input.numel() == 0) {
@@ -125,9 +125,9 @@ struct SplitFunctor<phi::CPUContext, T> {
   }
 };
 
-#define DEFINE_FUNCTOR(type)                                      \
-  template class PADDLE_API ConcatFunctor<phi::CPUContext, type>; \
-  template class PADDLE_API SplitFunctor<phi::CPUContext, type>;
+#define DEFINE_FUNCTOR(type)                                 \
+  template class PADDLE_API ConcatFunctor<CPUContext, type>; \
+  template class PADDLE_API SplitFunctor<CPUContext, type>;
 
 FOR_ALL_TYPES(DEFINE_FUNCTOR);
 

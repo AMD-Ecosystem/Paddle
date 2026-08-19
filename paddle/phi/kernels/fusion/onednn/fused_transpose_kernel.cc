@@ -47,7 +47,7 @@ void SetInMemDescWithSqueeze2FuseSupport(
   }
 
   in->set_mem_desc(in_md.reshape(squeezed_op_tz));
-  in->Resize(common::make_ddim(squeezed_op_tz));
+  in->Resize(squeezed_op_tz);
 }
 
 template <typename T, typename Context>
@@ -66,7 +66,7 @@ void FusedTransposeKernel(const Context& dev_ctx,
   auto x_dims = x.dims();
   if ((x_dims.size() >= 3) &&
       (phi::OneDNNContext::tls().get_cur_paddle_data_layout() ==
-       phi::DataLayout::NHWC)) {
+       DataLayout::NHWC)) {
     int axis_size = static_cast<int>(axis.size());
     std::vector<int> formatted_axis = axis;
     std::vector<int> count(axis_size, 0);
@@ -75,14 +75,13 @@ void FusedTransposeKernel(const Context& dev_ctx,
         formatted_axis[i] = axis[i] + axis_size;
       }
     }
-    auto dims = common::vectorize<int>(x_dims);
+    auto dims = vectorize<int>(x_dims);
 
     std::rotate(dims.begin() + 1, dims.begin() + 2, dims.end());
     x_dims = x_dims.reshape(dims);
-    VLOG(3)
-        << "Rotating Shape in Transpose from: kMKLDNN to: kNHWC output_shape";
+    VLOG(3) << "Rotating Shape in Transpose from: ONEDNN to: NHWC output_shape";
 
-    phi::DDim out_dims(x_dims);
+    DDim out_dims(x_dims);
     for (size_t i = 0; i < axis.size(); i++) {
       out_dims[i] = x_dims[formatted_axis[i]];  // NOLINT
     }
@@ -106,7 +105,7 @@ void FusedTransposeKernel(const Context& dev_ctx,
     return;
   }
 
-  auto x_vec_dims = common::vectorize(x.dims());
+  auto x_vec_dims = vectorize(x.dims());
   auto x_type = funcs::ToOneDNNDataType(x.dtype());
 
   dnnl::primitive_attr attrs;
@@ -187,7 +186,7 @@ void FusedTransposeKernel(const Context& dev_ctx,
         fused_reshape2_shape, out, out_md);
   } else if (!fused_squeeze2_axes.empty()) {
     out->set_mem_desc(out_md);
-    out->Resize(common::make_ddim(out_md.get_dims()));
+    out->Resize(out_md.get_dims());
   } else {
     out->set_mem_desc(out_md);
   }

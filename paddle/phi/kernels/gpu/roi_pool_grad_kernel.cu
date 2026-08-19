@@ -14,6 +14,7 @@
 
 #include "paddle/phi/kernels/roi_pool_grad_kernel.h"
 
+#include "paddle/phi/backends/gpu/cuda/cuda_graph_with_memory_pool.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/backends/gpu/gpu_launch_config.h"
 #include "paddle/phi/backends/gpu/gpu_primitives.h"
@@ -68,9 +69,8 @@ __global__ void GPURoiPoolBackward(const IndexType nthreads,
 
     int64_t arg_max = offset_arg_max_data[ph * pooled_width + pw];
     if (arg_max != -1) {
-      phi::CudaAtomicAdd(
-          offset_input_grad + arg_max,
-          static_cast<T>(offset_output_grad[ph * pooled_width + pw]));
+      CudaAtomicAdd(offset_input_grad + arg_max,
+                    static_cast<T>(offset_output_grad[ph * pooled_width + pw]));
     }
   }
 }
@@ -79,7 +79,7 @@ template <typename T, typename Context>
 void RoiPoolGradKernel(const Context& dev_ctx,
                        const DenseTensor& x,
                        const DenseTensor& boxes,
-                       const paddle::optional<DenseTensor>& boxes_num,
+                       const optional<DenseTensor>& boxes_num,
                        const DenseTensor& arg_max,
                        const DenseTensor& out_grad,
                        int pooled_height,
@@ -93,8 +93,7 @@ void RoiPoolGradKernel(const Context& dev_ctx,
   int64_t rois_num = boxes.dims()[0];
 
   if (x.numel() == 0 || boxes.numel() == 0) {
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(dx->dims())), 0, dx);
+    Full<T, Context>(dev_ctx, dx->dims(), 0, dx);
     return;
   }
 
@@ -111,7 +110,7 @@ void RoiPoolGradKernel(const Context& dev_ctx,
       // upgraded.
 
       std::vector<int> boxes_num_list(boxes_batch_size);
-      memory_utils::Copy(phi::CPUPlace(),
+      memory_utils::Copy(CPUPlace(),
                          boxes_num_list.data(),
                          gplace,
                          boxes_num->data<int>(),
@@ -139,10 +138,13 @@ void RoiPoolGradKernel(const Context& dev_ctx,
         bytes,
         phi::Stream(reinterpret_cast<phi::StreamId>(dev_ctx.stream())));
     int* roi_id_data = reinterpret_cast<int*>(roi_ptr->ptr());
+    const int* stable_box_batch_id =
+        phi::backends::gpu::RestoreHostMemIfCapturingCUDAGraph(
+            box_batch_id_data, static_cast<size_t>(bytes / sizeof(int)));
     memory_utils::Copy(gplace,
                        roi_id_data,
-                       phi::CPUPlace(),
-                       box_batch_id_data,
+                       CPUPlace(),
+                       stable_box_batch_id,
                        bytes,
                        dev_ctx.stream());
 

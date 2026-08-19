@@ -63,7 +63,7 @@ static int ConvertDataByType(const T1* x,
 }
 
 template <typename Context, typename T>
-static void GetDataPointer(const phi::DenseTensor& tensorData,
+static void GetDataPointer(const DenseTensor& tensorData,
                            T** result,
                            const Context& dev_ctx,
                            xpu::ctx_guard* ctx_guard) {
@@ -91,7 +91,7 @@ static void GetOutDataPointer(DenseTensor* tensorData,
 
 template <typename Context, typename T>
 static void CopyOutData(const DenseTensor& srcTensor,
-                        phi::DenseTensor* dstTensor,
+                        DenseTensor* dstTensor,
                         const Context& dev_ctx,
                         xpu::ctx_guard* ctx_guard) {
   if (dstTensor->dtype() == DataType::FLOAT16) {
@@ -106,8 +106,8 @@ static void CopyOutData(const DenseTensor& srcTensor,
 }
 
 template <typename Context, typename T>
-static void SetBetaData(const phi::DenseTensor& beta_pow,
-                        phi::DenseTensor* beta_pow_out,
+static void SetBetaData(const DenseTensor& beta_pow,
+                        DenseTensor* beta_pow_out,
                         const T& beta,
                         const Context& dev_ctx) {
   if (beta_pow.dtype() == DataType::FLOAT16) {
@@ -121,8 +121,8 @@ static void SetBetaData(const phi::DenseTensor& beta_pow,
 }
 
 template <typename Context, typename T>
-static void Scale(phi::DenseTensor* beta_pow_out,
-                  const phi::DenseTensor& beta_pow,
+static void Scale(DenseTensor* beta_pow_out,
+                  const DenseTensor& beta_pow,
                   T* beta_pow_ptr,
                   const T& beta,
                   const Context& dev_ctx,
@@ -130,8 +130,8 @@ static void Scale(phi::DenseTensor* beta_pow_out,
   float16* beta_pow_out_p2 = dev_ctx.template Alloc<float16>(beta_pow_out);
 
   DenseTensor xpu_beta_pow_out;
-  const phi::DenseTensorMeta meta_beta_pow_out(DataType::FLOAT32,
-                                               beta_pow_out->dims());
+  const DenseTensorMeta meta_beta_pow_out(DataType::FLOAT32,
+                                          beta_pow_out->dims());
   xpu_beta_pow_out.set_meta(meta_beta_pow_out);
 
   T* beta_pow_out_ptr = dev_ctx.template Alloc<T>(&xpu_beta_pow_out);
@@ -366,7 +366,7 @@ class SparseAdamFunctor<T, GPUAdam, MT> {
   MT* moment2_out_;
   const MT* moment2_max_;
   MT* moment2_max_out_;
-  const MT* lr_;
+  const double* lr_;
   const T* grad_;
   const T* param_;
   T* param_out_;
@@ -391,7 +391,7 @@ class SparseAdamFunctor<T, GPUAdam, MT> {
                     MT* mom2_out,
                     const MT* mom2_max,
                     MT* mom2_max_out,
-                    const MT* lr,
+                    const double* lr,
                     const T* grad,
                     const T* param,
                     T* param_out,
@@ -430,7 +430,7 @@ class SparseAdamFunctor<T, GPUAdam, MT> {
     MT mom1 = moment1_[i];
     MT mom2 = moment2_[i];
 
-    MT lr = *lr_;
+    MT lr = static_cast<MT>(*lr_);
     MT beta1_pow = *beta1_pow_;
     MT beta2_pow = *beta2_pow_;
     MT p = master_param_ ? master_param_[i] : static_cast<MT>(param_[i]);
@@ -465,7 +465,7 @@ class SparseAdamFunctor<T, GPUAdam, MT> {
 
   inline HOSTDEVICE void operator()(size_t i) const {
     auto row_idx =
-        phi::funcs::BinarySearch<int64_t>(rows_, row_count_, i / row_numel_);
+        funcs::BinarySearch<int64_t>(rows_, row_count_, i / row_numel_);
     if (lazy_mode_ && row_idx < 0) {
       return;
     } else {
@@ -775,7 +775,7 @@ class SparseAdamWFunctor<T, GPUAdamW, MT> {
 
   inline HOSTDEVICE void operator()(size_t i) const {
     auto row_idx =
-        phi::funcs::BinarySearch<int64_t>(rows_, row_count_, i / row_numel_);
+        funcs::BinarySearch<int64_t>(rows_, row_count_, i / row_numel_);
     if (lazy_mode_ && row_idx < 0) {
       return;
     } else {

@@ -118,7 +118,7 @@ class AdamW(Optimizer):
         **Currently, AdamW doesn't support sparse parameter optimization.**
 
     Examples:
-        .. code-block:: python
+        .. code-block:: pycon
 
             >>> import paddle
 
@@ -335,6 +335,9 @@ class AdamW(Optimizer):
             return self._auxiliary_vars[key]
         else:
             return None
+
+    def get_lr_dtype(self) -> paddle.dtype:
+        return paddle.float64
 
     def _add_param_group(self, param_group):
         """
@@ -641,15 +644,17 @@ class AdamW(Optimizer):
             None
 
         Examples:
-            .. code-block:: python
+            .. code-block:: pycon
 
                 >>> import paddle
 
-                >>> a = paddle.rand([2,13], dtype="float32")
+                >>> a = paddle.rand([2, 13], dtype="float32")
                 >>> linear = paddle.nn.Linear(13, 5)
                 >>> # This can be any optimizer supported by dygraph.
-                >>> opt = paddle.optimizer.AdamW(learning_rate = 0.01,
-                ...                             parameters = linear.parameters())
+                >>> opt = paddle.optimizer.AdamW(
+                ...     learning_rate=0.01,
+                ...     parameters=linear.parameters(),
+                ... )
                 >>> out = linear(a)
                 >>> out.backward()
                 >>> opt.step()

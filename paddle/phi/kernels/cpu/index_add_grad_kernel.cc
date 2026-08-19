@@ -32,11 +32,7 @@ void IndexAddGradKernel(const Context& dev_ctx,
   if (out_grad.numel() == 0) {
     dev_ctx.template Alloc<T>(x_grad);
     if (add_value_grad) {
-      phi::Full<T, Context>(
-          dev_ctx,
-          phi::IntArray(common::vectorize(add_value_grad->dims())),
-          0,
-          add_value_grad);
+      Full<T, Context>(dev_ctx, add_value_grad->dims(), 0, add_value_grad);
     }
     return;
   }
@@ -46,29 +42,29 @@ void IndexAddGradKernel(const Context& dev_ctx,
   const auto& index_type = index.dtype();
 
   bool index_type_match =
-      index_type == phi::DataType::INT32 || index_type == phi::DataType::INT64;
+      index_type == DataType::INT32 || index_type == DataType::INT64;
   PADDLE_ENFORCE_EQ(index_type_match,
                     true,
                     common::errors::InvalidArgument(
                         "Input(Index) holds the wrong type, it holds %s, but "
                         "desires to be %s or %s",
                         index_type,
-                        phi::DataType::INT32,
-                        phi::DataType::INT64));
+                        DataType::INT32,
+                        DataType::INT64));
 
   // get x_grad: copy out_grad to x_grad.
   if (x_grad) {
     dev_ctx.template Alloc<T>(x_grad);
-    phi::Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, x_grad);
+    Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, x_grad);
   }
 
   if (add_value_grad) {
     auto inputs = out_grad;
     // get add_value_grad by using index_select(out_grad, index, axis)
-    if (index_type == phi::DataType::INT32) {
+    if (index_type == DataType::INT32) {
       IndexSelectInner<Context, T, int>(
           dev_ctx, &inputs, index, add_value_grad, axis);
-    } else if (index_type == phi::DataType::INT64) {
+    } else if (index_type == DataType::INT64) {
       IndexSelectInner<Context, T, int64_t>(
           dev_ctx, &inputs, index, add_value_grad, axis);
     }

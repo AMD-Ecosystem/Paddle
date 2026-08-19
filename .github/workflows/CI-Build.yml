@@ -16,12 +16,37 @@ env:
   COMMIT_ID: ${{ github.event.pull_request.head.sha }}
 
 jobs:
+  check-skill:
+    name: Check file paths
+    if: ${{ github.repository_owner == 'PaddlePaddle' }}
+    runs-on:
+      group: APPROVAL
+    continue-on-error: true
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      can-skip: ${{ steps.skip-skill.outputs.should-skip || 'false' }}
+    steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Run skip check
+        id: skip-skill
+        uses: ./.github/actions/skip-skill
+        with:
+          ignore-paths: '.agents/skills/**'
+
   clone:
     name: Clone-linux
+    needs: check-skill
     uses: ./.github/workflows/_Clone-linux.yml
     with:
       clone_dir: Paddle-build
       workflow-name: 'CI-build'
+      skill-can-skip: ${{ needs.check-skill.outputs.can-skip }}
 
   build-docker:
     name: build docker images
@@ -45,13 +70,15 @@ jobs:
     needs: [clone, build-docker]
     with:
       docker_build_image: ${{ needs.build-docker.outputs.docker_build_image }}
+      clone-can-skip: ${{ needs.clone.outputs.can-skip }}
 
   static-check:
     name: Static-Check
     uses: ./.github/workflows/_Static-Check.yml
     needs: [clone, build-docker, build]
     with:
-      can-skip: ${{ needs.build.outputs.can-skip }}
+      build-can-skip: ${{ needs.build.outputs.can-skip }}
+      can-skip: ${{ needs.clone.outputs.can-skip == 'true' }}
       docker_build_image: ${{ needs.build-docker.outputs.docker_build_image }}
 
   ce-framework:
@@ -59,7 +86,8 @@ jobs:
     uses: ./.github/workflows/_CE-Framework.yml
     needs: [clone, build-docker, build]
     with:
-      can-skip: ${{ needs.build.outputs.can-skip }}
+      build-can-skip: ${{ needs.build.outputs.can-skip }}
+      can-skip: ${{ needs.clone.outputs.can-skip == 'true' }}
       docker_build_image: ${{ needs.build-docker.outputs.docker_build_image }}
 
   ce-cinn-framework:
@@ -67,7 +95,8 @@ jobs:
     uses: ./.github/workflows/_CE-CINN-Framework.yml
     needs: [clone, build-docker, build]
     with:
-      can-skip: ${{ needs.build.outputs.can-skip }}
+      build-can-skip: ${{ needs.build.outputs.can-skip }}
+      can-skip: ${{ needs.clone.outputs.can-skip == 'true' }}
       docker_build_image: ${{ needs.build-docker.outputs.docker_build_image }}
 
   api-benchmark:
@@ -75,23 +104,25 @@ jobs:
     uses: ./.github/workflows/_Api-Benchmark.yml
     needs: [clone, build-docker, build]
     with:
-      can-skip: ${{ needs.build.outputs.can-skip }}
+      build-can-skip: ${{ needs.build.outputs.can-skip }}
+      can-skip: ${{ needs.clone.outputs.can-skip == 'true' }}
       docker_build_image: ${{ needs.build-docker.outputs.docker_build_image }}
 
-  auto-parallel:
-    name: Auto-Parallel
-    uses: ./.github/workflows/_Auto-Parallel.yml
-    needs: [clone, build-docker, build]
-    with:
-      can-skip: ${{ needs.build.outputs.can-skip }}
-      docker_build_image: ${{ needs.build-docker.outputs.docker_build_image }}
+  # auto-parallel:
+  #   name: Auto-Parallel
+  #   uses: ./.github/workflows/_Auto-Parallel.yml
+  #   needs: [clone, build-docker, build]
+  #   with:
+  #     can-skip: ${{ needs.build.outputs.can-skip }}
+  #     docker_build_image: ${{ needs.build-docker.outputs.docker_build_image }}
 
   model-benchmark:
     name: Model-Benchmark
     uses: ./.github/workflows/_Model-Benchmark.yml
     needs: [clone, build-docker, build]
     with:
-      can-skip: ${{ needs.build.outputs.can-skip }}
+      build-can-skip: ${{ needs.build.outputs.can-skip }}
+      can-skip: ${{ needs.clone.outputs.can-skip == 'true' }}
       docker_build_image: ${{ needs.build-docker.outputs.docker_build_image }}
 
   doc-preview:
@@ -99,7 +130,8 @@ jobs:
     uses: ./.github/workflows/_Doc-Preview.yml
     needs: [clone, build-docker, build]
     with:
-      can-skip: ${{ needs.build.outputs.can-skip }}
+      build-can-skip: ${{ needs.build.outputs.can-skip }}
+      can-skip: ${{ needs.clone.outputs.can-skip == 'true' }}
       docker_doc_image: ${{ needs.build-docker.outputs.docker_doc_image }}
 
   slice:
@@ -107,7 +139,8 @@ jobs:
     uses: ./.github/workflows/_Slice.yml
     needs: [clone, build-docker, build]
     with:
-      can-skip: ${{ needs.build.outputs.can-skip }}
+      build-can-skip: ${{ needs.build.outputs.can-skip }}
+      can-skip: ${{ needs.clone.outputs.can-skip == 'true' }}
       docker_build_image: ${{ needs.build-docker.outputs.docker_build_image }}
       slice-check: ${{ needs.clone.outputs.slice-check }}
 
@@ -116,5 +149,6 @@ jobs:
     uses: ./.github/workflows/_Deepmd-pd-test.yml
     needs: [clone, build-docker, build]
     with:
-      can-skip: ${{ needs.build.outputs.can-skip }}
+      build-can-skip: ${{ needs.build.outputs.can-skip }}
+      can-skip: ${{ needs.clone.outputs.can-skip == 'true' }}
       docker_build_image: ${{ needs.build-docker.outputs.docker_build_image }}

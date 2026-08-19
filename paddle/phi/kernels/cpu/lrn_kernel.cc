@@ -18,21 +18,19 @@
 #include <string>
 #include <vector>
 
+#include "paddle/phi/backends/onednn/onednn_helper.h"
 #include "paddle/phi/core/kernel_registry.h"
 #include "paddle/phi/kernels/funcs/blas/blas.h"
 #include "paddle/phi/kernels/funcs/math_function.h"
-#ifdef PADDLE_WITH_DNNL
-#include "paddle/phi/backends/onednn/onednn_helper.h"
-#endif
 
 namespace phi {
 
 template <typename T>
-struct LRNFunctor<phi::CPUContext, T> {
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const phi::DenseTensor& input,
-                  phi::DenseTensor* out,
-                  phi::DenseTensor* mid,
+struct LRNFunctor<CPUContext, T> {
+  void operator()(const CPUContext& dev_ctx,
+                  const DenseTensor& input,
+                  DenseTensor* out,
+                  DenseTensor* mid,
                   int64_t N,
                   int64_t C,
                   int64_t H,
@@ -42,17 +40,17 @@ struct LRNFunctor<phi::CPUContext, T> {
                   T alpha,
                   T beta,
                   const DataLayout data_layout) {
-    auto blas = funcs::GetBlas<phi::CPUContext, T>(dev_ctx);
-    funcs::Transpose<phi::CPUContext, T, 4> transpose;
-    phi::DenseTensor in_transpose, mid_transpose, out_transpose;
+    auto blas = funcs::GetBlas<CPUContext, T>(dev_ctx);
+    funcs::Transpose<CPUContext, T, 4> transpose;
+    DenseTensor in_transpose, mid_transpose, out_transpose;
     // if channel_last, transpose to channel_first
     if (data_layout == DataLayout::NHWC) {
       auto in_dims = input.dims();
       std::vector<int64_t> shape(
           {in_dims[0], in_dims[3], in_dims[1], in_dims[2]});
-      in_transpose.Resize(common::make_ddim(shape));
-      mid_transpose.Resize(common::make_ddim(shape));
-      out_transpose.Resize(common::make_ddim(shape));
+      in_transpose.Resize(shape);
+      mid_transpose.Resize(shape);
+      out_transpose.Resize(shape);
       dev_ctx.Alloc<T>(&in_transpose);
       dev_ctx.Alloc<T>(&mid_transpose);
       dev_ctx.Alloc<T>(&out_transpose);
@@ -72,7 +70,7 @@ struct LRNFunctor<phi::CPUContext, T> {
     T* odata = out_transpose.data<T>();
     T* mdata = mid_transpose.data<T>();
 
-    phi::DenseTensor squared;
+    DenseTensor squared;
     squared.Resize({1, C + n - 1, H, W});
     T* sdata = dev_ctx.Alloc<T>(&squared);
     std::memset(sdata, 0, sizeof(T) * squared.numel());
@@ -117,8 +115,8 @@ struct LRNFunctor<phi::CPUContext, T> {
     }
   }
 };
-template struct LRNFunctor<phi::CPUContext, float>;
-template struct LRNFunctor<phi::CPUContext, double>;
+template struct LRNFunctor<CPUContext, float>;
+template struct LRNFunctor<CPUContext, double>;
 }  // namespace phi
 
 PD_REGISTER_KERNEL(lrn, CPU, ALL_LAYOUT, phi::LRNKernel, float) {}

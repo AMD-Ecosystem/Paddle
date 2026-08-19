@@ -44,7 +44,7 @@ void PNormGradKernel(const Context& dev_ctx,
                      const DenseTensor& x,
                      const DenseTensor& out,
                      const DenseTensor& out_grad,
-                     float porder,
+                     double porder,
                      int axis,
                      float epsilon,
                      bool keepdim UNUSED,
@@ -55,6 +55,9 @@ void PNormGradKernel(const Context& dev_ctx,
   auto* in_norm_dy = &out_grad;
   auto* out_dx = x_grad;
   dev_ctx.template Alloc<T>(out_dx);
+  if (out_dx->numel() == 0) {
+    return;
+  }
 
   T eps = static_cast<T>(epsilon);
   auto xdim = in_x->dims();
@@ -67,10 +70,10 @@ void PNormGradKernel(const Context& dev_ctx,
 
   auto* place = dev_ctx.eigen_device();
 
-  auto x_e = phi::EigenVector<T>::Flatten(*in_x);
-  auto dx_e = phi::EigenVector<T>::Flatten(*out_dx);
-  auto norm_e = phi::EigenVector<T>::Flatten(*in_norm);
-  auto norm_dy_e = phi::EigenVector<T>::Flatten(*in_norm_dy);
+  auto x_e = EigenVector<T>::Flatten(*in_x);
+  auto dx_e = EigenVector<T>::Flatten(*out_dx);
+  auto norm_e = EigenVector<T>::Flatten(*in_norm);
+  auto norm_dy_e = EigenVector<T>::Flatten(*in_norm_dy);
 
   auto xr = x_e.reshape(shape);
   auto dx = dx_e.reshape(shape);
@@ -88,8 +91,8 @@ void PNormGradKernel(const Context& dev_ctx,
                         xr.sign() * norm_dy.broadcast(bcast);
   } else {
     dx.device(*place) =
-        (xr.abs()).pow(porder - 1.0f) /
-        ((norm.broadcast(bcast)).pow(porder - 1.0f) + xr.constant(eps));
+        (xr.abs()).pow(porder - 1.0) /
+        ((norm.broadcast(bcast)).pow(porder - 1.0) + xr.constant(eps));
     dx.device(*place) = dx * norm_dy.broadcast(bcast) * xr.sign();
   }
 }

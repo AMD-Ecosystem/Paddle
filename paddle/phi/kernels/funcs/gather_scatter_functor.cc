@@ -96,23 +96,23 @@ inline T IntFloorDiv(T a, T b) {
 template <bool compute_both = false>
 class CoordinateManager {
  private:
-  const phi::DDim& shape;
-  const phi::DDim& strides1;
+  const DDim& shape;
+  const DDim& strides1;
   const int ndim;
   const int src_dim;
   int64_t last_offset;
   std::vector<int64_t> indices;
-  const phi::DDim* strides2;
+  const DDim* strides2;
 
  public:
   int64_t offset1;
   int64_t offset2;
 
-  CoordinateManager(const phi::DDim& _shape,
-                    const phi::DDim& _strides1,
+  CoordinateManager(const DDim& _shape,
+                    const DDim& _strides1,
                     int _ndim,
                     int _src_dim,
-                    const phi::DDim* _strides2 = nullptr)
+                    const DDim* _strides2 = nullptr)
       : shape(_shape),
         strides1(_strides1),
         ndim(_ndim),
@@ -174,23 +174,23 @@ class CoordinateManager {
 template <bool compute_both = false>
 class ReversedCoordinateManager {
  private:
-  const phi::DDim& shape;
-  const phi::DDim& strides1;
+  const DDim& shape;
+  const DDim& strides1;
   const int ndim;
   const int src_dim;
   int64_t last_offset;
   std::vector<int64_t> indices;
-  const phi::DDim* strides2;
+  const DDim* strides2;
 
  public:
   int64_t offset1;
   int64_t offset2;
 
-  ReversedCoordinateManager(const phi::DDim& _shape,
-                            const phi::DDim& _strides1,
+  ReversedCoordinateManager(const DDim& _shape,
+                            const DDim& _strides1,
                             int _ndim,
                             int _src_dim,
-                            const phi::DDim* _strides2 = nullptr)
+                            const DDim* _strides2 = nullptr)
       : shape(_shape),
         strides1(_strides1),
         ndim(_ndim),
@@ -250,14 +250,14 @@ template <typename tensor_t,
           bool is_scatter_like = true>
 struct cpu_gather_scatter_functor {
   template <typename func_t>
-  void operator()(phi::DenseTensor self,
+  void operator()(DenseTensor self,
                   int dim,
-                  const phi::DenseTensor& index,
-                  const phi::DenseTensor& src,
+                  const DenseTensor& index,
+                  const DenseTensor& src,
                   const std::string& method_name,
                   const func_t& reduce_op,
                   bool include_self,
-                  const phi::DeviceContext& dev_ctx UNUSED) {
+                  const DeviceContext& dev_ctx UNUSED) {
     if (index.numel() == 0) {
       return;
     }
@@ -372,12 +372,12 @@ struct cpu_gather_scatter_functor {
 };
 
 template <typename tensor_t, typename index_t>
-void cpu_gather_kernel(phi::DenseTensor self,
+void cpu_gather_kernel(DenseTensor self,
                        int dim,
-                       const phi::DenseTensor& index,
-                       phi::DenseTensor result,
+                       const DenseTensor& index,
+                       DenseTensor result,
                        bool include_self,
-                       const phi::DeviceContext& dev_ctx) {
+                       const DeviceContext& dev_ctx) {
   cpu_gather_scatter_functor<tensor_t,
                              index_t,
                              /*is_scatter_like=*/false>()(
@@ -385,12 +385,12 @@ void cpu_gather_kernel(phi::DenseTensor self,
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_assign_kernel(phi::DenseTensor self,
+void cpu_scatter_assign_kernel(DenseTensor self,
                                int dim,
-                               const phi::DenseTensor& index,
-                               phi::DenseTensor src,
+                               const DenseTensor& index,
+                               DenseTensor src,
                                bool include_self,
-                               const phi::DeviceContext& dev_ctx) {
+                               const DeviceContext& dev_ctx) {
   cpu_gather_scatter_functor<tensor_t,
                              index_t,
                              /*is_scatter_like=*/true>()(
@@ -398,12 +398,12 @@ void cpu_scatter_assign_kernel(phi::DenseTensor self,
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_add_kernel(phi::DenseTensor self,
+void cpu_scatter_add_kernel(DenseTensor self,
                             int dim,
-                            const phi::DenseTensor& index,
-                            phi::DenseTensor src,
+                            const DenseTensor& index,
+                            DenseTensor src,
                             bool include_self,
-                            const phi::DeviceContext& dev_ctx) {
+                            const DeviceContext& dev_ctx) {
   cpu_gather_scatter_functor<tensor_t,
                              index_t,
                              /*is_scatter_like=*/true>()(
@@ -411,12 +411,12 @@ void cpu_scatter_add_kernel(phi::DenseTensor self,
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_mul_kernel(phi::DenseTensor self,
+void cpu_scatter_mul_kernel(DenseTensor self,
                             int dim,
-                            const phi::DenseTensor& index,
-                            phi::DenseTensor src,
+                            const DenseTensor& index,
+                            DenseTensor src,
                             bool include_self,
-                            const phi::DeviceContext& dev_ctx) {
+                            const DeviceContext& dev_ctx) {
   cpu_gather_scatter_functor<tensor_t,
                              index_t,
                              /*is_scatter_like=*/true>()(
@@ -424,12 +424,12 @@ void cpu_scatter_mul_kernel(phi::DenseTensor self,
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_mean_kernel(phi::DenseTensor self,
+void cpu_scatter_mean_kernel(DenseTensor self,
                              int dim,
-                             const phi::DenseTensor& index,
-                             phi::DenseTensor src,
+                             const DenseTensor& index,
+                             DenseTensor src,
                              bool include_self,
-                             const phi::DeviceContext& dev_ctx) {
+                             const DeviceContext& dev_ctx) {
   cpu_gather_scatter_functor<tensor_t,
                              index_t,
                              /*is_scatter_like=*/true>()(
@@ -437,12 +437,12 @@ void cpu_scatter_mean_kernel(phi::DenseTensor self,
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_max_kernel(phi::DenseTensor self,
+void cpu_scatter_max_kernel(DenseTensor self,
                             int dim,
-                            const phi::DenseTensor& index,
-                            phi::DenseTensor src,
+                            const DenseTensor& index,
+                            DenseTensor src,
                             bool include_self,
-                            const phi::DeviceContext& dev_ctx) {
+                            const DeviceContext& dev_ctx) {
   cpu_gather_scatter_functor<tensor_t,
                              index_t,
                              /*is_scatter_like=*/true>()(
@@ -450,12 +450,12 @@ void cpu_scatter_max_kernel(phi::DenseTensor self,
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_min_kernel(phi::DenseTensor self,
+void cpu_scatter_min_kernel(DenseTensor self,
                             int dim,
-                            const phi::DenseTensor& index,
-                            phi::DenseTensor src,
+                            const DenseTensor& index,
+                            DenseTensor src,
                             bool include_self,
-                            const phi::DeviceContext& dev_ctx) {
+                            const DeviceContext& dev_ctx) {
   cpu_gather_scatter_functor<tensor_t,
                              index_t,
                              /*is_scatter_like=*/true>()(
@@ -463,12 +463,12 @@ void cpu_scatter_min_kernel(phi::DenseTensor self,
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_input_grad_kernel(phi::DenseTensor self UNUSED,
+void cpu_scatter_input_grad_kernel(DenseTensor self UNUSED,
                                    int dim,
-                                   const phi::DenseTensor& index,
-                                   phi::DenseTensor grad,
+                                   const DenseTensor& index,
+                                   DenseTensor grad,
                                    bool include_self UNUSED,
-                                   const phi::DeviceContext& dev_ctx UNUSED) {
+                                   const DeviceContext& dev_ctx UNUSED) {
   auto* index_data = index.data<index_t>();
   auto* grad_data = grad.data<tensor_t>();
 
@@ -485,17 +485,16 @@ void cpu_scatter_input_grad_kernel(phi::DenseTensor self UNUSED,
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_mul_min_max_input_grad_kernel(
-    phi::DenseTensor self UNUSED,
-    int dim,
-    const phi::DenseTensor& index,
-    const phi::DenseTensor& out,
-    const phi::DenseTensor& x,
-    const phi::DenseTensor& value,
-    phi::DenseTensor grad,
-    const std::string& reduce,
-    bool include_self UNUSED,
-    const phi::DeviceContext& dev_ctx) {
+void cpu_scatter_mul_min_max_input_grad_kernel(DenseTensor self UNUSED,
+                                               int dim,
+                                               const DenseTensor& index,
+                                               const DenseTensor& out,
+                                               const DenseTensor& x,
+                                               const DenseTensor& value,
+                                               DenseTensor grad,
+                                               const std::string& reduce,
+                                               bool include_self UNUSED,
+                                               const DeviceContext& dev_ctx) {
   auto* index_data = index.data<index_t>();
   auto* grad_data = grad.data<tensor_t>();
   auto* out_data = out.data<tensor_t>();
@@ -517,9 +516,14 @@ void cpu_scatter_mul_min_max_input_grad_kernel(
     cm.CalculateOffset(index);
     int64_t replace_index_grad = cm.offset1;
     if (is_mul && num_elements[replace_index_grad] == 0) {
-      grad_data[replace_index_grad] = static_cast<tensor_t>(
-          grad_data[replace_index_grad] * out_data[replace_index_grad] /
-          x_data[replace_index_grad]);
+      if (x_data[replace_index_grad] != static_cast<tensor_t>(0)) {
+        tensor_t val = grad_data[replace_index_grad];
+        val *= out_data[replace_index_grad];
+        val /= x_data[replace_index_grad];
+        grad_data[replace_index_grad] = static_cast<tensor_t>(val);
+      } else {
+        grad_data[replace_index_grad] = static_cast<tensor_t>(0);
+      }
       num_elements[replace_index_grad] += 1;
     } else if (!is_mul) {
       if (out_data[replace_index_grad] != x_data[replace_index_grad]) {
@@ -542,13 +546,12 @@ void cpu_scatter_mul_min_max_input_grad_kernel(
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_mean_input_grad_kernel(phi::DenseTensor self UNUSED,
+void cpu_scatter_mean_input_grad_kernel(DenseTensor self UNUSED,
                                         int dim,
-                                        const phi::DenseTensor& index,
-                                        phi::DenseTensor grad,
+                                        const DenseTensor& index,
+                                        DenseTensor grad,
                                         bool include_self UNUSED,
-                                        const phi::DeviceContext& dev_ctx
-                                            UNUSED) {
+                                        const DeviceContext& dev_ctx UNUSED) {
   auto* index_data = index.data<index_t>();
   auto* grad_data = grad.data<tensor_t>();
 
@@ -570,12 +573,12 @@ void cpu_scatter_mean_input_grad_kernel(phi::DenseTensor self UNUSED,
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_value_grad_kernel(phi::DenseTensor self,
+void cpu_scatter_value_grad_kernel(DenseTensor self,
                                    int dim,
-                                   const phi::DenseTensor& index,
-                                   phi::DenseTensor grad,
+                                   const DenseTensor& index,
+                                   DenseTensor grad,
                                    bool include_self UNUSED,
-                                   const phi::DeviceContext& dev_ctx UNUSED) {
+                                   const DeviceContext& dev_ctx UNUSED) {
   const auto* self_data = self.data<tensor_t>();
   auto* index_data = index.data<index_t>();
   auto* grad_data = grad.data<tensor_t>();
@@ -599,24 +602,23 @@ void cpu_scatter_value_grad_kernel(phi::DenseTensor self,
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_add_mean_value_grad_kernel(phi::DenseTensor self,
+void cpu_scatter_add_mean_value_grad_kernel(DenseTensor self,
                                             int dim,
-                                            const phi::DenseTensor& index,
-                                            const phi::DenseTensor& out UNUSED,
-                                            const phi::DenseTensor& x UNUSED,
-                                            const phi::DenseTensor& value
-                                                UNUSED,
-                                            phi::DenseTensor grad,
+                                            const DenseTensor& index,
+                                            const DenseTensor& out UNUSED,
+                                            const DenseTensor& x UNUSED,
+                                            const DenseTensor& value UNUSED,
+                                            DenseTensor grad,
                                             const std::string& reduce,
                                             bool include_self,
-                                            const phi::DeviceContext& dev_ctx) {
+                                            const DeviceContext& dev_ctx) {
   const auto* self_data = self.data<tensor_t>();
   auto* index_data = index.data<index_t>();
   auto* grad_data = grad.data<tensor_t>();
 
   int64_t self_size = self.numel();
 
-  phi::funcs::set_constant(dev_ctx, &grad, 0);
+  funcs::set_constant(dev_ctx, &grad, 0);
 
   std::vector<int> num_elements;
   const int ndim = index.dims().size();
@@ -654,17 +656,16 @@ void cpu_scatter_add_mean_value_grad_kernel(phi::DenseTensor self,
 }
 
 template <typename tensor_t, typename index_t>
-void cpu_scatter_mul_min_max_value_grad_kernel(
-    phi::DenseTensor self,
-    int dim,
-    const phi::DenseTensor& index,
-    const phi::DenseTensor& out,
-    const phi::DenseTensor& x,
-    const phi::DenseTensor& value,
-    phi::DenseTensor grad,
-    const std::string& reduce,
-    bool include_self,
-    const phi::DeviceContext& dev_ctx) {
+void cpu_scatter_mul_min_max_value_grad_kernel(DenseTensor self,
+                                               int dim,
+                                               const DenseTensor& index,
+                                               const DenseTensor& out,
+                                               const DenseTensor& x,
+                                               const DenseTensor& value,
+                                               DenseTensor grad,
+                                               const std::string& reduce,
+                                               bool include_self,
+                                               const DeviceContext& dev_ctx) {
   const auto* self_data = self.data<tensor_t>();
   auto* index_data = index.data<index_t>();
   auto* grad_data = grad.data<tensor_t>();
@@ -690,9 +691,13 @@ void cpu_scatter_mul_min_max_value_grad_kernel(
           out_data[replace_index_self] == value_data[replace_index_grad]) {
         num_elements[replace_index_self] += 1;
       } else if (!is_min_max) {
-        grad_data[replace_index_grad] =
-            self_data[replace_index_self] *
-            (out_data[replace_index_self] / value_data[replace_index_grad]);
+        if (value_data[replace_index_grad] != static_cast<tensor_t>(0)) {
+          grad_data[replace_index_grad] =
+              self_data[replace_index_self] *
+              (out_data[replace_index_self] / value_data[replace_index_grad]);
+        } else {
+          grad_data[replace_index_grad] = static_cast<tensor_t>(0);
+        }
       }
     }
   }

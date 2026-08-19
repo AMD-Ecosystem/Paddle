@@ -14,6 +14,7 @@
 
 #include "paddle/phi/kernels/roi_align_kernel.h"
 
+#include "paddle/phi/backends/gpu/cuda/cuda_graph_with_memory_pool.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/backends/gpu/gpu_launch_config.h"
 #include "paddle/phi/common/memory_utils.h"
@@ -144,7 +145,7 @@ template <typename T, typename Context>
 void RoiAlignKernel(const Context& dev_ctx,
                     const DenseTensor& x,
                     const DenseTensor& boxes,
-                    const paddle::optional<DenseTensor>& boxes_num,
+                    const optional<DenseTensor>& boxes_num,
                     int pooled_height,
                     int pooled_width,
                     float spatial_scale,
@@ -156,8 +157,7 @@ void RoiAlignKernel(const Context& dev_ctx,
     return;
   }
   if (x.numel() == 0) {
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(out->dims())), 0, out);
+    Full<T, Context>(dev_ctx, out->dims(), 0, out);
     return;
   }
   auto in_dims = x.dims();
@@ -182,7 +182,7 @@ void RoiAlignKernel(const Context& dev_ctx,
   DenseTensor roi_batch_id_list;
   roi_batch_id_list.Resize({rois_num});
   int* roi_batch_id_data = dev_ctx.template HostAlloc<int>(&roi_batch_id_list);
-  auto cplace = phi::CPUPlace();
+  auto cplace = CPUPlace();
   auto gplace = dev_ctx.GetPlace();
   if (boxes_num) {
     int64_t boxes_batch_size = boxes_num->numel();
@@ -196,7 +196,7 @@ void RoiAlignKernel(const Context& dev_ctx,
             boxes_batch_size,
             batch_size));
 
-    if (boxes_num->dtype() == phi::DataType::INT64) {
+    if (boxes_num->dtype() == DataType::INT64) {
       std::vector<int64_t> boxes_num_list(boxes_batch_size);
       memory_utils::Copy(cplace,
                          boxes_num_list.data(),
@@ -211,7 +211,7 @@ void RoiAlignKernel(const Context& dev_ctx,
         }
         start += boxes_num_list[n];
       }
-    } else if (boxes_num->dtype() == phi::DataType::INT32) {
+    } else if (boxes_num->dtype() == DataType::INT32) {
       std::vector<int> boxes_num_list(boxes_batch_size);
       memory_utils::Copy(cplace,
                          boxes_num_list.data(),
@@ -267,8 +267,15 @@ void RoiAlignKernel(const Context& dev_ctx,
       bytes,
       phi::Stream(reinterpret_cast<phi::StreamId>(dev_ctx.stream())));
   int* roi_id_data = reinterpret_cast<int*>(roi_ptr->ptr());
-  memory_utils::Copy(
-      gplace, roi_id_data, cplace, roi_batch_id_data, bytes, dev_ctx.stream());
+  const int* stable_roi_batch_id =
+      phi::backends::gpu::RestoreHostMemIfCapturingCUDAGraph(
+          roi_batch_id_data, static_cast<size_t>(bytes / sizeof(int)));
+  memory_utils::Copy(gplace,
+                     roi_id_data,
+                     cplace,
+                     stable_roi_batch_id,
+                     bytes,
+                     dev_ctx.stream());
   if (output_size > std::numeric_limits<int>::max() ||
       x.numel() > std::numeric_limits<int>::max()) {
     GPURoiAlignForward<T, int64_t><<<blocks, threads, 0, dev_ctx.stream()>>>(

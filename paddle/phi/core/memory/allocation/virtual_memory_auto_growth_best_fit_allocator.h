@@ -46,7 +46,7 @@ class VirtualMemoryAutoGrowthBestFitAllocator : public Allocator {
   VirtualMemoryAutoGrowthBestFitAllocator(
       const std::shared_ptr<Allocator> &underlying_allocator,
       size_t alignment,
-      const phi::GPUPlace &place);
+      const GPUPlace &place);
 
   std::shared_ptr<Allocator> &GetUnderLyingAllocator() {
     return underlying_allocator_;
@@ -68,11 +68,13 @@ class VirtualMemoryAutoGrowthBestFitAllocator : public Allocator {
 
   bool TryAllocateBatch(const std::vector<size_t> &sizes);
 
-  bool CollectTensorParts(void *ptr, std::vector<BlockPart> *parts);
+  bool CollectTensorParts(void *ptr,
+                          size_t size,
+                          std::vector<BlockPart> *parts);
 
  protected:
   phi::Allocation *AllocateImpl(size_t size) override;
-  size_t CompactImpl(const phi::Place &place) override;
+  size_t CompactImpl(const Place &place) override;
   void FreeImpl(phi::Allocation *allocation) override;
 
  private:
@@ -91,7 +93,7 @@ class VirtualMemoryAutoGrowthBestFitAllocator : public Allocator {
   std::map<std::pair<size_t, void *>, std::list<Block>::iterator> free_blocks_;
   std::list<Block> all_blocks_;
   std::list<AllocationPtr> allocations_;
-  phi::Place place_;
+  Place place_;
   SpinLock spinlock_;
 };
 
@@ -110,9 +112,10 @@ class VirtualMemoryAutoGrowthBestFitMultiScalePoolAllocator
       const std::shared_ptr<VirtualMemoryAutoGrowthBestFitAllocator>
           &large_allocator,
       size_t alignment,
-      const phi::GPUPlace &place)
+      const GPUPlace &place)
       : MultiScalePoolAllocator(
-            small_allocator, large_allocator, alignment, place) {}
+            small_allocator, large_allocator, alignment, place),
+        alignment_(alignment) {}
   bool IsAllocThreadSafe() const override { return true; }
   void PreAlloc() override;
   void Accept(AllocatorVisitor *visitor) override { visitor->Visit(this); }
@@ -120,9 +123,10 @@ class VirtualMemoryAutoGrowthBestFitMultiScalePoolAllocator
   std::vector<size_t> GetCompactSize() const { return compact_size_; }
 
  protected:
-  size_t CompactImpl(const phi::Place &place) override;
+  size_t CompactImpl(const Place &place) override;
 
  private:
+  size_t alignment_;
   std::vector<size_t> compact_size_;
 };
 

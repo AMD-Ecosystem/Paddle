@@ -25,7 +25,7 @@ namespace phi {
 template <typename T, typename Context>
 void HistogramKernel(const Context& dev_ctx,
                      const DenseTensor& input,
-                     const paddle::optional<DenseTensor>& weight,
+                     const optional<DenseTensor>& weight,
                      int64_t bins,
                      float min,
                      float max,
@@ -39,8 +39,7 @@ void HistogramKernel(const Context& dev_ctx,
   auto weight_data = weight.get_ptr() ? weight.get_ptr()->data<T>() : nullptr;
   auto input_numel = input.numel();
   if (input_numel == 0) {
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(output->dims())), 0, output);
+    Full<T, Context>(dev_ctx, output->dims(), 0, output);
     return;
   }
 
@@ -102,8 +101,8 @@ void HistogramKernel(const Context& dev_ctx,
       }
     }
     if (density) {
-      DenseTensor sum = phi::Sum<float, Context>(
-          dev_ctx, *output, phi::IntArray({0}), phi::DataType::FLOAT32, false);
+      DenseTensor sum = Sum<float, Context>(
+          dev_ctx, *output, IntArray({0}), DataType::FLOAT32, false);
       float* sum_data = sum.data<float>();
       float gap = static_cast<float>(nbins) /
                   static_cast<float>((output_max - output_min)) / *sum_data;

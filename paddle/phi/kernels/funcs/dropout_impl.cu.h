@@ -77,7 +77,7 @@ struct MaskFunctor {
 
   HOSTDEVICE inline void operator()(T* dst, const float* rand, int num) const {
     static constexpr int kCount =
-        phi::funcs::uniform_distribution<float>::kReturnsCount;
+        funcs::uniform_distribution<float>::kReturnsCount;
 // 0 ~ kCount - 1 is dst, kCount ~ 2 * kCount - 1 is mask
 #pragma unroll
     for (int i = 0; i < kCount; i++) {
@@ -103,7 +103,7 @@ struct DstMaskFunctor {
                                     const float* rand,
                                     int num) const {
     static constexpr int kCount =
-        phi::funcs::uniform_distribution<float>::kReturnsCount;
+        funcs::uniform_distribution<float>::kReturnsCount;
 // 0 ~ kCount - 1 is dst, kCount ~ 2 * kCount - 1 is mask
 #pragma unroll
     for (int i = 0; i < kCount; i++) {
@@ -140,7 +140,7 @@ __global__ void VectorizedRandomGenerator(
     size_t main_offset) {
   size_t idx = static_cast<size_t>(BLOCK_ID_X * BLOCK_NUM_X);
   static constexpr int kCount =
-      phi::funcs::uniform_distribution<float>::kReturnsCount;
+      funcs::uniform_distribution<float>::kReturnsCount;
   size_t stride = BLOCK_NUM_X * GRID_NUM_X * kCount;
 #ifdef PADDLE_WITH_HIP
   hiprandStatePhilox4_32_10_t state;
@@ -155,7 +155,7 @@ __global__ void VectorizedRandomGenerator(
              2];  // 0 ~ kCount - 1 : dst,  kCount ~ 2 * kCount - 1: mask
   float rands[kCount];
   uint8_t mask_result[kCount];
-  using Rand = phi::funcs::uniform_distribution<float>;
+  using Rand = funcs::uniform_distribution<float>;
   using Cast = kps::IdentityFunctor<T>;
   int deal_size = BLOCK_NUM_X * kCount;
 
@@ -209,7 +209,7 @@ __global__ void VectorizedGeneratorMask(const size_t n,
   // kCount is 4 for curand_uniform4 is used
   if (seed_ptr) seed = seed_ptr[0];
 
-  constexpr int kCount = phi::funcs::uniform_distribution<float>::kReturnsCount;
+  constexpr int kCount = funcs::uniform_distribution<float>::kReturnsCount;
   size_t idx = static_cast<size_t>(BLOCK_ID_X * BLOCK_NUM_X);
   size_t stride = BLOCK_NUM_X * GRID_NUM_X * kCount;
 #ifdef PADDLE_WITH_HIP
@@ -224,7 +224,7 @@ __global__ void VectorizedGeneratorMask(const size_t n,
   T dst_mask[kCount];  // 0 ~ kCount - 1 : dst,  kCount ~ 2 * kCount - 1: mask
   float rands[kCount];
   uint8_t mask_result[kCount];
-  using Rand = phi::funcs::uniform_distribution<float>;
+  using Rand = funcs::uniform_distribution<float>;
   using Cast = kps::IdentityFunctor<T>;
   int deal_size = BLOCK_NUM_X * kCount;
 
@@ -261,16 +261,16 @@ __global__ void VectorizedGeneratorMask(const size_t n,
 
 template <typename T>
 void DropoutFwGPUKernelDriver(
-    const phi::GPUContext& dev_ctx,
+    const GPUContext& dev_ctx,
     bool is_test,
     float dropout_prob,
     bool upscale_in_train,
     bool is_fix_seed,
     int seed_val,
-    const phi::DenseTensor& x,
-    const phi::DenseTensor* seed,
-    phi::DenseTensor* mask,
-    phi::DenseTensor* y,
+    const DenseTensor& x,
+    const DenseTensor* seed,
+    DenseTensor* mask,
+    DenseTensor* y,
     bool is_dropout_nd = false,
     const std::vector<int>& axis = std::vector<int>()) {
   int64_t x_numel = x.numel();
@@ -300,21 +300,33 @@ void DropoutFwGPUKernelDriver(
     uint64_t seed_data;
     uint64_t increment;
     // VectorizedRandomGenerator use curand_uniform4, so kVecSize is 4;
-    constexpr int kVecSize =
-        phi::funcs::uniform_distribution<float>::kReturnsCount;
-    auto gpu_config =
-        phi::backends::gpu::GetGpuLaunchConfig1D(dev_ctx, x_numel, kVecSize);
-    size_t grid_size = gpu_config.GetGridSize();
-    size_t block_size = gpu_config.GetBlockSize();
+    constexpr int kVecSize = funcs::uniform_distribution<float>::kReturnsCount;
 
-    int64_t device_id = dev_ctx.GetPlace().GetDeviceId();
-    const auto& prop = phi::backends::gpu::GetDeviceProperties(device_id);
-    size_t max_grid_size = prop.maxThreadsPerMultiProcessor *
-                           prop.multiProcessorCount / block_size;
-    grid_size = std::min(grid_size, max_grid_size);
+    size_t grid_size;
+    size_t block_size;
+    size_t offset;
 
-    auto offset =
-        ((x_numel - 1) / (grid_size * block_size * kVecSize) + 1) * kVecSize;
+    if (funcs::IsDeterministicRNG()) {
+      auto cfg = funcs::GetDeterministicRNGConfig(x_numel, kVecSize);
+      grid_size = cfg.grid_size;
+      block_size = cfg.block_size;
+      offset = cfg.increment;
+    } else {
+      auto gpu_config =
+          phi::backends::gpu::GetGpuLaunchConfig1D(dev_ctx, x_numel, kVecSize);
+      grid_size = gpu_config.GetGridSize();
+      block_size = gpu_config.GetBlockSize();
+
+      int64_t device_id = dev_ctx.GetPlace().GetDeviceId();
+      const auto& prop = phi::backends::gpu::GetDeviceProperties(device_id);
+      size_t max_grid_size = prop.maxThreadsPerMultiProcessor *
+                             prop.multiProcessorCount / block_size;
+      grid_size = std::min(grid_size, max_grid_size);
+
+      offset =
+          ((x_numel - 1) / (grid_size * block_size * kVecSize) + 1) * kVecSize;
+    }
+
     size_t main_offset =
         size / (block_size * kVecSize) * (block_size * kVecSize);
 
@@ -343,13 +355,13 @@ void DropoutFwGPUKernelDriver(
                                                  seed_ptr);
       auto dst_functor =
           DstFunctor<T>(1.0f - dropout_prob, upscale_in_train, x_numel);
-      std::vector<const phi::DenseTensor*> ins = {&x, mask};
-      std::vector<phi::DenseTensor*> outs = {y};
-      phi::funcs::BroadcastKernel<T>(dev_ctx, ins, &outs, dst_functor);
+      std::vector<const DenseTensor*> ins = {&x, mask};
+      std::vector<DenseTensor*> outs = {y};
+      funcs::BroadcastKernel<T>(dev_ctx, ins, &outs, dst_functor);
     } else {
       bool copy_in_kernel = GetSeedDataAndIncrement(
           dev_ctx, seed, is_fix_seed, seed_val, offset, &seed_data, &increment);
-      const phi::GPUContext* dev_ctx_p = &dev_ctx;
+      const GPUContext* dev_ctx_p = &dev_ctx;
       auto gen_cuda = dev_ctx.GetGenerator();
       auto state_index = gen_cuda->GetStateIndex();
 
@@ -416,7 +428,7 @@ void DropoutFwGPUKernelDriver(
       using MT = typename phi::dtype::MPTypeTrait<T>::Type;
       MT factor = static_cast<MT>(1.0f - dropout_prob);
       // y = factor * x
-      phi::ScaleKernel<T, phi::GPUContext>(dev_ctx, x, factor, 0.0f, false, y);
+      phi::ScaleKernel<T, GPUContext>(dev_ctx, x, factor, 0.0f, false, y);
     }
   }
 }
@@ -438,13 +450,13 @@ struct CudaDropoutGradFunctor {
 };
 
 template <typename T>
-void DropoutGradGPUKernelDriver(const phi::GPUContext& dev_ctx,
+void DropoutGradGPUKernelDriver(const GPUContext& dev_ctx,
                                 bool is_test,
                                 float dropout_prob,
                                 bool upscale_in_train,
-                                const phi::DenseTensor& grad_y,
-                                const phi::DenseTensor& mask,
-                                phi::DenseTensor* grad_x,
+                                const DenseTensor& grad_y,
+                                const DenseTensor& mask,
+                                DenseTensor* grad_x,
                                 bool is_dropout_nd = false) {
   using MT = typename phi::dtype::MPTypeTrait<T>::Type;
 
@@ -452,7 +464,7 @@ void DropoutGradGPUKernelDriver(const phi::GPUContext& dev_ctx,
   if (is_test) {
     MT factor = static_cast<MT>(upscale_in_train ? 1.0f : 1.0f - dropout_prob);
     // y = factor * x
-    phi::ScaleKernel<T, phi::GPUContext>(
+    phi::ScaleKernel<T, GPUContext>(
         dev_ctx, grad_y, factor, 0.0f, false, grad_x);
   } else {
     if (upscale_in_train && dropout_prob == 1.0f) {
@@ -466,13 +478,13 @@ void DropoutGradGPUKernelDriver(const phi::GPUContext& dev_ctx,
                       ? static_cast<MT>(1.0f / (1.0f - dropout_prob))
                       : static_cast<MT>(1.0f);
 
-      std::vector<const phi::DenseTensor*> ins = {&grad_y, &mask};
-      std::vector<phi::DenseTensor*> outs = {grad_x};
+      std::vector<const DenseTensor*> ins = {&grad_y, &mask};
+      std::vector<DenseTensor*> outs = {grad_x};
       if (is_dropout_nd) {
-        phi::funcs::BroadcastKernel<T>(
+        funcs::BroadcastKernel<T>(
             dev_ctx, ins, &outs, CudaDropoutGradFunctor<T>(factor));
       } else {
-        phi::funcs::ElementwiseKernel<T>(
+        funcs::ElementwiseKernel<T>(
             dev_ctx, ins, &outs, CudaDropoutGradFunctor<T>(factor));
       }
     }

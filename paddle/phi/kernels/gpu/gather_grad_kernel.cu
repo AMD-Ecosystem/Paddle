@@ -31,8 +31,7 @@ void GatherGradKernel(const Context& dev_ctx,
   // x [4, 2], index [2, 0], out [2, 0], x_grad [4, 2]
   if (out_grad.numel() == 0 || (x_grad && x_grad->numel() == 0)) {
     if (x_grad) {
-      phi::Full<T, Context>(
-          dev_ctx, phi::IntArray(common::vectorize(x_grad->dims())), 0, x_grad);
+      Full<T, Context>(dev_ctx, x_grad->dims(), 0, x_grad);
     }
     return;
   }
@@ -62,7 +61,7 @@ void GatherGradKernel(const Context& dev_ctx,
   if (index.dims().size() != 0) {
     if (index_type == DataType::INT32) {
       DenseTensor index_int64 =
-          phi::Cast<int32_t, Context>(dev_ctx, index, DataType::INT64);
+          Cast<int32_t, Context>(dev_ctx, index, DataType::INT64);
       funcs::GPUScatterAdd<T, int64_t>(
           dev_ctx, out_grad, index_int64, x_grad, axis_v);
     } else if (index_type == DataType::INT64) {

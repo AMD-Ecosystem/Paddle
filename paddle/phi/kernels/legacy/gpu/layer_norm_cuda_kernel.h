@@ -962,9 +962,9 @@ void cuda_rms_norm(const Context& dev_ctx,
       const_cast<scalar_t_out*>(scale.data<scalar_t_out>()), \
       dev_ctx.stream())
   // scale.dtype() same as y->dtype()
-  if (scale.dtype() == phi::DataType::FLOAT32) {
+  if (scale.dtype() == DataType::FLOAT32) {
     DISPATCH_FWD_CASE(float);
-  } else if (scale.dtype() == phi::DataType::BFLOAT16) {
+  } else if (scale.dtype() == DataType::BFLOAT16) {
     DISPATCH_FWD_CASE(phi::bfloat16);
   }
 #undef DISPATCH_FWD_CASE
@@ -992,7 +992,7 @@ void HostRMSNormGradient(const Context& dev_ctx,
     const int nshared2 = nshared2_a > nshared2_b ? nshared2_a : nshared2_b;
     auto place = input.place();
     DenseTensor part_grad_gamma =
-        phi::Empty<float, Context>(dev_ctx, {part_size, n2});
+        Empty<float, Context>(dev_ctx, {part_size, n2});
     cuComputePartGradGammaBeta<<<blocks2, threads2, nshared2, stream>>>(
         dout,
         input.data<T>(),
@@ -1061,9 +1061,9 @@ void cuda_rms_norm_gradient(const Context& dev_ctx,
       grad_x->data<T>(),                                \
       grad_scale->data<scalar_t_out>(),                 \
       dev_ctx.stream())
-  if (scale.dtype() == phi::DataType::FLOAT32) {
+  if (scale.dtype() == DataType::FLOAT32) {
     DISPATCH_BWD_CASE(float);
-  } else if (scale.dtype() == phi::DataType::BFLOAT16) {
+  } else if (scale.dtype() == DataType::BFLOAT16) {
     DISPATCH_BWD_CASE(phi::bfloat16);
   }
 #undef DISPATCH_BWD_CASE

@@ -31,6 +31,7 @@ limitations under the License. */
 #if defined(__NVCC__) || defined(__HIPCC__)
 #include "paddle/phi/kernels/gpu/reduce.h"
 #endif
+COMMON_DECLARE_bool(use_legacy_gemm);
 
 namespace phi {
 
@@ -50,7 +51,7 @@ struct ReduceSumForMatmulGrad<CPUContext, T> {
                   const std::vector<int>& reduce_dims) {
     std::vector<int64_t> reduce_dims_tmp(reduce_dims.begin(),
                                          reduce_dims.end());
-    funcs::ReduceKernelImpl<CPUContext, T, T, phi::funcs::SumFunctor>(
+    funcs::ReduceKernelImpl<CPUContext, T, T, funcs::SumFunctor>(
         dev_ctx, input, output, reduce_dims_tmp, true, false);
   }
 };
@@ -62,7 +63,7 @@ struct ReduceSumForMatmulGrad<GPUContext, T> {
                   const DenseTensor& input,
                   DenseTensor* output,
                   const std::vector<int>& reduce_dims) {
-    phi::SumKernel<T, GPUContext>(
+    SumKernel<T, GPUContext>(
         dev_ctx, input, reduce_dims, input.dtype(), false, output);
   }
 };
@@ -98,6 +99,25 @@ static DenseTensor FoldHeadAndLastDims(const Context& dev_ctx,
   return output;
 }
 
+#if defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_HIP) && !defined(_WIN32)
+// Reshape a rank-3 tensor from B x M x N to (B * N) x M.
+// In order to perform [M, BN] x [BN, K] -> [M, K] to save reduce cost
+// Avoiding [1,0,2] permute for better performance
+// (Warning: This requires transposing data and writes into new memory.)
+// Identity op if the tensor is not of rank 3.
+template <typename Context, typename T>
+static DenseTensor FoldBatchIntoAggregation(const Context& dev_ctx,
+                                            const DenseTensor& input) {
+  auto in_dims = input.dims();
+  if (in_dims.size() != 3) {
+    return input;
+  }
+  DenseTensor output = TransposeLast2Dim<T>(dev_ctx, input);
+  output.Resize({in_dims[0] * in_dims[2], in_dims[1]});
+  return output;
+}
+#endif
+
 template <typename Context, typename T>
 typename std::enable_if<!std::is_integral<T>::value>::type MatMul(
     const Context& dev_ctx,
@@ -108,9 +128,9 @@ typename std::enable_if<!std::is_integral<T>::value>::type MatMul(
     DenseTensor* out,
     bool flag = false) {
   dev_ctx.template Alloc<T>(out);
-  auto blas = phi::funcs::GetBlas<Context, T>(dev_ctx);
-  auto mat_dim_a = phi::funcs::CreateMatrixDescriptor(a.dims(), 0, trans_a);
-  auto mat_dim_b = phi::funcs::CreateMatrixDescriptor(b.dims(), 0, trans_b);
+  auto blas = funcs::GetBlas<Context, T>(dev_ctx);
+  auto mat_dim_a = funcs::CreateMatrixDescriptor(a.dims(), 0, trans_a);
+  auto mat_dim_b = funcs::CreateMatrixDescriptor(b.dims(), 0, trans_b);
   if (a.dims().size() == 3 && b.dims().size() <= 2) {
     // the transpose_X must be false, if is true, the transpose cost much time
     if (!trans_a) {
@@ -135,7 +155,7 @@ static DDim RowMatrixFromVector(const DDim& x_dim) {
   if (x_dim.size() > 1) {
     return x_dim;
   }
-  return common::make_ddim({1, x_dim[0]});
+  return make_ddim({1, x_dim[0]});
 }
 
 /**
@@ -146,7 +166,7 @@ static DDim ColumnMatrixFromVector(const DDim& y_dim) {
   if (y_dim.size() > 1) {
     return y_dim;
   }
-  return common::make_ddim({y_dim[0], 1});
+  return make_ddim({y_dim[0], 1});
 }
 
 /**
@@ -156,7 +176,7 @@ static DDim ColumnMatrixFromVector(const DDim& y_dim) {
  * If transposed, `H,W` will be swapped.
  */
 static void ReshapeTensorIntoMatrixSequence(
-    DenseTensor* x, const phi::funcs::MatDescriptor& descriptor) {
+    DenseTensor* x, const funcs::MatDescriptor& descriptor) {
   int64_t h, w;
   h = descriptor.height_;
   w = descriptor.width_;
@@ -177,8 +197,8 @@ static void ReshapeXYOutIntoMatrixSequence(DenseTensor* x,
                                            bool trans_y) {
   auto x_dim = RowMatrixFromVector(x->dims());
   auto y_dim = ColumnMatrixFromVector(y->dims());
-  auto mat_dim_x = phi::funcs::CreateMatrixDescriptor(x_dim, 0, trans_x);
-  auto mat_dim_y = phi::funcs::CreateMatrixDescriptor(y_dim, 0, trans_y);
+  auto mat_dim_x = funcs::CreateMatrixDescriptor(x_dim, 0, trans_x);
+  auto mat_dim_y = funcs::CreateMatrixDescriptor(y_dim, 0, trans_y);
   if (mat_dim_x.batch_size_ == 0 && mat_dim_y.batch_size_ == 0) {
     out->Resize({mat_dim_x.height_, mat_dim_y.width_});
   } else {
@@ -200,24 +220,59 @@ void CalcInputGrad(const Context& dev_ctx,
                    bool trans_b,
                    bool is_fold_init_dims_b,
                    DenseTensor* out,
-                   bool flag = false) {
+                   bool flag = false,
+                   bool using_optimized_gemm = false) {
+  // disabling optimized gemm for high-level derivative calculation, for better
+  // precision.
   if (out == nullptr) return;
   bool need_combine =
       (a.dims().size() == 3 || b.dims().size() == 3) && out->dims().size() == 2;
-  if (!need_combine) {
-    MatMul<Context, T>(dev_ctx, a, trans_a, b, trans_b, out, flag);
-  } else {
-    MatMul<Context, T>(
-        dev_ctx,
-        is_fold_init_dims_a ? FoldInitDims(a)
-                            : FoldHeadAndLastDims<Context, T>(dev_ctx, a),
-        trans_a,
-        is_fold_init_dims_b ? FoldInitDims(b)
-                            : FoldHeadAndLastDims<Context, T>(dev_ctx, b),
-        trans_b,
-        out,
-        flag);
-  }
+
+#if defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_HIP) && !defined(_WIN32)
+  if (!FLAGS_use_legacy_gemm && using_optimized_gemm) {
+    DenseTensor a_processed = a, b_processed = b;
+    bool trans_a_processed = trans_a, trans_b_processed = trans_b;
+    if (need_combine) {
+      a_processed = is_fold_init_dims_a
+                        ? FoldInitDims(a)
+                        : FoldBatchIntoAggregation<Context, T>(dev_ctx, a);
+      b_processed = is_fold_init_dims_b
+                        ? FoldInitDims(b)
+                        : FoldBatchIntoAggregation<Context, T>(dev_ctx, b);
+      // Once we try to combine aggregation dimension to batch dimension,
+      // we need to flip the transpose flag
+      trans_a_processed = is_fold_init_dims_a ? trans_a : !trans_a;
+      trans_b_processed = is_fold_init_dims_b ? trans_b : !trans_b;
+    }  // if need_combine and in new gemm dispatch logic.
+    std::vector<std::int64_t> a_dims = vectorize(a_processed.dims());
+    std::vector<std::int64_t> b_dims = vectorize(b_processed.dims());
+    MatMulFunction<Context, T>(dev_ctx,
+                               a_processed,
+                               b_processed,
+                               a_dims,
+                               b_dims,
+                               out,
+                               trans_a_processed,
+                               trans_b_processed);
+  } else  // NOLINT
+#endif    // LINUX && CUDA GPU only
+  {       // NOLINT
+    // legacy no-broadcast matmul dispatch logic, using high-dim permute,
+    // which is suffer from low-performance, and using less optimized
+    // matmul-api.
+    if (!need_combine) {
+      MatMul<Context, T>(dev_ctx, a, trans_a, b, trans_b, out, flag);
+    } else {
+      DenseTensor a_processed =
+          is_fold_init_dims_a ? FoldInitDims(a)
+                              : FoldHeadAndLastDims<Context, T>(dev_ctx, a);
+      DenseTensor b_processed =
+          is_fold_init_dims_b ? FoldInitDims(b)
+                              : FoldHeadAndLastDims<Context, T>(dev_ctx, b);
+      MatMul<Context, T>(
+          dev_ctx, a_processed, trans_a, b_processed, trans_b, out, flag);
+    }  // if need_combine and in legacy gemm dispatch logic
+  }    // legacy matmul dispatch logic
 }
 
 template <typename T, typename Context>
@@ -231,23 +286,21 @@ void MatmulGradKernel(const Context& dev_ctx,
                       DenseTensor* dy) {
   if (x.numel() == 0) {
     dev_ctx.template Alloc<T>(dx);
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(y.dims())), 0, dy);
+    Full<T, Context>(dev_ctx, y.dims(), 0, dy);
     return;
   }
   if (y.numel() == 0) {
     dev_ctx.template Alloc<T>(dy);
-    phi::Full<T, Context>(
-        dev_ctx, phi::IntArray(common::vectorize(x.dims())), 0, dx);
+    Full<T, Context>(dev_ctx, x.dims(), 0, dx);
     return;
   }
   if (!transpose_x && transpose_y && y.dims().size() < 2) {
     transpose_y = false;
   }
   // get dims
-  std::vector<std::int64_t> x_dims = common::vectorize(x.dims());
-  std::vector<std::int64_t> y_dims = common::vectorize(y.dims());
-  std::vector<std::int64_t> dout_dims = common::vectorize(out_grad.dims());
+  std::vector<std::int64_t> x_dims = vectorize(x.dims());
+  std::vector<std::int64_t> y_dims = vectorize(y.dims());
+  std::vector<std::int64_t> dout_dims = vectorize(out_grad.dims());
 
   int x_ndim = x_dims.size();
   int y_ndim = y_dims.size();
@@ -264,13 +317,36 @@ void MatmulGradKernel(const Context& dev_ctx,
   }
 
   bool is_broadcast = true;
-  if (x_ndim <= 2 || y_ndim <= 2) {
+  if (y_ndim <= 2 || x_ndim <= 2) {
     is_broadcast = false;
   } else if (x_ndim != y_ndim) {
     is_broadcast = true;
   } else {
     is_broadcast = !std::equal(
         x_dims.cbegin(), x_dims.cbegin() + x_ndim - 2, y_dims.cbegin());
+  }
+
+  bool is_y_been_broadcasted = false;
+  bool is_x_been_broadcasted = false;
+  // NOTE(Pan Zhaowu): Figure out which tensor is been broadcasted,
+  // to combine the broadcasted dim of other tensor into aggregation dim,
+  // avoiding use batched gemm and saving reduction cost.
+  if (is_broadcast) {
+    if (x_ndim != y_ndim) {
+      is_x_been_broadcasted = x_ndim < y_ndim;
+      is_y_been_broadcasted = !is_x_been_broadcasted;
+    } else {
+      int64_t x_batch = 1;
+      int64_t y_batch = 1;
+      for (int i = 0; i < x_ndim - 2; ++i) {
+        x_batch *= x_dims[i];
+      }
+      for (int i = 0; i < y_ndim - 2; ++i) {
+        y_batch *= y_dims[i];
+      }
+      is_x_been_broadcasted = x_batch < y_batch;
+      is_y_been_broadcasted = !is_x_been_broadcasted;
+    }
   }
 
   // for complex
@@ -308,25 +384,172 @@ void MatmulGradKernel(const Context& dev_ctx,
     }
 
     if (transpose_x && transpose_y) {
-      CalcInputGrad<T>(
-          dev_ctx, y_conj, true, true, out_grad_help, true, false, dx);
-      CalcInputGrad<T>(
-          dev_ctx, out_grad_help, true, true, x_conj, true, false, dy);
+#if defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_HIP) && !defined(_WIN32)
+      if (!FLAGS_use_legacy_gemm && x_help.dims().size() == 3 &&
+          y_help.dims().size() == 3) {
+        // For batched case only (both x and y are 3D after reshape): match
+        // PyTorch's backward cublas call pattern (OP_N/OP_N instead of
+        // OP_T/OP_T), compute without transposes and transpose the results.
+        // dX = (dOut @ Y_conj)^T, dY = (X_conj @ dOut)^T
+        if (dx) {
+          auto dx_dims_orig = dx->dims();
+          DenseTensor dx_tmp = EmptyLike<T, Context>(dev_ctx, *dx);
+          dx_tmp.Resize({dx_tmp.dims()[0], dx_tmp.dims()[2], dx_tmp.dims()[1]});
+          CalcInputGrad<T>(dev_ctx,
+                           out_grad_help,
+                           false,
+                           true,
+                           y_conj,
+                           false,
+                           false,
+                           &dx_tmp,
+                           false,
+                           true);
+          dev_ctx.template Alloc<T>(dx);
+          std::vector<int> axis = {0, 2, 1};
+          funcs::Transpose<Context, T, 3> trans;
+          trans(dev_ctx, dx_tmp, dx, axis);
+          dx->Resize(dx_dims_orig);
+        }
+        if (dy) {
+          auto dy_dims_orig = dy->dims();
+          DenseTensor dy_tmp = EmptyLike<T, Context>(dev_ctx, *dy);
+          dy_tmp.Resize({dy_tmp.dims()[0], dy_tmp.dims()[2], dy_tmp.dims()[1]});
+          CalcInputGrad<T>(dev_ctx,
+                           x_conj,
+                           false,
+                           true,
+                           out_grad_help,
+                           false,
+                           false,
+                           &dy_tmp,
+                           false,
+                           true);
+          dev_ctx.template Alloc<T>(dy);
+          std::vector<int> axis = {0, 2, 1};
+          funcs::Transpose<Context, T, 3> trans;
+          trans(dev_ctx, dy_tmp, dy, axis);
+          dy->Resize(dy_dims_orig);
+        }
+      } else  // NOLINT
+#endif
+      {  // NOLINT
+        CalcInputGrad<T>(dev_ctx,
+                         y_conj,
+                         true,
+                         true,
+                         out_grad_help,
+                         true,
+                         false,
+                         dx,
+                         false,
+                         true);
+        CalcInputGrad<T>(dev_ctx,
+                         out_grad_help,
+                         true,
+                         true,
+                         x_conj,
+                         true,
+                         false,
+                         dy,
+                         false,
+                         true);
+      }
     } else if (transpose_x) {
-      CalcInputGrad<T>(
-          dev_ctx, y_conj, false, false, out_grad_help, true, false, dx);
-      CalcInputGrad<T>(
-          dev_ctx, x_conj, false, false, out_grad_help, false, true, dy);
+      CalcInputGrad<T>(dev_ctx,
+                       y_conj,
+                       false,
+                       false,
+                       out_grad_help,
+                       true,
+                       false,
+                       dx,
+                       false,
+                       true);
+      CalcInputGrad<T>(dev_ctx,
+                       x_conj,
+                       false,
+                       false,
+                       out_grad_help,
+                       false,
+                       true,
+                       dy,
+                       false,
+                       true);
     } else if (transpose_y) {
-      CalcInputGrad<T>(
-          dev_ctx, out_grad_help, false, false, y_conj, false, true, dx);
-      CalcInputGrad<T>(
-          dev_ctx, out_grad_help, true, true, x_conj, false, true, dy);
+      CalcInputGrad<T>(dev_ctx,
+                       out_grad_help,
+                       false,
+                       false,
+                       y_conj,
+                       false,
+                       true,
+                       dx,
+                       false,
+                       true);
+#if defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_HIP) && !defined(_WIN32)
+      if (!FLAGS_use_legacy_gemm && x_help.dims().size() == 3 &&
+          y_help.dims().size() == 3) {
+        // For batched case only (both x and y are 3D after reshape): match
+        // PyTorch's backward cublas call pattern for dY. Compute X_conj^T @
+        // dOut into a temp buffer with transposed shape, then transpose the
+        // result. This produces the same cublas descriptor layout as PyTorch,
+        // ensuring identical algorithm selection and bitwise alignment.
+        if (dy) {
+          auto dy_dims_orig = dy->dims();
+          DenseTensor dy_tmp = EmptyLike<T, Context>(dev_ctx, *dy);
+          dy_tmp.Resize({dy_tmp.dims()[0], dy_tmp.dims()[2], dy_tmp.dims()[1]});
+          CalcInputGrad<T>(dev_ctx,
+                           x_conj,
+                           true,
+                           true,
+                           out_grad_help,
+                           false,
+                           false,
+                           &dy_tmp,
+                           false,
+                           true);
+          dev_ctx.template Alloc<T>(dy);
+          std::vector<int> axis = {0, 2, 1};
+          funcs::Transpose<Context, T, 3> trans;
+          trans(dev_ctx, dy_tmp, dy, axis);
+          dy->Resize(dy_dims_orig);
+        }
+      } else  // NOLINT
+#endif
+      {  // NOLINT
+        CalcInputGrad<T>(dev_ctx,
+                         out_grad_help,
+                         true,
+                         true,
+                         x_conj,
+                         false,
+                         true,
+                         dy,
+                         false,
+                         true);
+      }
     } else {
-      CalcInputGrad<T>(
-          dev_ctx, out_grad_help, false, false, y_conj, true, false, dx);
-      CalcInputGrad<T>(
-          dev_ctx, x_conj, true, true, out_grad_help, false, true, dy);
+      CalcInputGrad<T>(dev_ctx,
+                       out_grad_help,
+                       false,
+                       false,
+                       y_conj,
+                       true,
+                       false,
+                       dx,
+                       false,
+                       true);
+      CalcInputGrad<T>(dev_ctx,
+                       x_conj,
+                       true,
+                       true,
+                       out_grad_help,
+                       false,
+                       true,
+                       dy,
+                       false,
+                       true);
     }
 
     if (dx) {
@@ -432,32 +655,117 @@ void MatmulGradKernel(const Context& dev_ctx,
                                      false);
       } else {
         // XY: dX = GY', dY = X'G
-        if (dx)
-          MatMulFunction<Context, T>(dev_ctx,
-                                     out_grad,
-                                     y_conj,
-                                     dout_dims,
-                                     y_dims,
-                                     &dx_help,
-                                     false,
-                                     true);
-        if (dy)
-          MatMulFunction<Context, T>(dev_ctx,
-                                     x_conj,
-                                     out_grad,
-                                     x_dims,
-                                     dout_dims,
-                                     &dy_help,
-                                     true,
-                                     false);
+        VLOG(3)
+            << "matmul grad case: transpose_x = false && transpose_y = false";
+        if (dx) {
+#if defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_HIP) && !defined(_WIN32)
+          if (!FLAGS_use_legacy_gemm && is_x_been_broadcasted && x_ndim == 3 &&
+              ndim == 3) {
+            // Once x been broadcasted, we introduce a new aggregate dim
+            // original: [B, M, N] x [B, K, N]' -> [B, M, K] -(reduceB)-> [M, K]
+            // new: [BN, M] x [BN, K] -> [M, K]
+            DenseTensor out_grad_processed =
+                TransposeLast2Dim<T>(dev_ctx, out_grad);
+            DenseTensor y_conj_processed =
+                TransposeLast2Dim<T>(dev_ctx, y_conj);
+            int64_t BN = 1;
+            std::vector<std::int64_t> y_processed_dims =
+                vectorize(y_conj_processed.dims());
+            for (int i = 0; i < ndim - 1; i++) {
+              BN *= y_processed_dims[i];
+            }
+            std::vector<std::int64_t> out_grad_2d_dim{BN, dout_dims[ndim - 2]};
+            std::vector<std::int64_t> y_conj_2d_dim{BN, y_dims[y_ndim - 2]};
+
+            out_grad_processed.Resize(out_grad_2d_dim);
+            y_conj_processed.Resize(y_conj_2d_dim);
+            // 2D x 2D -> 2D
+            MatMulFunction<Context, T>(dev_ctx,
+                                       out_grad_processed,
+                                       y_conj_processed,
+                                       out_grad_2d_dim,
+                                       y_conj_2d_dim,
+                                       &dx_help,
+                                       true,
+                                       false);
+
+            // make legacy reduce logic happy
+            std::vector<std::int64_t> x_grad_dim(ndim);
+            for (int i = 0; i < ndim - 2; i++) {
+              x_grad_dim[i] = 1;
+            }
+            x_grad_dim[ndim - 2] = dx_help.dims()[0];
+            x_grad_dim[ndim - 1] = dx_help.dims()[1];
+            dx_help.Resize(x_grad_dim);
+
+          } else  // NOLINT
+#endif
+          {  // NOLINT
+            MatMulFunction<Context, T>(dev_ctx,
+                                       out_grad,
+                                       y_conj,
+                                       dout_dims,
+                                       y_dims,
+                                       &dx_help,
+                                       false,
+                                       true);
+          }  // if is_x_been_broadcasted
+        }    // if dx
+        if (dy) {
+#if defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_HIP) && !defined(_WIN32)
+          if (!FLAGS_use_legacy_gemm && is_y_been_broadcasted && y_ndim == 3 &&
+              ndim == 3) {
+            // Once y been broadcasted, we introduce a new aggregate dim
+            // original: [B, M, K] x [B, M, N] -> [B, K, N] -(reduceB)-> [K, N]
+            // new: [BM, K]' x [BM, N] -> [K, N]
+            int64_t BM = 1;
+            for (int i = 0; i < ndim - 1; i++) {
+              BM *= x_dims[i];
+            }
+            std::vector<std::int64_t> out_grad_2d_dim{BM, dout_dims[ndim - 1]};
+            std::vector<std::int64_t> x_conj_2d_dim{BM, x_dims[x_ndim - 1]};
+
+            DenseTensor out_grad_processed = out_grad;
+            DenseTensor x_conj_processed = x_conj;
+            out_grad_processed.Resize(out_grad_2d_dim);
+            x_conj_processed.Resize(x_conj_2d_dim);
+
+            MatMulFunction<Context, T>(dev_ctx,
+                                       x_conj_processed,
+                                       out_grad_processed,
+                                       x_conj_2d_dim,
+                                       out_grad_2d_dim,
+                                       &dy_help,
+                                       true,
+                                       false);
+            // make legacy reduce logic happy
+            std::vector<std::int64_t> y_grad_dim(ndim);
+            for (int i = 0; i < ndim - 2; i++) {
+              y_grad_dim[i] = 1;
+            }
+            y_grad_dim[ndim - 2] = dy_help.dims()[0];
+            y_grad_dim[ndim - 1] = dy_help.dims()[1];
+            dy_help.Resize(y_grad_dim);
+
+          } else  // NOLINT
+#endif
+          {  // NOLINT
+            MatMulFunction<Context, T>(dev_ctx,
+                                       x_conj,
+                                       out_grad,
+                                       x_dims,
+                                       dout_dims,
+                                       &dy_help,
+                                       true,
+                                       false);
+          }  // if is_y_been_broadcasted
+        }    // if dy
       }
     }
 
     // get help dims
-    const std::vector<std::int64_t> dx_help_dims =
-        common::vectorize(dx_help.dims());
-    const std::vector<std::int64_t> dy_help_dims =
-        common::vectorize(dy_help.dims());
+    const std::vector<std::int64_t> dx_help_dims = vectorize(dx_help.dims());
+    const std::vector<std::int64_t> dy_help_dims = vectorize(dy_help.dims());
 
     std::vector<std::int64_t> dx_broadcast_dims(ndim);
     std::vector<std::int64_t> dy_broadcast_dims(ndim);
@@ -527,17 +835,17 @@ void MatmulDoubleGradKernel(const Context& dev_ctx,
                             const DenseTensor& x,
                             const DenseTensor& y,
                             const DenseTensor& dout,
-                            const paddle::optional<DenseTensor>& ddx,
-                            const paddle::optional<DenseTensor>& ddy,
+                            const optional<DenseTensor>& ddx,
+                            const optional<DenseTensor>& ddy,
                             bool transpose_x,
                             bool transpose_y,
                             DenseTensor* dx,
                             DenseTensor* dy,
                             DenseTensor* ddout) {
   // Get dims from the input x, y, output_grad
-  std::vector<std::int64_t> x_dims = common::vectorize(x.dims());
-  std::vector<std::int64_t> y_dims = common::vectorize(y.dims());
-  std::vector<std::int64_t> dout_dims = common::vectorize(dout.dims());
+  std::vector<std::int64_t> x_dims = vectorize(x.dims());
+  std::vector<std::int64_t> y_dims = vectorize(y.dims());
+  std::vector<std::int64_t> dout_dims = vectorize(dout.dims());
 
   int x_ndim = x_dims.size();
   int y_ndim = y_dims.size();
@@ -841,10 +1149,8 @@ void MatmulDoubleGradKernel(const Context& dev_ctx,
     }
 
     // get help dims
-    const std::vector<std::int64_t> dx_help_dims =
-        common::vectorize(dx_help.dims());
-    const std::vector<std::int64_t> dy_help_dims =
-        common::vectorize(dy_help.dims());
+    const std::vector<std::int64_t> dx_help_dims = vectorize(dx_help.dims());
+    const std::vector<std::int64_t> dy_help_dims = vectorize(dy_help.dims());
 
     std::vector<std::int64_t> dx_broadcast_dims(ndim);
     std::vector<std::int64_t> dy_broadcast_dims(ndim);
@@ -927,11 +1233,11 @@ void MatmulTripleGradKernel(const Context& dev_ctx,
                             const DenseTensor& x,
                             const DenseTensor& y,
                             const DenseTensor& dout,
-                            const paddle::optional<DenseTensor>& ddx,
-                            const paddle::optional<DenseTensor>& ddy,
-                            const paddle::optional<DenseTensor>& d_dx,
-                            const paddle::optional<DenseTensor>& d_dy,
-                            const paddle::optional<DenseTensor>& d_ddout,
+                            const optional<DenseTensor>& ddx,
+                            const optional<DenseTensor>& ddy,
+                            const optional<DenseTensor>& d_dx,
+                            const optional<DenseTensor>& d_dy,
+                            const optional<DenseTensor>& d_ddout,
                             bool transpose_x,
                             bool transpose_y,
                             DenseTensor* out_d_x,
@@ -940,9 +1246,9 @@ void MatmulTripleGradKernel(const Context& dev_ctx,
                             DenseTensor* out_d_ddx,
                             DenseTensor* out_d_ddy) {
   // Get dims from the input x, y, output_grad
-  std::vector<std::int64_t> x_dims = common::vectorize(x.dims());
-  std::vector<std::int64_t> y_dims = common::vectorize(y.dims());
-  std::vector<std::int64_t> dout_dims = common::vectorize(dout.dims());
+  std::vector<std::int64_t> x_dims = vectorize(x.dims());
+  std::vector<std::int64_t> y_dims = vectorize(y.dims());
+  std::vector<std::int64_t> dout_dims = vectorize(dout.dims());
 
   int x_ndim = x_dims.size();
   int y_ndim = y_dims.size();
@@ -1591,9 +1897,9 @@ void MatmulTripleGradKernel(const Context& dev_ctx,
 
     // get help dims
     const std::vector<std::int64_t> dx_help_dims =
-        common::vectorize(out_dx_help.dims());
+        vectorize(out_dx_help.dims());
     const std::vector<std::int64_t> dy_help_dims =
-        common::vectorize(out_dx_help.dims());
+        vectorize(out_dx_help.dims());
 
     std::vector<std::int64_t> dx_broadcast_dims(ndim);
     std::vector<std::int64_t> dy_broadcast_dims(ndim);
@@ -1928,10 +2234,8 @@ void MatmulWithFlattenGradKernel(const Context& dev_ctx,
                                  int y_num_col_dims,
                                  DenseTensor* x_grad,
                                  DenseTensor* y_grad) {
-  auto x_matrix =
-      x.dims().size() > 2 ? phi::ReshapeToMatrix(x, x_num_col_dims) : x;
-  auto y_matrix =
-      y.dims().size() > 2 ? phi::ReshapeToMatrix(y, y_num_col_dims) : y;
+  auto x_matrix = x.dims().size() > 2 ? ReshapeToMatrix(x, x_num_col_dims) : x;
+  auto y_matrix = y.dims().size() > 2 ? ReshapeToMatrix(y, y_num_col_dims) : y;
   auto* dout = &out_grad;
 
   DenseTensor dout_mat(*dout);
@@ -1948,11 +2252,11 @@ void MatmulWithFlattenGradKernel(const Context& dev_ctx,
     dy->set_lod(y.lod());
   }
 
-  auto blas = phi::funcs::GetBlas<Context, T>(dev_ctx);
+  auto blas = funcs::GetBlas<Context, T>(dev_ctx);
   if (dx) {
     dev_ctx.template Alloc<T>(dx);
     DenseTensor dx_matrix =
-        dx->dims().size() > 2 ? phi::ReshapeToMatrix(*dx, x_num_col_dims) : *dx;
+        dx->dims().size() > 2 ? ReshapeToMatrix(*dx, x_num_col_dims) : *dx;
 
     // dx = dout * y'. dx: M x K, dout : M x N, y : K x N
     blas.MatMul(dout_mat, false, y_matrix, true, &dx_matrix);
@@ -1960,29 +2264,26 @@ void MatmulWithFlattenGradKernel(const Context& dev_ctx,
   if (dy) {
     dev_ctx.template Alloc<T>(dy);
     DenseTensor dy_matrix =
-        dy->dims().size() > 2 ? phi::ReshapeToMatrix(*dy, y_num_col_dims) : *dy;
+        dy->dims().size() > 2 ? ReshapeToMatrix(*dy, y_num_col_dims) : *dy;
     // dy = x' * dout. dy K x N, dout : M x N, x : M x K
     blas.MatMul(x_matrix, true, dout_mat, false, &dy_matrix);
   }
 }
 
 template <typename T, typename Context>
-void MatmulWithFlattenDoubleGradKernel(
-    const Context& dev_ctx,
-    const DenseTensor& x,
-    const DenseTensor& y,
-    const DenseTensor& out_grad,
-    const paddle::optional<DenseTensor>& x_grad_grad,
-    const paddle::optional<DenseTensor>& y_grad_grad,
-    int x_num_col_dims,
-    int y_num_col_dims,
-    DenseTensor* x_grad,
-    DenseTensor* y_grad,
-    DenseTensor* out_grad_grad) {
-  auto x_mat =
-      x.dims().size() > 2 ? phi::ReshapeToMatrix(x, x_num_col_dims) : x;
-  auto y_mat =
-      y.dims().size() > 2 ? phi::ReshapeToMatrix(y, y_num_col_dims) : y;
+void MatmulWithFlattenDoubleGradKernel(const Context& dev_ctx,
+                                       const DenseTensor& x,
+                                       const DenseTensor& y,
+                                       const DenseTensor& out_grad,
+                                       const optional<DenseTensor>& x_grad_grad,
+                                       const optional<DenseTensor>& y_grad_grad,
+                                       int x_num_col_dims,
+                                       int y_num_col_dims,
+                                       DenseTensor* x_grad,
+                                       DenseTensor* y_grad,
+                                       DenseTensor* out_grad_grad) {
+  auto x_mat = x.dims().size() > 2 ? ReshapeToMatrix(x, x_num_col_dims) : x;
+  auto y_mat = y.dims().size() > 2 ? ReshapeToMatrix(y, y_num_col_dims) : y;
 
   const int64_t m = common::flatten_to_2d(x.dims(), x_num_col_dims)[0];
   const int64_t n = common::flatten_to_2d(y.dims(), y_num_col_dims)[1];
@@ -2007,14 +2308,14 @@ void MatmulWithFlattenDoubleGradKernel(
     ddout_mat.Resize({m, n});
   }
 
-  auto blas = phi::funcs::GetBlas<Context, T>(dev_ctx);
+  auto blas = funcs::GetBlas<Context, T>(dev_ctx);
   // a flag to specify whether ddout value has been set, if flag
   // is false, MatMul beta should be 0 to set ddout, if flag is
   // true, MatMul beta should be 1 to add result to ddout.
   bool ddout_flag = false;
   if (ddx) {
     auto ddx_mat = ddx->dims().size() > 2
-                       ? phi::ReshapeToMatrix(*ddx, x_num_col_dims)
+                       ? ReshapeToMatrix(*ddx, x_num_col_dims)
                        : static_cast<const DenseTensor&>(*ddx);
 
     // dy = ddx' * dout. dy : K x M, ddx' : K x M, dout : M x N
@@ -2022,9 +2323,8 @@ void MatmulWithFlattenDoubleGradKernel(
       dy->set_lod(y.lod());
       // allocate and reshape dy
       dev_ctx.template Alloc<T>(dy);
-      DenseTensor dy_mat = dy->dims().size() > 2
-                               ? phi::ReshapeToMatrix(*dy, y_num_col_dims)
-                               : *dy;
+      DenseTensor dy_mat =
+          dy->dims().size() > 2 ? ReshapeToMatrix(*dy, y_num_col_dims) : *dy;
       blas.MatMul(ddx_mat, true, dout_mat, false, &dy_mat);
     }
     // ddout1 = ddx * y. ddx : M x K, y : K x N, ddout1 : M x N
@@ -2041,16 +2341,15 @@ void MatmulWithFlattenDoubleGradKernel(
   }
   if (ddy) {
     auto ddy_mat = ddy->dims().size() > 2
-                       ? phi::ReshapeToMatrix(*ddy, y_num_col_dims)
+                       ? ReshapeToMatrix(*ddy, y_num_col_dims)
                        : static_cast<const DenseTensor&>(*ddy);
     // dx = dout * ddy'. dout : M x N, ddy' : N x K, dx : M x K
     if (dx) {
       dx->set_lod(x.lod());
       // allocate and reshape dx
       dev_ctx.template Alloc<T>(dx);
-      DenseTensor dx_mat = dx->dims().size() > 2
-                               ? phi::ReshapeToMatrix(*dx, x_num_col_dims)
-                               : *dx;
+      DenseTensor dx_mat =
+          dx->dims().size() > 2 ? ReshapeToMatrix(*dx, x_num_col_dims) : *dx;
       blas.MatMul(dout_mat, false, ddy_mat, true, &dx_mat);
     }
     // ddout2 = x * ddy. x : M x K, ddy : K x N, ddout2 : M x N

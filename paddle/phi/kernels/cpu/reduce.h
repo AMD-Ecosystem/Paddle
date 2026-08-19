@@ -55,7 +55,7 @@ void Reduce(const Context& dev_ctx,
 
   } else {
     // cast x tensor to out_dtype
-    auto tmp_tensor = phi::Cast<T, Context>(dev_ctx, x, out_dtype);
+    auto tmp_tensor = Cast<T, Context>(dev_ctx, x, out_dtype);
 
     // do reduce sum
     PD_VISIT_ALL_CPU_TYPES(
@@ -68,11 +68,11 @@ void Reduce(const Context& dev_ctx,
 
 template <typename Context, typename T, typename Functor>
 void BoolReduceKernel(const Context& dev_ctx,
-                      const phi::DenseTensor& input,
+                      const DenseTensor& input,
                       const std::vector<int64_t>& dims,
                       bool keep_dim,
                       bool reduce_all,
-                      phi::DenseTensor* output) {
+                      DenseTensor* output) {
   reduce_all = recompute_reduce_all(input, dims, reduce_all);
   dev_ctx.template Alloc<bool>(output);
 
@@ -89,7 +89,7 @@ void BoolReduceKernel(const Context& dev_ctx,
   reduce_all = (reduce_all || full_dim);
   DenseTensor tmp_tensor;
   if (input.dtype() != phi::DataType::BOOL) {
-    tmp_tensor = phi::Cast<T, Context>(dev_ctx, input, phi::DataType::BOOL);
+    tmp_tensor = Cast<T, Context>(dev_ctx, input, phi::DataType::BOOL);
   } else {
     tmp_tensor = input;
   }

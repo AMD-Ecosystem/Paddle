@@ -29,7 +29,7 @@
 namespace phi {
 
 template <typename T>
-using MultiPrecisionType = typename phi::dtype::MPTypeTrait<T>::Type;
+using MultiPrecisionType = typename dtype::MPTypeTrait<T>::Type;
 
 enum class RegularizationType {
   kNONE = 0,
@@ -238,7 +238,7 @@ void InnerCompute(const Context& dev_ctx,
                   const DenseTensor& velocity_in,
                   const DenseTensor& index_in,
                   const DenseTensor& learning_rate_in,
-                  const paddle::optional<DenseTensor>& master_param_in,
+                  const optional<DenseTensor>& master_param_in,
                   float mu_in,
                   const Scalar& axis_in,
                   bool use_nesterov,
@@ -288,8 +288,8 @@ void InnerCompute(const Context& dev_ctx,
                           " the second dimension should be 1."));
   }
 
-  const phi::DenseTensor* master_param = nullptr;
-  phi::DenseTensor* master_param_out = nullptr;
+  const DenseTensor* master_param = nullptr;
+  DenseTensor* master_param_out = nullptr;
   if (multi_precision) {
     bool has_master = (master_param_in.get_ptr() != nullptr) &&
                       (master_param_out_out != nullptr);
@@ -312,8 +312,8 @@ void InnerCompute(const Context& dev_ctx,
 
   auto grad = &grad_in;
 
-  phi::funcs::ForRange<Context> for_range(static_cast<const Context&>(dev_ctx),
-                                          param->numel());
+  funcs::ForRange<Context> for_range(static_cast<const Context&>(dev_ctx),
+                                     param->numel());
 
   auto param_dims = param->dims();
   auto grad_dims = grad->dims();
@@ -329,18 +329,18 @@ void InnerCompute(const Context& dev_ctx,
       common::errors::InvalidArgument("The Grad's rank of sparse_momentum_op"
                                       " must be 2 now."));
 
-  phi::DenseTensor sorted_index, grad_index, sort_value;
+  DenseTensor sorted_index, grad_index, sort_value;
   sorted_index.Resize({num_index});
   grad_index.Resize({num_index});
   auto sorted_index_ptr = dev_ctx.template Alloc<IndexT>(&sorted_index);
   auto grad_index_ptr = dev_ctx.template Alloc<IndexT>(&grad_index);
 
-  if (dev_ctx.GetPlace().GetType() == phi::AllocationType::GPU) {
+  if (dev_ctx.GetPlace().GetType() == AllocationType::GPU) {
 #if defined(__NVCC__) || defined(__HIPCC__)
     sort_value.Resize({num_index});
     auto sort_value_ptr = dev_ctx.template Alloc<IndexT>(&sort_value);
 
-    phi::funcs::ForRange<Context> for_range_index(dev_ctx, num_index);
+    funcs::ForRange<Context> for_range_index(dev_ctx, num_index);
     RangeFunctor<IndexT> range_functor(sort_value_ptr);
     for_range_index(range_functor);
 
@@ -354,7 +354,7 @@ void InnerCompute(const Context& dev_ctx,
         nullptr,
         static_cast<int>(num_index))));
     auto d_temp_storage =
-        phi::memory_utils::Alloc(dev_ctx.GetPlace(), temp_storage_bytes);
+        memory_utils::Alloc(dev_ctx.GetPlace(), temp_storage_bytes);
     PADDLE_ENFORCE_GPU_SUCCESS((cub::DeviceRadixSort::SortPairs<IndexT, IndexT>(
         d_temp_storage->ptr(),
         temp_storage_bytes,
@@ -367,7 +367,7 @@ void InnerCompute(const Context& dev_ctx,
         sizeof(IndexT) * 8,
         dev_ctx.stream())));
 #endif
-  } else if (dev_ctx.GetPlace().GetType() == phi::AllocationType::CPU) {
+  } else if (dev_ctx.GetPlace().GetType() == AllocationType::CPU) {
     std::vector<std::pair<IndexT, IndexT>> vec_tosort;
     auto index_ptr = index->data<IndexT>();
     for (IndexT i = 0; i < num_index; i++) {
@@ -418,7 +418,7 @@ void SparseMomentumOpKernel(const Context& dev_ctx,
                             const DenseTensor& velocity,
                             const DenseTensor& index_in,
                             const DenseTensor& learning_rate,
-                            const paddle::optional<DenseTensor>& master_param,
+                            const optional<DenseTensor>& master_param,
                             float mu,
                             const Scalar& axis,
                             bool use_nesterov,
@@ -436,7 +436,7 @@ void SparseMomentumOpKernel(const Context& dev_ctx,
   if (multi_precision) {
     if (use_nesterov) {
       auto update_method = UseNesterov<MPDType>();
-      if (index_type == phi::DataType::INT32) {
+      if (index_type == DataType::INT32) {
         InnerCompute<T, Context, MPDType, int, UseNesterov<MPDType>>(
             dev_ctx,
             param,
@@ -479,7 +479,7 @@ void SparseMomentumOpKernel(const Context& dev_ctx,
       }
     } else {
       auto update_method = NoNesterov<MPDType>();
-      if (index_type == phi::DataType::INT32) {
+      if (index_type == DataType::INT32) {
         InnerCompute<T, Context, MPDType, int, NoNesterov<MPDType>>(
             dev_ctx,
             param,
@@ -524,7 +524,7 @@ void SparseMomentumOpKernel(const Context& dev_ctx,
   } else {
     if (use_nesterov) {
       auto update_method = UseNesterov<T>();
-      if (index_type == phi::DataType::INT32) {
+      if (index_type == DataType::INT32) {
         InnerCompute<T, Context, T, int, UseNesterov<T>>(dev_ctx,
                                                          param,
                                                          grad,
@@ -566,7 +566,7 @@ void SparseMomentumOpKernel(const Context& dev_ctx,
       }
     } else {
       auto update_method = NoNesterov<T>();
-      if (index_type == phi::DataType::INT32) {
+      if (index_type == DataType::INT32) {
         InnerCompute<T, Context, T, int, NoNesterov<T>>(dev_ctx,
                                                         param,
                                                         grad,

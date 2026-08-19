@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "paddle/phi/kernels/gpu/collect_fpn_proposals_kernel.h"
+#include "paddle/phi/backends/gpu/cuda/cuda_graph_with_memory_pool.h"
 #include "paddle/phi/backends/gpu/gpu_primitives.h"
 #include "paddle/phi/common/memory_utils.h"
 #include "paddle/phi/core/allocator.h"
@@ -42,9 +43,7 @@ static inline int NumBlocks(const int N) {
 static __global__ void GetLengthLoD(const int nthreads,
                                     const int* batch_ids,
                                     int* length_lod) {
-  CUDA_KERNEL_LOOP(i, nthreads) {
-    phi::CudaAtomicAdd(length_lod + batch_ids[i], 1);
-  }
+  CUDA_KERNEL_LOOP(i, nthreads) { CudaAtomicAdd(length_lod + batch_ids[i], 1); }
 }
 
 template <typename T, typename Context>
@@ -52,8 +51,7 @@ void GPUCollectFpnProposalsOpKernel(
     const Context& dev_ctx,
     const std::vector<const DenseTensor*>& multi_level_rois,
     const std::vector<const DenseTensor*>& multi_level_scores,
-    const paddle::optional<std::vector<const DenseTensor*>>&
-        multi_level_rois_num,
+    const optional<std::vector<const DenseTensor*>>& multi_level_rois_num,
     int post_nms_topn,
     DenseTensor* fpn_rois_out,
     DenseTensor* rois_num_out) {
@@ -74,13 +72,13 @@ void GPUCollectFpnProposalsOpKernel(
   int real_post_num = min(post_nms_topN, total_roi_num);
   fpn_rois->Resize({real_post_num, kBBoxSize});
   dev_ctx.template Alloc<T>(fpn_rois);
-  phi::DenseTensor concat_rois;
-  phi::DenseTensor concat_scores;
+  DenseTensor concat_rois;
+  DenseTensor concat_scores;
   concat_rois.Resize({total_roi_num, kBBoxSize});
   T* concat_rois_data = dev_ctx.template Alloc<T>(&concat_rois);
   concat_scores.Resize({total_roi_num, 1});
   T* concat_scores_data = dev_ctx.template Alloc<T>(&concat_scores);
-  phi::DenseTensor roi_batch_id_list;
+  DenseTensor roi_batch_id_list;
   roi_batch_id_list.Resize({total_roi_num});
   int* roi_batch_id_data = dev_ctx.template HostAlloc<int>(&roi_batch_id_list);
   int index = 0;
@@ -94,8 +92,8 @@ void GPUCollectFpnProposalsOpKernel(
     auto roi_in = roi_ins[i];
     auto score_in = score_ins[i];
     if (multi_rois_num.size() > 0) {
-      phi::DenseTensor temp;
-      phi::Copy(dev_ctx, *multi_rois_num[i], phi::CPUPlace(), true, &temp);
+      DenseTensor temp;
+      Copy(dev_ctx, *multi_rois_num[i], CPUPlace(), true, &temp);
       const int* length_in = temp.data<int>();
       lod_size = multi_rois_num[i]->numel();
       for (size_t n = 0; n < lod_size; ++n) {
@@ -130,23 +128,23 @@ void GPUCollectFpnProposalsOpKernel(
   }
 
   // copy batch id list to GPU
-  phi::DenseTensor roi_batch_id_list_gpu;
-  phi::Copy(dev_ctx,
-            roi_batch_id_list,
-            dev_ctx.GetPlace(),
-            false,
-            &roi_batch_id_list_gpu);
+  DenseTensor roi_batch_id_list_gpu;
+  Copy(dev_ctx,
+       roi_batch_id_list,
+       dev_ctx.GetPlace(),
+       false,
+       &roi_batch_id_list_gpu);
 
-  phi::DenseTensor index_in_t;
+  DenseTensor index_in_t;
   index_in_t.Resize({total_roi_num});
   int* idx_in = dev_ctx.template Alloc<int>(&index_in_t);
-  funcs::ForRange<phi::GPUContext> for_range_total(dev_ctx, total_roi_num);
+  funcs::ForRange<GPUContext> for_range_total(dev_ctx, total_roi_num);
   for_range_total(funcs::RangeInitFunctor{0, 1, idx_in});
 
-  phi::DenseTensor keys_out_t;
+  DenseTensor keys_out_t;
   keys_out_t.Resize({total_roi_num});
   T* keys_out = dev_ctx.template Alloc<T>(&keys_out_t);
-  phi::DenseTensor index_out_t;
+  DenseTensor index_out_t;
   index_out_t.Resize({total_roi_num});
   int* idx_out = dev_ctx.template Alloc<int>(&index_out_t);
 
@@ -178,23 +176,23 @@ void GPUCollectFpnProposalsOpKernel(
                                                     sizeof(T) * 8,
                                                     dev_ctx.stream());
   index_out_t.Resize({real_post_num});
-  phi::DenseTensor sorted_rois;
+  DenseTensor sorted_rois;
   sorted_rois.Resize({real_post_num, kBBoxSize});
   dev_ctx.template Alloc<T>(&sorted_rois);
-  phi::DenseTensor sorted_batch_id;
+  DenseTensor sorted_batch_id;
   sorted_batch_id.Resize({real_post_num});
   dev_ctx.template Alloc<int>(&sorted_batch_id);
   funcs::GPUGather<T>(dev_ctx, concat_rois, index_out_t, &sorted_rois);
   funcs::GPUGather<int>(
       dev_ctx, roi_batch_id_list_gpu, index_out_t, &sorted_batch_id);
 
-  phi::DenseTensor batch_index_t;
+  DenseTensor batch_index_t;
   batch_index_t.Resize({real_post_num});
   int* batch_idx_in = dev_ctx.template Alloc<int>(&batch_index_t);
-  funcs::ForRange<phi::GPUContext> for_range_post(dev_ctx, real_post_num);
+  funcs::ForRange<GPUContext> for_range_post(dev_ctx, real_post_num);
   for_range_post(funcs::RangeInitFunctor{0, 1, batch_idx_in});
 
-  phi::DenseTensor out_id_t;
+  DenseTensor out_id_t;
   out_id_t.Resize({real_post_num});
   int* out_id_data = dev_ctx.template Alloc<int>(&out_id_t);
   // Determine temporary device storage requirements
@@ -227,10 +225,10 @@ void GPUCollectFpnProposalsOpKernel(
 
   funcs::GPUGather<T>(dev_ctx, sorted_rois, index_out_t, fpn_rois);
 
-  phi::DenseTensor length_lod;
+  DenseTensor length_lod;
   length_lod.Resize({lod_size});
   int* length_lod_data = dev_ctx.template Alloc<int>(&length_lod);
-  funcs::SetConstant<phi::GPUContext, int> set_zero;
+  funcs::SetConstant<GPUContext, int> set_zero;
   set_zero(dev_ctx, &length_lod, static_cast<int>(0));
 
   int blocks = NumBlocks(real_post_num);
@@ -239,8 +237,16 @@ void GPUCollectFpnProposalsOpKernel(
   // get length-based lod by batch ids
   GetLengthLoD<<<blocks, threads, 0, dev_ctx.stream()>>>(
       real_post_num, out_id_data, length_lod_data);
+  PADDLE_ENFORCE_EQ(
+      phi::backends::gpu::IsCUDAGraphCapturing(),
+      false,
+      common::errors::InvalidArgument(
+          "CollectFpnProposals does not support CUDA Graph capture: async D2H "
+          "copy to local vector 'length_lod_cpu' will bake the destination "
+          "address into the graph; on replay the vector is re-created at a "
+          "different address, causing a dangling-pointer write."));
   std::vector<int> length_lod_cpu(lod_size);
-  phi::memory_utils::Copy(phi::CPUPlace(),
+  phi::memory_utils::Copy(CPUPlace(),
                           length_lod_cpu.data(),
                           place,
                           length_lod_data,
@@ -265,7 +271,7 @@ void GPUCollectFpnProposalsOpKernel(
                             dev_ctx.stream());
   }
 
-  phi::LegacyLoD lod;
+  LegacyLoD lod;
   lod.emplace_back(offset);
   fpn_rois->set_lod(lod);
 }

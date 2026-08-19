@@ -25,15 +25,15 @@
 namespace phi {
 
 template <typename T>
-struct DequantizeFunctor<phi::CPUContext, T> {
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const phi::DenseTensor* in,
-                  const phi::DenseTensor* scale,
+struct DequantizeFunctor<CPUContext, T> {
+  void operator()(const CPUContext& dev_ctx,
+                  const DenseTensor* in,
+                  const DenseTensor* scale,
                   T max_range,
-                  phi::DenseTensor* out) {
-    auto in_e = phi::EigenVector<T>::Flatten(*in);
+                  DenseTensor* out) {
+    auto in_e = EigenVector<T>::Flatten(*in);
     const T* scale_factor = scale->data<T>();
-    auto out_e = phi::EigenVector<T>::Flatten(*out);
+    auto out_e = EigenVector<T>::Flatten(*out);
 
     auto& dev = *dev_ctx.eigen_device();
     out_e.device(dev) = in_e * scale_factor[0] / max_range;
@@ -41,13 +41,13 @@ struct DequantizeFunctor<phi::CPUContext, T> {
 };
 
 template <typename T>
-struct ChannelDequantizeFunctorV2<phi::CPUContext, T> {
-  void operator()(const phi::CPUContext& dev_ctx,
-                  const phi::DenseTensor* in,
-                  const phi::DenseTensor* scale,
+struct ChannelDequantizeFunctorV2<CPUContext, T> {
+  void operator()(const CPUContext& dev_ctx,
+                  const DenseTensor* in,
+                  const DenseTensor* scale,
                   T max_range,
                   const int quant_axis,
-                  phi::DenseTensor* out) {
+                  DenseTensor* out) {
     // Dequant op is before quantized op
     // Dequantize the weight of quantized op
     auto in_dims = in->dims();
@@ -56,10 +56,10 @@ struct ChannelDequantizeFunctorV2<phi::CPUContext, T> {
     if (quant_axis == 0) {
       for (int64_t i = 0; i < channel; i++) {
         T s = scale_factor[i];
-        phi::DenseTensor one_channel_in = in->Slice(i, i + 1);
-        phi::DenseTensor one_channel_out = out->Slice(i, i + 1);
-        auto in_e = phi::EigenVector<T>::Flatten(one_channel_in);
-        auto out_e = phi::EigenVector<T>::Flatten(one_channel_out);
+        DenseTensor one_channel_in = in->Slice(i, i + 1);
+        DenseTensor one_channel_out = out->Slice(i, i + 1);
+        auto in_e = EigenVector<T>::Flatten(one_channel_in);
+        auto out_e = EigenVector<T>::Flatten(one_channel_out);
         auto& dev = *dev_ctx.eigen_device();
         out_e.device(dev) = in_e * s / max_range;
       }
@@ -88,12 +88,12 @@ struct ChannelDequantizeFunctorV2<phi::CPUContext, T> {
   }
 };
 
-template struct DequantizeFunctor<phi::CPUContext, phi::float16>;
-template struct DequantizeFunctor<phi::CPUContext, float>;
-template struct DequantizeFunctor<phi::CPUContext, double>;
-template struct ChannelDequantizeFunctorV2<phi::CPUContext, phi::float16>;
-template struct ChannelDequantizeFunctorV2<phi::CPUContext, float>;
-template struct ChannelDequantizeFunctorV2<phi::CPUContext, double>;
+template struct DequantizeFunctor<CPUContext, float16>;
+template struct DequantizeFunctor<CPUContext, float>;
+template struct DequantizeFunctor<CPUContext, double>;
+template struct ChannelDequantizeFunctorV2<CPUContext, float16>;
+template struct ChannelDequantizeFunctorV2<CPUContext, float>;
+template struct ChannelDequantizeFunctorV2<CPUContext, double>;
 
 }  // namespace phi
 

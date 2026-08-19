@@ -26,19 +26,18 @@ namespace phi {
 enum GRUActivationType { identity = 0, sigmoid = 1, tanh = 2, relu = 3 };
 
 template <typename T, typename Device, typename X, typename Y>
-void ActCompute(
-    const int act_type, const Device& d, X x, Y y, phi::Place place) {
+void ActCompute(const int act_type, const Device& d, X x, Y y, Place place) {
   if (act_type == identity) {
     y.device(d) = x;
   } else if (act_type == sigmoid) {
-    phi::funcs::SigmoidFunctor<T>()(d, x, y);
+    funcs::SigmoidFunctor<T>()(d, x, y);
   } else if (act_type == tanh) {
-    phi::funcs::TanhFunctor<T>()(d, x, y);
+    funcs::TanhFunctor<T>()(d, x, y);
   } else if (act_type == relu) {
-    if (place == phi::CPUPlace())
-      phi::funcs::ReluCPUFunctor<T>()(d, x, y);
+    if (place == CPUPlace())
+      funcs::ReluCPUFunctor<T>()(d, x, y);
     else
-      phi::funcs::ReluCUDAFunctor<T>()(d, x, y);
+      funcs::ReluCUDAFunctor<T>()(d, x, y);
   } else {
     PADDLE_THROW(common::errors::Unimplemented(
         "Unsupported activation type, only supports identity, sigmoid, tanh "
@@ -53,7 +52,7 @@ void GRUUnitKernel(const Context& dev_ctx,
                    const DenseTensor& input,
                    const DenseTensor& hidden_prev,
                    const DenseTensor& weight,
-                   const paddle::optional<DenseTensor>& bias,
+                   const optional<DenseTensor>& bias,
                    int activation,
                    int gate_activation,
                    bool origin_mode,
@@ -70,16 +69,16 @@ void GRUUnitKernel(const Context& dev_ctx,
   int64_t batch_size = input_p->dims()[0];
   int64_t frame_size = hidden_prev_p->dims()[1];
 
-  auto x = phi::EigenMatrix<T>::From(input);
-  auto h_p = phi::EigenMatrix<T>::From(hidden_prev);
-  auto g = phi::EigenMatrix<T>::From(*gate);
-  auto r_h_p = phi::EigenMatrix<T>::From(*reset_hidden_prev);
-  auto h = phi::EigenMatrix<T>::From(*hidden);
+  auto x = EigenMatrix<T>::From(input);
+  auto h_p = EigenMatrix<T>::From(hidden_prev);
+  auto g = EigenMatrix<T>::From(*gate);
+  auto r_h_p = EigenMatrix<T>::From(*reset_hidden_prev);
+  auto h = EigenMatrix<T>::From(*hidden);
   auto& place = *dev_ctx.eigen_device();
 
   // calculate unactivated gate outputs
   if (bias) {
-    auto b = phi::EigenMatrix<T>::From(bias.get());
+    auto b = EigenMatrix<T>::From(bias.get());
     g.device(place) =
         x + b.reshape(Eigen::array<int64_t, 2>({{1, frame_size * 3}}))
                 .broadcast(Eigen::array<int64_t, 2>({{batch_size, 1}}));
@@ -90,7 +89,7 @@ void GRUUnitKernel(const Context& dev_ctx,
   const T* weight_data = weight.data<T>();
   T* gate_data = gate->data<T>();
   T* reset_hidden_prev_data = reset_hidden_prev->data<T>();
-  auto blas = phi::funcs::GetBlas<Context, T>(dev_ctx);
+  auto blas = funcs::GetBlas<Context, T>(dev_ctx);
   blas.GEMM(false,
             false,
             batch_size,
@@ -164,11 +163,11 @@ void ActGradCompute(
   if (act_type == identity)
     dx.device(d) = dy;
   else if (act_type == sigmoid)
-    phi::funcs::SigmoidGradFunctor<T>()(d, x, y, dy, dx);
+    funcs::SigmoidGradFunctor<T>()(d, x, y, dy, dx);
   else if (act_type == tanh)
-    phi::funcs::TanhGradFunctor<T>()(d, x, y, dy, dx);
+    funcs::TanhGradFunctor<T>()(d, x, y, dy, dx);
   else if (act_type == relu)
-    phi::funcs::ReluGradFunctor<T>()(d, x, y, dy, dx);
+    funcs::ReluGradFunctor<T>()(d, x, y, dy, dx);
   else
     PADDLE_THROW(common::errors::Unimplemented(
         "Unsupported activation type, only supports identity, sigmoid, tanh "
@@ -182,7 +181,7 @@ void GRUUnitGradKernel(const Context& dev_ctx,
                        const DenseTensor& input,
                        const DenseTensor& hidden_prev,
                        const DenseTensor& weight,
-                       const paddle::optional<DenseTensor>& bias,
+                       const optional<DenseTensor>& bias,
                        const DenseTensor& gate,
                        const DenseTensor& reset_hidden_prev,
                        const DenseTensor& hidden_grad,
@@ -193,8 +192,8 @@ void GRUUnitGradKernel(const Context& dev_ctx,
                        DenseTensor* hidden_prev_grad,
                        DenseTensor* weight_grad,
                        DenseTensor* bias_grad) {
-  phi::DenseTensor gate_grad;
-  phi::DenseTensor reset_hidden_prev_grad;
+  DenseTensor gate_grad;
+  DenseTensor reset_hidden_prev_grad;
 
   const T* hidden_prev_data = hidden_prev.data<T>();
   const T* weight_data = weight.data<T>();
@@ -205,11 +204,11 @@ void GRUUnitGradKernel(const Context& dev_ctx,
   T* reset_hidden_prev_grad_data =
       dev_ctx.template Alloc<T>(&reset_hidden_prev_grad);
 
-  auto h_p = phi::EigenMatrix<T>::From(hidden_prev);
-  auto g = phi::EigenMatrix<T>::From(gate);
-  auto d_h = phi::EigenMatrix<T>::From(hidden_grad);
-  auto d_g = phi::EigenMatrix<T>::From(gate_grad);
-  auto d_r_h_p = phi::EigenMatrix<T>::From(reset_hidden_prev_grad);
+  auto h_p = EigenMatrix<T>::From(hidden_prev);
+  auto g = EigenMatrix<T>::From(gate);
+  auto d_h = EigenMatrix<T>::From(hidden_grad);
+  auto d_g = EigenMatrix<T>::From(gate_grad);
+  auto d_r_h_p = EigenMatrix<T>::From(reset_hidden_prev_grad);
   auto& place = *dev_ctx.eigen_device();
 
   int64_t batch_size = input.dims()[0];
@@ -246,7 +245,7 @@ void GRUUnitGradKernel(const Context& dev_ctx,
         activation, place, c, c, d_g.slice(c_offsets, extents), d_h * u);
   }
   // backward for reset_hidden_prev
-  auto blas = phi::funcs::GetBlas<Context, T>(dev_ctx);
+  auto blas = funcs::GetBlas<Context, T>(dev_ctx);
   blas.GEMM(false,
             true,
             batch_size,
@@ -303,7 +302,7 @@ void GRUUnitGradKernel(const Context& dev_ctx,
   // backward for hidden_prev
   if (hidden_prev_grad) {
     T* hidden_prev_grad_data = dev_ctx.template Alloc<T>(hidden_prev_grad);
-    auto d_h_p = phi::EigenMatrix<T>::From(*hidden_prev_grad);
+    auto d_h_p = EigenMatrix<T>::From(*hidden_prev_grad);
     if (origin_mode) {
       d_h_p.device(place) = d_r_h_p * r + d_h * u;
     } else {
@@ -326,13 +325,13 @@ void GRUUnitGradKernel(const Context& dev_ctx,
   // backward for input
   if (input_grad) {
     dev_ctx.template Alloc<T>(input_grad);
-    auto d_x = phi::EigenMatrix<T>::From(*input_grad);
+    auto d_x = EigenMatrix<T>::From(*input_grad);
     d_x.device(place) = d_g;
   }
   // backward for bias
   if (bias_grad) {
     dev_ctx.template Alloc<T>(bias_grad);
-    auto d_b = phi::EigenVector<T>::Flatten(*bias_grad);
+    auto d_b = EigenVector<T>::Flatten(*bias_grad);
     d_b.device(place) = d_g.sum(Eigen::array<int64_t, 1>({{0}}));
   }
 }

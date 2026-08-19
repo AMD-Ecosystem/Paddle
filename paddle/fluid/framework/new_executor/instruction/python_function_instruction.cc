@@ -66,7 +66,6 @@ void PythonFunctionInstruction::BuildPythonFunctionContext(
   auto& name2id = op_yaml_info.InputName2Id();
   auto inplace_id_map = op_yaml_info.GetInplaceIdMap();
   int input_index = 0;
-  int vec_input_index = 0;
 
   for (const std::string& t : vec_input_tensor_params) {
     PADDLE_ENFORCE_EQ(
@@ -96,11 +95,11 @@ void PythonFunctionInstruction::BuildPythonFunctionContext(
                             common::errors::PreconditionNotMet(
                                 "can not find var[%s] in scope", in_var_name));
     auto var = inner_scope->FindVar(in_var_name);
-    if (var->IsType<phi::DenseTensor>()) {
-      auto dense_tensor_in = var->GetMutable<phi::DenseTensor>();
+    if (var->IsType<DenseTensor>()) {
+      auto dense_tensor_in = var->GetMutable<DenseTensor>();
 
-      std::shared_ptr<phi::DenseTensor> tensor_in(
-          dense_tensor_in, [](phi::DenseTensor* ptr) {
+      std::shared_ptr<DenseTensor> tensor_in(
+          dense_tensor_in, [](DenseTensor* ptr) {
             VLOG(6) << ptr << " ptr will not be deleted by shared_ptr";
           });
       input_index++;
@@ -171,10 +170,10 @@ void PythonFunctionInstruction::BuildPythonFunctionContext(
     if (out_ptr.type().isa<paddle::dialect::AllocatedDenseTensorType>()) {
       auto dense_tensor_out =
           inner_scope->FindVar(value_exec_info_.GetVarName(out_ptr))
-              ->GetMutable<phi::DenseTensor>();
+              ->GetMutable<DenseTensor>();
       cache_out_ptrs_.push_back(dense_tensor_out);
-      std::shared_ptr<phi::DenseTensor> tensor_out(
-          dense_tensor_out, [](phi::DenseTensor* ptr) {
+      std::shared_ptr<DenseTensor> tensor_out(
+          dense_tensor_out, [](DenseTensor* ptr) {
             VLOG(6) << ptr << " ptr will not be deleted by shared_ptr";
           });
       paddle::Tensor python_out;
@@ -206,7 +205,7 @@ void PythonFunctionInstruction::BuildPythonFunctionContext(
 
 PythonFunctionInstruction::PythonFunctionInstruction(
     size_t id,
-    const phi::Place& place,
+    const Place& place,
     pir::Operation* op,
     const ValueExecutionInfo& value_exec_info)
     : InstructionBase(id, place),

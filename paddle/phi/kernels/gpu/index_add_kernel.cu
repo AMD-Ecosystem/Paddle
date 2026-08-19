@@ -45,7 +45,7 @@ __global__ void index_add_cuda_kernel(const T* input,
         (index[dim_idx] < 0 ? index[dim_idx] + index_dim_size : index[dim_idx]);
     int64_t input_idx =
         idx + (delta * pre_idx + src_dim_idx - dim_idx) * stride;
-    phi::CudaAtomicAdd(&output[input_idx], add_value[idx]);
+    CudaAtomicAdd(&output[input_idx], add_value[idx]);
   }
 }
 
@@ -84,15 +84,15 @@ void IndexAddKernel(const Context& dev_ctx,
                     int axis,
                     DenseTensor* output) {
   if (x.numel() == 0) {
-    phi::Copy(dev_ctx, x, dev_ctx.GetPlace(), false, output);
+    Copy(dev_ctx, x, dev_ctx.GetPlace(), false, output);
     return;
   }
   if (index.numel() == 0) {
-    phi::Copy(dev_ctx, x, dev_ctx.GetPlace(), false, output);
+    Copy(dev_ctx, x, dev_ctx.GetPlace(), false, output);
     return;
   }
   if (add_value.numel() == 0) {
-    phi::Copy(dev_ctx, x, dev_ctx.GetPlace(), false, output);
+    Copy(dev_ctx, x, dev_ctx.GetPlace(), false, output);
     return;
   }
   auto input_dim = x.dims();
@@ -115,7 +115,7 @@ void IndexAddKernel(const Context& dev_ctx,
 
   // copy input to output.
   // todo(@limin29): inplace do not need copy.
-  phi::Copy(dev_ctx, x, dev_ctx.GetPlace(), false, output);
+  Copy(dev_ctx, x, dev_ctx.GetPlace(), false, output);
 
   auto index_dim_size = input_dim[dim];
 
@@ -127,7 +127,7 @@ void IndexAddKernel(const Context& dev_ctx,
     dim3 grid_dim = dim3((num_columns + block_dim - 1) / block_dim);
     phi::backends::gpu::LimitGridDim(dev_ctx, &grid_dim);
 
-    if (index_type == phi::DataType::INT64) {
+    if (index_type == DataType::INT64) {
       const int64_t* index_data = index.data<int64_t>();
       index_add_deterministic_cuda_kernel<T, int64_t>
           <<<grid_dim, block_dim, 0, stream>>>(in_data,
@@ -155,7 +155,7 @@ void IndexAddKernel(const Context& dev_ctx,
     dim3 grid_dim = dim3((numel + block_dim - 1) / block_dim);
     phi::backends::gpu::LimitGridDim(dev_ctx, &grid_dim);
 
-    if (index_type == phi::DataType::INT64) {
+    if (index_type == DataType::INT64) {
       const int64_t* index_data = index.data<int64_t>();
       index_add_cuda_kernel<T, int64_t>
           <<<grid_dim, block_dim, 0, stream>>>(in_data,

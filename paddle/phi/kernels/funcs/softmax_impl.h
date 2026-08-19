@@ -25,10 +25,8 @@ limitations under the License. */
 namespace phi {
 namespace funcs {
 
-template <typename T,
-          int MajorType = Eigen::RowMajor,
-          typename IndexType = Eigen::DenseIndex>
-using EigenMatrix = phi::EigenMatrix<T, MajorType, IndexType>;
+template <typename T, int MajorType = Eigen::RowMajor>
+using EigenMatrix = EigenMatrix<T, MajorType>;
 
 template <typename T>
 struct ValueClip {
@@ -43,8 +41,8 @@ class SoftmaxEigen {
  public:
   void operator()(const DeviceContext& dev_ctx,
                   const int axis_dim,
-                  const phi::DenseTensor* X,
-                  phi::DenseTensor* Y) {
+                  const DenseTensor* X,
+                  DenseTensor* Y) {
     constexpr int64_t kBatchDim = 0;
     constexpr int64_t kClassDim = 1;
     constexpr int64_t kAxisDim = 1;
@@ -105,8 +103,8 @@ class SoftmaxEigen<DeviceContext, phi::float16> {
  public:
   void operator()(const DeviceContext& dev_ctx,
                   const int axis_dim,
-                  const phi::DenseTensor* X,
-                  phi::DenseTensor* Y) {
+                  const DenseTensor* X,
+                  DenseTensor* Y) {
     constexpr int64_t kBatchDim = 0;
     constexpr int64_t kClassDim = 1;
     constexpr int64_t kAxisDim = 1;
@@ -164,8 +162,8 @@ class SoftmaxEigen<DeviceContext, phi::bfloat16> {
  public:
   void operator()(const DeviceContext& dev_ctx,
                   const int axis_dim,
-                  const phi::DenseTensor* X,
-                  phi::DenseTensor* Y) {
+                  const DenseTensor* X,
+                  DenseTensor* Y) {
     constexpr int64_t kBatchDim = 0;
     constexpr int64_t kClassDim = 1;
     constexpr int64_t kAxisDim = 1;
@@ -222,22 +220,22 @@ template <typename DeviceContext, typename T, typename Enable>
 void SoftmaxFunctor<DeviceContext, T, Enable>::operator()(
     const DeviceContext& dev_ctx,
     const int axis_dim,
-    const phi::DenseTensor* X,
-    phi::DenseTensor* Y) {
+    const DenseTensor* X,
+    DenseTensor* Y) {
   SoftmaxEigen<DeviceContext, T>()(dev_ctx, axis_dim, X, Y);
 }
 
 template <class DeviceContext>
 using enable_if_CPU = typename std::enable_if<
-    std::is_same<DeviceContext, phi::CPUContext>::value>::type;
+    std::is_same<DeviceContext, CPUContext>::value>::type;
 
 template <typename DeviceContext, typename T>
 class SoftmaxFunctor<DeviceContext, T, enable_if_CPU<DeviceContext>> {
  public:
   void operator()(const DeviceContext& dev_ctx,
                   const int axis_dim,
-                  const phi::DenseTensor* X,
-                  phi::DenseTensor* Y) {
+                  const DenseTensor* X,
+                  DenseTensor* Y) {
     const auto& in_dims = X->dims();
     constexpr int64_t kBatchDim = 0;
     constexpr int64_t kClassDim = 1;
@@ -279,9 +277,9 @@ class SoftmaxGradEigen {
  public:
   void operator()(const DeviceContext& dev_ctx,
                   const int axis_dim,
-                  const phi::DenseTensor* y,
-                  const phi::DenseTensor* y_grad,
-                  phi::DenseTensor* x_grad) {
+                  const DenseTensor* y,
+                  const DenseTensor* y_grad,
+                  DenseTensor* x_grad) {
     auto softmax = EigenMatrix<T>::From(*y);
     auto softmax_grad = EigenMatrix<T>::From(*y_grad);
     auto logits_grad = EigenMatrix<T>::From(*x_grad);
@@ -315,9 +313,9 @@ class SoftmaxGradEigen<DeviceContext, phi::float16> {
  public:
   void operator()(const DeviceContext& dev_ctx,
                   const int axis_dim,
-                  const phi::DenseTensor* y,
-                  const phi::DenseTensor* y_grad,
-                  phi::DenseTensor* x_grad) {
+                  const DenseTensor* y,
+                  const DenseTensor* y_grad,
+                  DenseTensor* x_grad) {
     auto softmax = EigenMatrix<phi::float16>::From(*y);
     auto softmax_grad = EigenMatrix<phi::float16>::From(*y_grad);
     auto logits_grad = EigenMatrix<phi::float16>::From(*x_grad);
@@ -350,9 +348,9 @@ class SoftmaxGradEigen<DeviceContext, phi::bfloat16> {
  public:
   void operator()(const DeviceContext& dev_ctx,
                   const int axis_dim,
-                  const phi::DenseTensor* y,
-                  const phi::DenseTensor* y_grad,
-                  phi::DenseTensor* x_grad) {
+                  const DenseTensor* y,
+                  const DenseTensor* y_grad,
+                  DenseTensor* x_grad) {
     auto softmax = EigenMatrix<phi::bfloat16>::From(*y);
     auto softmax_grad = EigenMatrix<phi::bfloat16>::From(*y_grad);
     auto logits_grad = EigenMatrix<phi::bfloat16>::From(*x_grad);
@@ -384,9 +382,9 @@ template <typename DeviceContext, typename T, typename Enable>
 void SoftmaxGradFunctor<DeviceContext, T, Enable>::operator()(
     const DeviceContext& dev_ctx,
     const int axis_dim,
-    const phi::DenseTensor* y,
-    const phi::DenseTensor* y_grad,
-    phi::DenseTensor* x_grad) {
+    const DenseTensor* y,
+    const DenseTensor* y_grad,
+    DenseTensor* x_grad) {
   SoftmaxGradEigen<DeviceContext, T>()(dev_ctx, axis_dim, y, y_grad, x_grad);
 }
 
@@ -395,9 +393,9 @@ class SoftmaxGradFunctor<DeviceContext, T, enable_if_CPU<DeviceContext>> {
  public:
   void operator()(const DeviceContext& dev_ctx,
                   const int axis_dim,
-                  const phi::DenseTensor* y,
-                  const phi::DenseTensor* y_grad,
-                  phi::DenseTensor* x_grad) {
+                  const DenseTensor* y,
+                  const DenseTensor* y_grad,
+                  DenseTensor* x_grad) {
     const auto& out_dims = y->dims();
     constexpr int64_t kBatchDim = 0;
     constexpr int64_t kClassDim = 1;

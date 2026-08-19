@@ -44,7 +44,7 @@ void RowConvGradKernel(const Context &dev_ctx,
   } else {
     batch_size = static_cast<int>(x->lod()[0].size() - 1);
   }
-  phi::Vector<size_t> batch_indices(batch_size + 1);
+  Vector<size_t> batch_indices(batch_size + 1);
   int timesteps = 0;
   int input_dim = 0;
   if (is_tensor) {
@@ -76,10 +76,9 @@ void RowConvGradKernel(const Context &dev_ctx,
       } else {
         current_timesteps = end - start;
       }
-      phi::DenseTensor cur_input =
-          x->Slice(start, end);  // Current input sequence
+      DenseTensor cur_input = x->Slice(start, end);  // Current input sequence
       cur_input = cur_input.Resize({current_timesteps, input_dim});
-      phi::DenseTensor cur_doutput =
+      DenseTensor cur_doutput =
           d_out->Slice(start, end);  // Current output grad sequence
       cur_doutput = cur_doutput.Resize({current_timesteps, input_dim});
       auto cur_ip = EigenMatrix<T>::From(cur_input);
@@ -111,10 +110,10 @@ void RowConvGradKernel(const Context &dev_ctx,
         current_timesteps = end - start;
       }
 
-      phi::DenseTensor cur_doutput =
+      DenseTensor cur_doutput =
           d_out->Slice(start, end);  // Current output grad sequence
       cur_doutput = cur_doutput.Resize({current_timesteps, input_dim});
-      phi::DenseTensor cur_dinput =
+      DenseTensor cur_dinput =
           dx->Slice(start, end);  // Current input grad sequence
       cur_dinput = cur_dinput.Resize({current_timesteps, input_dim});
 

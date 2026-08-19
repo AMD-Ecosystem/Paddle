@@ -15,6 +15,7 @@ limitations under the License. */
 #include "paddle/phi/kernels/check_numerics_kernel.h"
 
 #include "glog/logging.h"
+#include "paddle/phi/backends/gpu/cuda/cuda_graph_with_memory_pool.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/common/amp_type_traits.h"
 #include "paddle/phi/common/memory_utils.h"
@@ -284,7 +285,7 @@ inline std::string GetHintString(const std::string& op_type,
 }
 
 template <typename T>
-static char* GetGpuHintStringPtr(const phi::GPUContext& dev_ctx,
+static char* GetGpuHintStringPtr(const GPUContext& dev_ctx,
                                  const std::string& op_type,
                                  const std::string& var_name,
                                  int dev_id) {
@@ -323,8 +324,11 @@ static char* GetGpuHintStringPtr(const phi::GPUContext& dev_ctx,
                                                 hipMemcpyHostToDevice,
                                                 dev_ctx.stream()));
 #else
+      const char* stable_str =
+          phi::backends::gpu::RestoreHostMemIfCapturingCUDAGraph(
+              const_cast<char*>(iter->first.c_str()), op_var.length() + 1);
       PADDLE_ENFORCE_GPU_SUCCESS(cudaMemcpyAsync(gpu_str_ptr,
-                                                 iter->first.c_str(),
+                                                 stable_str,
                                                  op_var.length() + 1,
                                                  cudaMemcpyHostToDevice,
                                                  dev_ctx.stream()));
@@ -344,15 +348,14 @@ static char* GetGpuHintStringPtr(const phi::GPUContext& dev_ctx,
 }
 
 template <typename T>
-static void PrintStack(const phi::GPUContext& dev_ctx,
+static void PrintStack(const GPUContext& dev_ctx,
                        const DenseTensor& stats,
                        const std::string& op_type,
                        const std::string& var_name,
                        int dev_id) {
-  auto cpu_stats =
-      phi::memory_utils::Alloc(phi::CPUPlace(), sizeof(int64_t) * 3);
+  auto cpu_stats = phi::memory_utils::Alloc(CPUPlace(), sizeof(int64_t) * 3);
   int64_t* cpu_stats_ptr = reinterpret_cast<int64_t*>(cpu_stats->ptr());
-  phi::memory_utils::Copy(phi::CPUPlace(),
+  phi::memory_utils::Copy(CPUPlace(),
                           cpu_stats_ptr,
                           stats.place(),
                           stats.data(),
@@ -370,7 +373,7 @@ static void PrintStack(const phi::GPUContext& dev_ctx,
 }
 
 template <typename T, typename MT>
-static void WriteToOutputDir(const phi::GPUContext& dev_ctx,
+static void WriteToOutputDir(const GPUContext& dev_ctx,
                              const DenseTensor& tensor,
                              const DenseTensor& stats,
                              const DenseTensor& values,
@@ -379,13 +382,13 @@ static void WriteToOutputDir(const phi::GPUContext& dev_ctx,
                              const std::string& output_dir,
                              const int check_nan_inf_level) {
   // Copy stats and values from GPU to CPU.
-  phi::DenseTensor cpu_stats;
+  DenseTensor cpu_stats;
   cpu_stats.Resize({static_cast<int64_t>(3)});
-  phi::Copy(dev_ctx, stats, phi::CPUPlace(), false, &cpu_stats);
+  Copy(dev_ctx, stats, CPUPlace(), false, &cpu_stats);
 
-  phi::DenseTensor cpu_values;
+  DenseTensor cpu_values;
   cpu_values.Resize({static_cast<int64_t>(3)});
-  phi::Copy(dev_ctx, values, phi::CPUPlace(), false, &cpu_values);
+  Copy(dev_ctx, values, CPUPlace(), false, &cpu_values);
   dev_ctx.Wait();
 
   int dev_id = tensor.place().device;
@@ -438,14 +441,14 @@ void CheckNumericsKernel(const Context& dev_ctx,
 
   int64_t numel_max_min = blocks;
 
-  phi::DenseTensor block_num_nan_inf_zero;
+  DenseTensor block_num_nan_inf_zero;
   block_num_nan_inf_zero.Resize({static_cast<int64_t>(3 * numel_max_min)});
   int64_t* block_num_nan_ptr =
       dev_ctx.template Alloc<int64_t>(&block_num_nan_inf_zero);
   int64_t* block_num_inf_ptr = block_num_nan_ptr + numel_max_min;
   int64_t* block_num_zero_ptr = block_num_inf_ptr + numel_max_min;
 
-  phi::DenseTensor tensor_block_max_min;
+  DenseTensor tensor_block_max_min;
   tensor_block_max_min.Resize({static_cast<int64_t>(3 * numel_max_min)});
   MT* tensor_block_max_ptr = dev_ctx.template Alloc<MT>(&tensor_block_max_min);
   MT* tensor_block_min_ptr = tensor_block_max_ptr + numel_max_min;

@@ -30,16 +30,16 @@ void IdentityLossKernel(const Context& dev_ctx,
   switch (reduction) {
     case 0:
       // sum
-      phi::SumRawKernel<T>(
-          dev_ctx, x, phi::IntArray({0}), false, true, out->dtype(), out);
+      SumRawKernel<T>(
+          dev_ctx, x, IntArray({0}), false, true, out->dtype(), out);
       break;
     case 1:
       // mean
-      phi::MeanAllKernel<T>(dev_ctx, x, out);
+      MeanAllKernel<T>(dev_ctx, x, out);
       break;
     case 2:
       // none
-      phi::Copy(dev_ctx, x, dev_ctx.GetPlace(), false, out);
+      Copy(dev_ctx, x, dev_ctx.GetPlace(), false, out);
       break;
     default:
       // error

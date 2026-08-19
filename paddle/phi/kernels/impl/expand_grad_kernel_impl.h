@@ -36,46 +36,46 @@ void ExpandBackward(const Context& dev_ctx,
   if constexpr (std::is_same_v<T, dtype::float16> ||
                 std::is_same_v<T, dtype::bfloat16>) {
     const DenseTensor out_grad_fp32 =
-        phi::Cast<T, Context>(dev_ctx, out_grad, DataType::FLOAT32);
+        Cast<T, Context>(dev_ctx, out_grad, DataType::FLOAT32);
     DenseTensor in_grad_fp32;
     in_grad_fp32.Resize(in_grad->dims());
     dev_ctx.template Alloc<float>(&in_grad_fp32);
 
     auto x_grad = EigenVector<float>::Flatten(in_grad_fp32);
-    Eigen::DSizes<Eigen::DenseIndex, Dims * 2> reshape_dims;
+    Eigen::DSizes<int64_t, Dims * 2> reshape_dims;
     for (size_t i = 0; i < reshape_size; ++i) {
       reshape_dims[i] = reshape_dims_vec[i];
     }
-    Eigen::DSizes<Eigen::DenseIndex, Dims> reduce_dims;
+    Eigen::DSizes<int64_t, Dims> reduce_dims;
     for (size_t i = 0; i < reduce_size; ++i) {
       reduce_dims[i] = reduce_dims_vec[i];
     }
     const auto out_grad0 = EigenVector<float>::Flatten(out_grad_fp32);
     auto& place = *dev_ctx.eigen_device();
-    phi::funcs::EigenBroadcastGrad<std::decay_t<decltype(place)>, float, Dims>::
-        Eval(place, x_grad, out_grad0, reduce_dims, reshape_dims);
+    funcs::EigenBroadcastGrad<std::decay_t<decltype(place)>, float, Dims>::Eval(
+        place, x_grad, out_grad0, reduce_dims, reshape_dims);
 
     if constexpr (std::is_same_v<T, dtype::float16>) {
-      phi::CastKernel<float, Context>(
+      CastKernel<float, Context>(
           dev_ctx, in_grad_fp32, DataType::FLOAT16, in_grad);
     } else {
-      phi::CastKernel<float, Context>(
+      CastKernel<float, Context>(
           dev_ctx, in_grad_fp32, DataType::BFLOAT16, in_grad);
     }
   } else {
     auto x_grad = EigenVector<T>::Flatten(*in_grad);
-    Eigen::DSizes<Eigen::DenseIndex, Dims * 2> reshape_dims;
+    Eigen::DSizes<int64_t, Dims * 2> reshape_dims;
     for (size_t i = 0; i < reshape_size; ++i) {
       reshape_dims[i] = reshape_dims_vec[i];
     }
-    Eigen::DSizes<Eigen::DenseIndex, Dims> reduce_dims;
+    Eigen::DSizes<int64_t, Dims> reduce_dims;
     for (size_t i = 0; i < reduce_size; ++i) {
       reduce_dims[i] = reduce_dims_vec[i];
     }
     auto out_grad0 = EigenVector<T>::Flatten(out_grad);
     auto& place = *dev_ctx.eigen_device();
-    phi::funcs::EigenBroadcastGrad<std::decay_t<decltype(place)>, T, Dims>::
-        Eval(place, x_grad, out_grad0, reduce_dims, reshape_dims);
+    funcs::EigenBroadcastGrad<std::decay_t<decltype(place)>, T, Dims>::Eval(
+        place, x_grad, out_grad0, reduce_dims, reshape_dims);
   }
 }
 
@@ -87,25 +87,22 @@ void ExpandGradKernel(const Context& dev_ctx,
                       DenseTensor* in_grad) {
   auto x_dims = x.dims();
   auto out_grad_dims = out_grad.dims();
-  std::vector<int64_t> expand_shape = phi::vectorize<int64_t>(out_grad_dims);
+  std::vector<int64_t> expand_shape = vectorize<int64_t>(out_grad_dims);
 
   if (x.numel() == 0 || out_grad.numel() == 0 ||
       (in_grad && in_grad->numel() == 0)) {
     dev_ctx.template Alloc<T>(in_grad);
     if (in_grad->numel() != 0) {
-      phi::Full<T, Context>(dev_ctx,
-                            phi::IntArray(common::vectorize(in_grad->dims())),
-                            0,
-                            in_grad);
+      Full<T, Context>(dev_ctx, in_grad->dims(), 0, in_grad);
     }
     return;
   }
 
   if (in_grad->dims() == out_grad_dims) {
-    phi::Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, in_grad);
+    Copy(dev_ctx, out_grad, dev_ctx.GetPlace(), false, in_grad);
     return;
   }
-  auto vec_in_dims = common::vectorize<int64_t>(x_dims);
+  auto vec_in_dims = vectorize<int64_t>(x_dims);
   auto diff = expand_shape.size() - vec_in_dims.size();
   vec_in_dims.insert(vec_in_dims.begin(), diff, 1);
   // 1. reshape_dims_vec is the broadcast parameter.

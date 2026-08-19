@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <vector>
 
+#include "paddle/phi/backends/gpu/cuda/cuda_graph_with_memory_pool.h"
 #include "paddle/phi/backends/gpu/gpu_context.h"
 #include "paddle/phi/backends/gpu/gpu_primitives.h"
 #include "paddle/phi/common/memory_utils.h"
@@ -86,34 +87,26 @@ template <typename T, typename Context>
 void EditDistanceKernel(const Context& dev_ctx,
                         const DenseTensor& hyps,
                         const DenseTensor& refs,
-                        const paddle::optional<DenseTensor>& hypslength,
-                        const paddle::optional<DenseTensor>& refslength,
+                        const optional<DenseTensor>& hypslength,
+                        const optional<DenseTensor>& refslength,
                         bool normalized,
                         DenseTensor* sequencenum,
                         DenseTensor* out) {
   dev_ctx.template Alloc<int64_t>(sequencenum);
   auto batch_size = hyps.dims()[0];
 
-  auto stream = reinterpret_cast<const phi::GPUContext&>(dev_ctx).stream();
+  auto stream = reinterpret_cast<const GPUContext&>(dev_ctx).stream();
 
-  phi::Vector<size_t> hyp_lod(batch_size + 1);
-  phi::Vector<size_t> ref_lod(batch_size + 1);
+  Vector<size_t> hyp_lod(batch_size + 1);
+  Vector<size_t> ref_lod(batch_size + 1);
 
   bool use_length = hypslength.get_ptr() != nullptr;
 
   if (use_length) {
     DenseTensor hyp_length_cpu;
     DenseTensor ref_length_cpu;
-    phi::Copy(dev_ctx,
-              *(hypslength.get_ptr()),
-              phi::CPUPlace(),
-              false,
-              &hyp_length_cpu);
-    phi::Copy(dev_ctx,
-              *(refslength.get_ptr()),
-              phi::CPUPlace(),
-              false,
-              &ref_length_cpu);
+    Copy(dev_ctx, *(hypslength.get_ptr()), CPUPlace(), false, &hyp_length_cpu);
+    Copy(dev_ctx, *(refslength.get_ptr()), CPUPlace(), false, &ref_length_cpu);
 
     for (auto i = 0; i < batch_size; i++) {
       hyp_lod[i + 1] = hyp_lod[i] + hyp_length_cpu.data<int64_t>()[i];
@@ -151,10 +144,12 @@ void EditDistanceKernel(const Context& dev_ctx,
       if (normalized) {
         distance = distance / n;
       }
+      const T* stable_dist =
+          phi::backends::gpu::RestoreHostMemIfCapturingCUDAGraph(&distance, 1);
       memory_utils::Copy(dev_ctx.GetPlace(),
                          out_data + num,
                          CPUPlace(),
-                         &distance,
+                         stable_dist,
                          sizeof(T),
                          stream);
     } else {

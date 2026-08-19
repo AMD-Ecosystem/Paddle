@@ -127,7 +127,7 @@ template <typename T, typename Context>
 void ContiguousKernel(const Context& dev_ctx,
                       const DenseTensor& input,
                       DenseTensor* out) {
-  phi::DenseTensorMeta meta = input.meta();
+  DenseTensorMeta meta = input.meta();
   meta.strides = meta.calc_strides(meta.dims);
   meta.offset = 0;
   out->set_meta(meta);
@@ -154,7 +154,7 @@ void ContiguousKernel(const Context& dev_ctx,
   if (FastTransposeCopyValid(*out, input)) {
     constexpr int64_t TRANS_NUMEL = 60;
     void* trans_buffer =
-        malloc(phi::SizeOf(input.dtype()) * TRANS_NUMEL * TRANS_NUMEL);
+        malloc(SizeOf(input.dtype()) * TRANS_NUMEL * TRANS_NUMEL);
 
     const T* tmp_src_ptr = input_data;
     T* tmp_out_ptr = output_data;
@@ -198,11 +198,11 @@ void ContiguousKernel(const Context& dev_ctx,
     free(trans_buffer);
   } else {
 #if defined(PADDLE_WITH_OPENMP)
-    phi::DenseTensorIteratorConfig config;
+    DenseTensorIteratorConfig config;
     config.add_output(*out);
     config.add_const_input(input);
     config.is_alloc_out_ = true;
-    phi::DenseTensorIterator iter = config.build();
+    DenseTensorIterator iter = config.build();
     if (!FastContiguousJudge(iter.shape(), input)) {
       FallbackContiguous<T>(
           input.dims(), input.strides(), numel, input_data, output_data);

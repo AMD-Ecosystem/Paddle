@@ -73,15 +73,14 @@ void ReduceSumGradKernel(const Context& dev_ctx,
   if (x.dtype() != out_grad.dtype()) {
     DenseTensorMeta x_grad_meta(
         out_grad.dtype(), x_grad->dims(), x_grad->layout());
-    DenseTensor x_grad_tmp =
-        phi::Empty<Context>(dev_ctx, std::move(x_grad_meta));
+    DenseTensor x_grad_tmp = Empty<Context>(dev_ctx, std::move(x_grad_meta));
     auto* x_grad_tmp_data = reinterpret_cast<XPUType*>(x_grad_tmp.data());
 
     int r = xpu::broadcast<XPUType>(
         dev_ctx.x_context(), out_data, x_grad_tmp_data, ydims, xdims);
     PADDLE_ENFORCE_XDNN_SUCCESS(r, "broadcast");
 
-    phi::CastKernel<T>(dev_ctx, x_grad_tmp, x.dtype(), x_grad);
+    CastKernel<T>(dev_ctx, x_grad_tmp, x.dtype(), x_grad);
   } else {
     int r = xpu::broadcast<XPUType>(
         dev_ctx.x_context(), out_data, x_grad_data, ydims, xdims);

@@ -171,8 +171,8 @@ __global__ void initialize_moe_routing_kernel(
   static_assert(VecSize <= TileSize,
                 "VecSize must be less than or equal to TileSize");
 
-  using LoadT = phi::AlignedVector<__nv_bfloat16, VecSize>;
-  using StoreT = phi::AlignedVector<__nv_fp8_e4m3, VecSize>;
+  using LoadT = AlignedVector<__nv_bfloat16, VecSize>;
+  using StoreT = AlignedVector<__nv_fp8_e4m3, VecSize>;
   LoadT src_vec;
   StoreT dest_vec;
 
@@ -222,7 +222,7 @@ __global__ void initialize_moe_routing_kernel(
        element_id += blockDim.x * VecSize) {
     // Each thread reads VecSize elements, totaling ThreadNum*VecSize elements
     // read Note: A single thread can compute at most one scale value
-    phi::Load<__nv_bfloat16, VecSize>(&source_row_ptr[element_id], &src_vec);
+    Load<__nv_bfloat16, VecSize>(&source_row_ptr[element_id], &src_vec);
 
     int64_t local_scale_id =
         VecSize * static_cast<int64_t>(threadIdx.x) / TileSize;
@@ -237,7 +237,7 @@ __global__ void initialize_moe_routing_kernel(
                                                  cols / TileSize);
     ApplyScale<VecSize>(src_vec.val, dest_vec.val, scale, local_scale_id);
 
-    phi::Store<__nv_fp8_e4m3, VecSize>(dest_vec, &dest_row_ptr[element_id]);
+    Store<__nv_fp8_e4m3, VecSize>(dest_vec, &dest_row_ptr[element_id]);
   }
 }
 
@@ -344,7 +344,7 @@ template <typename T, typename Context>
 void MoeDispatchAndQuantKernel(const Context &dev_ctx,
                                const DenseTensor &x,
                                const DenseTensor &gate_logits,
-                               const paddle::optional<DenseTensor> &corr_bias,
+                               const optional<DenseTensor> &corr_bias,
                                int64_t k,
                                int64_t capacity,
                                bool use_pad,
@@ -367,8 +367,7 @@ void MoeDispatchAndQuantKernel(const Context &dev_ctx,
                   sizeof(phi::float8_e4m3fn) * out_fp8->numel(),
                   dev_ctx.stream());
 
-  phi::Full<float, Context>(
-      dev_ctx, phi::IntArray(common::vectorize(scale->dims())), 1, scale);
+  Full<float, Context>(dev_ctx, scale->dims(), 1, scale);
 
   const auto &x_shape = x.dims();
   const auto &gate_logits_shape = gate_logits.dims();

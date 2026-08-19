@@ -59,27 +59,16 @@ void ActivationGradImpl(const Context& dev_ctx,
   if (dX->numel() == 0) {
     return;
   }
-  auto dout = phi::EigenVector<T>::Flatten(
+  auto dout = EigenVector<T>::Flatten(
       GET_DATA_SAFELY(dOut, "Input", "Out@GRAD", "ActivationGrad"));
-  auto out = phi::EigenVector<T>::Flatten(
+  auto out = EigenVector<T>::Flatten(
       GET_DATA_SAFELY(Out, "Input", "Out", "ActivationGrad"));
-  auto dx = phi::EigenVector<T>::Flatten(
+  auto dx = EigenVector<T>::Flatten(
       GET_DATA_SAFELY(dX, "Input", "X@GRAD", "ActivationGrad"));
-  auto x = phi::EigenVector<T>::Flatten(
+  auto x = EigenVector<T>::Flatten(
       GET_DATA_SAFELY(X, "Input", "X", "ActivationGrad"));
   auto* place = dev_ctx.eigen_device();
-  // use 32bit index to speed up computation
-  bool use_32bit_index = out.size() < Eigen::NumTraits<int>::highest();
-  bool is_gpu_place = dev_ctx.GetPlace().GetType() == phi::AllocationType::GPU;
-  if (use_32bit_index && is_gpu_place) {
-    functor(*place,
-            To32BitIndex(x),
-            To32BitIndex(out),
-            To32BitIndex(dout),
-            To32BitIndex(dx));
-  } else {
-    functor(*place, x, out, dout, dx);
-  }
+  functor(*place, x, out, dout, dx);
 }
 
 template <typename T, typename Context, typename Functor>
@@ -182,8 +171,8 @@ void TanhTripleGradKernel(const Context& dev_ctx,
                           const DenseTensor& out,
                           const DenseTensor& dout,
                           const DenseTensor& ddx,
-                          const paddle::optional<DenseTensor>& d_dout_new,
-                          const paddle::optional<DenseTensor>& d_ddout,
+                          const optional<DenseTensor>& d_dout_new,
+                          const optional<DenseTensor>& d_ddout,
                           DenseTensor* d_out_new,
                           DenseTensor* d_dout,
                           DenseTensor* d_ddx) {
@@ -274,7 +263,7 @@ void SigmoidTripleGradKernel(const Context& dev_ctx,
                              const DenseTensor& dout,
                              const DenseTensor& ddx,
                              const DenseTensor& d_dout_new,
-                             const paddle::optional<DenseTensor>& d_ddout,
+                             const optional<DenseTensor>& d_ddout,
                              DenseTensor* d_out_new,
                              DenseTensor* d_dout,
                              DenseTensor* d_ddx) {
@@ -333,19 +322,19 @@ void PowDoubleGradKernel(const Context& dev_ctx,
   float exponent = factor.to<float>();
   if (dx) {
     if (exponent == 1) {
-      *dx = phi::FullLike<T, Context>(dev_ctx, x, static_cast<T>(0));
+      *dx = FullLike<T, Context>(dev_ctx, x, static_cast<T>(0));
     } else {
-      DenseTensor dx_tmp1 = phi::Multiply<T, Context>(dev_ctx, dout, ddx);
-      DenseTensor dx_tmp2 = phi::Multiply<T, Context>(
-          dev_ctx, dx_tmp1, phi::Pow<T, Context>(dev_ctx, x, exponent - 2));
-      *dx = phi::Scale<T, Context>(
+      DenseTensor dx_tmp1 = Multiply<T, Context>(dev_ctx, dout, ddx);
+      DenseTensor dx_tmp2 = Multiply<T, Context>(
+          dev_ctx, dx_tmp1, Pow<T, Context>(dev_ctx, x, exponent - 2));
+      *dx = Scale<T, Context>(
           dev_ctx, dx_tmp2, exponent * (exponent - 1), 0.0, true);
     }
   }
   if (ddout) {
-    DenseTensor ddout_tmp = phi::Multiply<T, Context>(
-        dev_ctx, ddx, phi::Pow<T, Context>(dev_ctx, x, exponent - 1));
-    *ddout = phi::Scale<T, Context>(dev_ctx, ddout_tmp, exponent, 0.0, true);
+    DenseTensor ddout_tmp = Multiply<T, Context>(
+        dev_ctx, ddx, Pow<T, Context>(dev_ctx, x, exponent - 1));
+    *ddout = Scale<T, Context>(dev_ctx, ddout_tmp, exponent, 0.0, true);
   }
 }
 
@@ -355,7 +344,7 @@ void PowTripleGradKernel(const Context& dev_ctx,
                          const DenseTensor& dout,
                          const DenseTensor& ddx,
                          const DenseTensor& d_dx,
-                         const paddle::optional<DenseTensor>& d_ddout,
+                         const optional<DenseTensor>& d_ddout,
                          const Scalar& factor,
                          DenseTensor* out_d_x,
                          DenseTensor* out_d_dout,
@@ -369,70 +358,67 @@ void PowTripleGradKernel(const Context& dev_ctx,
     // D_X = D_DX * DDX * DOut * b * (b-1) * (b-2) * X^(b-3)
     //       + D_DDOut * DDX * b * (b-1) * X^(b-2)
     if (out_d_x) {
-      DenseTensor out_d_x_tmp1 = phi::Multiply<T, Context>(dev_ctx, d_dx, ddx);
+      DenseTensor out_d_x_tmp1 = Multiply<T, Context>(dev_ctx, d_dx, ddx);
       DenseTensor out_d_x_tmp2 =
-          phi::Scale<T, Context>(dev_ctx,
-                                 phi::Pow<T, Context>(dev_ctx, x, exponent - 3),
-                                 exponent * (exponent - 1) * (exponent - 2),
-                                 0.0,
-                                 true);
-      DenseTensor out_d_x_part1 = phi::Multiply<T, Context>(
+          Scale<T, Context>(dev_ctx,
+                            Pow<T, Context>(dev_ctx, x, exponent - 3),
+                            exponent * (exponent - 1) * (exponent - 2),
+                            0.0,
+                            true);
+      DenseTensor out_d_x_part1 = Multiply<T, Context>(
           dev_ctx,
-          phi::Multiply<T, Context>(dev_ctx, out_d_x_tmp1, dout),
+          Multiply<T, Context>(dev_ctx, out_d_x_tmp1, dout),
           out_d_x_tmp2);
 
       if (d_ddout.get_ptr()) {
         DenseTensor out_d_x_tmp3 =
-            phi::Multiply<T, Context>(dev_ctx, d_ddout.get(), ddx);
-        DenseTensor out_d_x_tmp4 = phi::Scale<T, Context>(
-            dev_ctx,
-            phi::Pow<T, Context>(dev_ctx, x, exponent - 2),
-            exponent * (exponent - 1),
-            0.0,
-            true);
+            Multiply<T, Context>(dev_ctx, d_ddout.get(), ddx);
+        DenseTensor out_d_x_tmp4 =
+            Scale<T, Context>(dev_ctx,
+                              Pow<T, Context>(dev_ctx, x, exponent - 2),
+                              exponent * (exponent - 1),
+                              0.0,
+                              true);
         DenseTensor out_d_x_part2 =
-            phi::Multiply<T, Context>(dev_ctx, out_d_x_tmp3, out_d_x_tmp4);
-        *out_d_x = phi::Add<T, Context>(dev_ctx, out_d_x_part1, out_d_x_part2);
+            Multiply<T, Context>(dev_ctx, out_d_x_tmp3, out_d_x_tmp4);
+        *out_d_x = Add<T, Context>(dev_ctx, out_d_x_part1, out_d_x_part2);
       } else {
         *out_d_x = out_d_x_part1;
       }
     }
     // D_DOut = D_DX * DDX * b * (b-1) * X^(b-2)
     if (out_d_dout) {
-      DenseTensor out_d_x_tmp = phi::Multiply<T, Context>(dev_ctx, d_dx, ddx);
+      DenseTensor out_d_x_tmp = Multiply<T, Context>(dev_ctx, d_dx, ddx);
       DenseTensor out_d_dout_tmp =
-          phi::Scale<T, Context>(dev_ctx,
-                                 phi::Pow<T, Context>(dev_ctx, x, exponent - 2),
-                                 exponent * (exponent - 1),
-                                 0.0,
-                                 true);
+          Scale<T, Context>(dev_ctx,
+                            Pow<T, Context>(dev_ctx, x, exponent - 2),
+                            exponent * (exponent - 1),
+                            0.0,
+                            true);
 
-      *out_d_dout =
-          phi::Multiply<T, Context>(dev_ctx, out_d_x_tmp, out_d_dout_tmp);
+      *out_d_dout = Multiply<T, Context>(dev_ctx, out_d_x_tmp, out_d_dout_tmp);
     }
     // D_DDX = D_DX * DOut * b * (b-1) * X^(b-2) + D_DDOut * b * X^(b-1)
     if (out_d_ddx) {
-      DenseTensor out_d_ddx_tmp1 =
-          phi::Multiply<T, Context>(dev_ctx, d_dx, dout);
+      DenseTensor out_d_ddx_tmp1 = Multiply<T, Context>(dev_ctx, d_dx, dout);
       DenseTensor out_d_dout_tmp =
-          phi::Scale<T, Context>(dev_ctx,
-                                 phi::Pow<T, Context>(dev_ctx, x, exponent - 2),
-                                 exponent * (exponent - 1),
-                                 0.0,
-                                 true);
+          Scale<T, Context>(dev_ctx,
+                            Pow<T, Context>(dev_ctx, x, exponent - 2),
+                            exponent * (exponent - 1),
+                            0.0,
+                            true);
       DenseTensor out_d_ddx_part1 =
-          phi::Multiply<T, Context>(dev_ctx, out_d_ddx_tmp1, out_d_dout_tmp);
+          Multiply<T, Context>(dev_ctx, out_d_ddx_tmp1, out_d_dout_tmp);
       if (d_ddout.get_ptr()) {
-        DenseTensor out_d_ddx_tmp2 = phi::Scale<T, Context>(
-            dev_ctx,
-            phi::Pow<T, Context>(dev_ctx, x, exponent - 1),
-            exponent,
-            0.0,
-            true);
+        DenseTensor out_d_ddx_tmp2 =
+            Scale<T, Context>(dev_ctx,
+                              Pow<T, Context>(dev_ctx, x, exponent - 1),
+                              exponent,
+                              0.0,
+                              true);
         DenseTensor out_d_ddx_part2 =
-            phi::Multiply<T, Context>(dev_ctx, d_ddout.get(), out_d_ddx_tmp2);
-        *out_d_ddx =
-            phi::Add<T, Context>(dev_ctx, out_d_ddx_part1, out_d_ddx_part2);
+            Multiply<T, Context>(dev_ctx, d_ddout.get(), out_d_ddx_tmp2);
+        *out_d_ddx = Add<T, Context>(dev_ctx, out_d_ddx_part1, out_d_ddx_part2);
       } else {
         *out_d_ddx = out_d_ddx_part1;
       }
@@ -443,57 +429,53 @@ void PowTripleGradKernel(const Context& dev_ctx,
     if (out_d_x) {
       if (d_ddout.get_ptr()) {
         DenseTensor out_d_x_tmp1 =
-            phi::Multiply<T, Context>(dev_ctx, d_ddout.get(), ddx);
-        DenseTensor out_d_x_tmp2 = phi::Scale<T, Context>(
-            dev_ctx,
-            phi::Pow<T, Context>(dev_ctx, x, exponent - 2),
-            exponent * (exponent - 1),
-            0.0,
-            true);
-        *out_d_x =
-            phi::Multiply<T, Context>(dev_ctx, out_d_x_tmp1, out_d_x_tmp2);
+            Multiply<T, Context>(dev_ctx, d_ddout.get(), ddx);
+        DenseTensor out_d_x_tmp2 =
+            Scale<T, Context>(dev_ctx,
+                              Pow<T, Context>(dev_ctx, x, exponent - 2),
+                              exponent * (exponent - 1),
+                              0.0,
+                              true);
+        *out_d_x = Multiply<T, Context>(dev_ctx, out_d_x_tmp1, out_d_x_tmp2);
       } else {
-        *out_d_x = phi::FullLike<T, Context>(dev_ctx, x, static_cast<T>(0));
+        *out_d_x = FullLike<T, Context>(dev_ctx, x, static_cast<T>(0));
       }
     }
     // D_DOut = D_DX * DDX * b * (b-1) * X^(b-2)
     if (out_d_dout) {
-      DenseTensor out_d_dout_tmp1 =
-          phi::Multiply<T, Context>(dev_ctx, d_dx, ddx);
+      DenseTensor out_d_dout_tmp1 = Multiply<T, Context>(dev_ctx, d_dx, ddx);
       DenseTensor out_d_dout_tmp2 =
-          phi::Scale<T, Context>(dev_ctx,
-                                 phi::Pow<T, Context>(dev_ctx, x, exponent - 2),
-                                 exponent * (exponent - 1),
-                                 0.0,
-                                 true);
+          Scale<T, Context>(dev_ctx,
+                            Pow<T, Context>(dev_ctx, x, exponent - 2),
+                            exponent * (exponent - 1),
+                            0.0,
+                            true);
 
       *out_d_dout =
-          phi::Multiply<T, Context>(dev_ctx, out_d_dout_tmp1, out_d_dout_tmp2);
+          Multiply<T, Context>(dev_ctx, out_d_dout_tmp1, out_d_dout_tmp2);
     }
     // D_DDX = D_DX * DOut * b * (b-1) * X^(b-2) + D_DDOut * b * X^(b-1)
     if (out_d_ddx) {
-      DenseTensor out_d_ddx_tmp1 =
-          phi::Multiply<T, Context>(dev_ctx, d_dx, dout);
+      DenseTensor out_d_ddx_tmp1 = Multiply<T, Context>(dev_ctx, d_dx, dout);
       DenseTensor out_d_dout_tmp2 =
-          phi::Scale<T, Context>(dev_ctx,
-                                 phi::Pow<T, Context>(dev_ctx, x, exponent - 2),
-                                 exponent * (exponent - 1),
-                                 0.0,
-                                 true);
+          Scale<T, Context>(dev_ctx,
+                            Pow<T, Context>(dev_ctx, x, exponent - 2),
+                            exponent * (exponent - 1),
+                            0.0,
+                            true);
       DenseTensor out_d_ddx_part1 =
-          phi::Multiply<T, Context>(dev_ctx, out_d_ddx_tmp1, out_d_dout_tmp2);
+          Multiply<T, Context>(dev_ctx, out_d_ddx_tmp1, out_d_dout_tmp2);
 
       if (d_ddout.get_ptr()) {
-        DenseTensor out_d_ddx_tmp2 = phi::Scale<T, Context>(
-            dev_ctx,
-            phi::Pow<T, Context>(dev_ctx, x, exponent - 1),
-            exponent,
-            0.0,
-            true);
+        DenseTensor out_d_ddx_tmp2 =
+            Scale<T, Context>(dev_ctx,
+                              Pow<T, Context>(dev_ctx, x, exponent - 1),
+                              exponent,
+                              0.0,
+                              true);
         DenseTensor out_d_ddx_part2 =
-            phi::Multiply<T, Context>(dev_ctx, d_ddout.get(), out_d_ddx_tmp2);
-        *out_d_ddx =
-            phi::Add<T, Context>(dev_ctx, out_d_ddx_part1, out_d_ddx_part2);
+            Multiply<T, Context>(dev_ctx, d_ddout.get(), out_d_ddx_tmp2);
+        *out_d_ddx = Add<T, Context>(dev_ctx, out_d_ddx_part1, out_d_ddx_part2);
       } else {
         *out_d_ddx = out_d_ddx_part1;
       }
@@ -502,37 +484,37 @@ void PowTripleGradKernel(const Context& dev_ctx,
     // case3: b = 1
     // D_X = D_DX * DDX * DOut * b * (b-1) * (b-2) * X^(b-3)
     if (out_d_x) {
-      DenseTensor out_d_x_tmp1 = phi::Multiply<T, Context>(dev_ctx, d_dx, ddx);
+      DenseTensor out_d_x_tmp1 = Multiply<T, Context>(dev_ctx, d_dx, ddx);
       DenseTensor out_d_x_tmp2 =
-          phi::Scale<T, Context>(dev_ctx,
-                                 phi::Pow<T, Context>(dev_ctx, x, exponent - 3),
-                                 exponent * (exponent - 1) * (exponent - 2),
-                                 0.0,
-                                 true);
+          Scale<T, Context>(dev_ctx,
+                            Pow<T, Context>(dev_ctx, x, exponent - 3),
+                            exponent * (exponent - 1) * (exponent - 2),
+                            0.0,
+                            true);
 
-      *out_d_x = phi::Multiply<T, Context>(
+      *out_d_x = Multiply<T, Context>(
           dev_ctx,
-          phi::Multiply<T, Context>(dev_ctx, out_d_x_tmp1, dout),
+          Multiply<T, Context>(dev_ctx, out_d_x_tmp1, dout),
           out_d_x_tmp2);
     }
     // D_DOut = 0
     if (out_d_dout) {
-      *out_d_dout = phi::FullLike<T, Context>(dev_ctx, dout, static_cast<T>(0));
+      *out_d_dout = FullLike<T, Context>(dev_ctx, dout, static_cast<T>(0));
     }
     // D_DDX = D_DDOut * b * X^(b-1)
     if (out_d_ddx) {
       if (d_ddout.get_ptr()) {
-        DenseTensor out_d_ddx_tmp = phi::Scale<T, Context>(
-            dev_ctx,
-            phi::Pow<T, Context>(dev_ctx, x, exponent - 1),
-            exponent,
-            0.0,
-            true);
+        DenseTensor out_d_ddx_tmp =
+            Scale<T, Context>(dev_ctx,
+                              Pow<T, Context>(dev_ctx, x, exponent - 1),
+                              exponent,
+                              0.0,
+                              true);
 
         *out_d_ddx =
-            phi::Multiply<T, Context>(dev_ctx, d_ddout.get(), out_d_ddx_tmp);
+            Multiply<T, Context>(dev_ctx, d_ddout.get(), out_d_ddx_tmp);
       } else {
-        *out_d_ddx = phi::FullLike<T, Context>(dev_ctx, ddx, static_cast<T>(0));
+        *out_d_ddx = FullLike<T, Context>(dev_ctx, ddx, static_cast<T>(0));
       }
     }
   }
@@ -554,7 +536,7 @@ void SqrtDoubleGradKernel(const Context& dev_ctx,
     dev_ctx.template Alloc<T>(ddout);
   }
 
-  phi::funcs::SqrtGradGradFunctor<T> functor;
+  funcs::SqrtGradGradFunctor<T> functor;
   functor(dev_ctx, &out, &dx, &ddx, dout, ddout);
 }
 
@@ -576,7 +558,7 @@ void RsqrtDoubleGradKernel(const Context& dev_ctx,
     dev_ctx.template Alloc<T>(ddout);
   }
 
-  phi::funcs::RsqrtGradGradFunctor<T> functor;
+  funcs::RsqrtGradGradFunctor<T> functor;
   functor(dev_ctx, &out, &dx, &ddx, dout, ddout);
 }
 
@@ -596,7 +578,7 @@ void CeluDoubleGradKernel(const Context& dev_ctx,
     dev_ctx.template Alloc<T>(ddout);
   }
 
-  phi::funcs::CELUGradGradFunctor<T> functor;
+  funcs::CELUGradGradFunctor<T> functor;
   auto attrs = functor.GetAttrs();
   *(attrs[0].second) = alpha;
   functor(dev_ctx, &x, &dout, &ddx, dx, ddout);
@@ -619,7 +601,7 @@ void SoftplusDoubleGradKernel(const Context& dev_ctx,
     dev_ctx.template Alloc<T>(ddout);
   }
 
-  phi::funcs::SoftplusDoubleGradFunctor<T> functor;
+  funcs::SoftplusDoubleGradFunctor<T> functor;
   auto attrs = functor.GetAttrs();
   *(attrs[0].second) = beta;
   *(attrs[1].second) = threshold;
@@ -641,7 +623,7 @@ void SquareDoubleGradKernel(const Context& dev_ctx,
     dev_ctx.template Alloc<T>(ddout);
   }
 
-  phi::funcs::SquareGradGradFunctor<T> functor;
+  funcs::SquareGradGradFunctor<T> functor;
   functor(dev_ctx, &x, &dout, &ddx, dx, ddout);
 }
 
@@ -658,17 +640,17 @@ void SinDoubleGradKernel(const Context& dev_ctx,
   if (ddout) {
     dev_ctx.template Alloc<T>(ddout);
   }
-  phi::funcs::SinDoubleGradFunctor<T> functor;
+  funcs::SinDoubleGradFunctor<T> functor;
   functor(dev_ctx, &x, &dout, &ddx, dx, ddout);
 }
 
 template <typename T, typename Context>
 void SinTripleGradKernel(const Context& dev_ctx,
                          const DenseTensor& x,
-                         const paddle::optional<DenseTensor>& dout,
-                         const paddle::optional<DenseTensor>& ddx,
+                         const optional<DenseTensor>& dout,
+                         const optional<DenseTensor>& ddx,
                          const DenseTensor& d_dx_new,
-                         const paddle::optional<DenseTensor>& d_ddout,
+                         const optional<DenseTensor>& d_ddout,
                          DenseTensor* d_x_new,
                          DenseTensor* d_dout,
                          DenseTensor* d_ddx) {
@@ -706,17 +688,17 @@ void CosDoubleGradKernel(const Context& dev_ctx,
   if (ddout) {
     dev_ctx.template Alloc<T>(ddout);
   }
-  phi::funcs::CosDoubleGradFunctor<T> functor;
+  funcs::CosDoubleGradFunctor<T> functor;
   functor(dev_ctx, &x, &dout, &ddx, dx, ddout);
 }
 
 template <typename T, typename Context>
 void CosTripleGradKernel(const Context& dev_ctx,
                          const DenseTensor& x,
-                         const paddle::optional<DenseTensor>& dout,
-                         const paddle::optional<DenseTensor>& ddx,
+                         const optional<DenseTensor>& dout,
+                         const optional<DenseTensor>& ddx,
                          const DenseTensor& d_dx_new,
-                         const paddle::optional<DenseTensor>& d_ddout,
+                         const optional<DenseTensor>& d_ddout,
                          DenseTensor* d_x_new,
                          DenseTensor* d_dout,
                          DenseTensor* d_ddx) {

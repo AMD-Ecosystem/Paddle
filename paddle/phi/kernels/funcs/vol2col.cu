@@ -80,7 +80,7 @@ __global__ void vol2col(int64_t num_kernels,
           *data_col = (d >= 0 && d < depth && h >= 0 && h < height && w >= 0 &&
                        w < width)
                           ? data_vol[vol_idx]
-                          : 0;
+                          : static_cast<T>(0);
           data_col += output_detph * output_height * output_width;
         }
       }
@@ -103,11 +103,11 @@ __global__ void vol2col(int64_t num_kernels,
 template <class DeviceContext, class T>
 void Vol2ColFunctor<DeviceContext, T>::operator()(
     const DeviceContext& dev_ctx,
-    const phi::DenseTensor& vol,
+    const DenseTensor& vol,
     const std::vector<int>& dilations,
     const std::vector<int>& strides,
     const std::vector<int>& paddings,
-    phi::DenseTensor* col,
+    DenseTensor* col,
     const DataLayout data_layout) const {
   PADDLE_ENFORCE_EQ(vol.dims().size(),
                     4,
@@ -251,7 +251,7 @@ __global__ void col2vol(int64_t num_kernels,
            static_cast<int64_t>(threadIdx.x);
        index < num_kernels;
        index += blockDim.x * gridDim.x) {
-    T src_val = 0;
+    T src_val = static_cast<T>(0);
     int64_t w = (data_layout != DataLayout::NHWC
                      ? index % width + padding_width
                      : (index / input_channels) % width + padding_width);
@@ -322,11 +322,11 @@ __global__ void col2vol(int64_t num_kernels,
 template <class DeviceContext, class T>
 void Col2VolFunctor<DeviceContext, T>::operator()(
     const DeviceContext& dev_ctx,
-    const phi::DenseTensor& col,
+    const DenseTensor& col,
     const std::vector<int>& dilations,
     const std::vector<int>& strides,
     const std::vector<int>& paddings,
-    phi::DenseTensor* vol,
+    DenseTensor* vol,
     const DataLayout data_layout) const {
   PADDLE_ENFORCE_EQ(vol->dims().size(),
                     4,
@@ -432,11 +432,16 @@ void Col2VolFunctor<DeviceContext, T>::operator()(
 }
 // };
 
-template class PADDLE_API Vol2ColFunctor<phi::GPUContext, float>;
-template class PADDLE_API Vol2ColFunctor<phi::GPUContext, double>;
+template class PADDLE_API Vol2ColFunctor<GPUContext, float>;
+template class PADDLE_API Vol2ColFunctor<GPUContext, double>;
 
-template class PADDLE_API Col2VolFunctor<phi::GPUContext, float>;
-template class PADDLE_API Col2VolFunctor<phi::GPUContext, double>;
+template class PADDLE_API Col2VolFunctor<GPUContext, float>;
+template class PADDLE_API Col2VolFunctor<GPUContext, double>;
 
+template class PADDLE_API Vol2ColFunctor<GPUContext, phi::dtype::float16>;
+template class PADDLE_API Vol2ColFunctor<GPUContext, phi::dtype::bfloat16>;
+
+template class PADDLE_API Col2VolFunctor<GPUContext, phi::dtype::float16>;
+template class PADDLE_API Col2VolFunctor<GPUContext, phi::dtype::bfloat16>;
 }  // namespace funcs
 }  // namespace phi

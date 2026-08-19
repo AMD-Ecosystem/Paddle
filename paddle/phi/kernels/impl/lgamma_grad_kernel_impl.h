@@ -24,7 +24,7 @@ struct LgammaGradFunctor {
       : dout_(dout), x_(x), output_(output), numel_(numel) {}
 
   HOSTDEVICE void operator()(int64_t idx) const {
-    using MT = typename phi::dtype::MPTypeTrait<T>::Type;
+    using MT = typename dtype::MPTypeTrait<T>::Type;
     const MT mp_dout = static_cast<MT>(dout_[idx]);
     const MT mp_x = static_cast<MT>(x_[idx]);
     MT eigen_out = Eigen::numext::digamma(mp_x);
@@ -55,7 +55,7 @@ void LgammaGradKernel(const Context& dev_ctx,
   if (d_x && d_x->numel() == 0) {
     return;
   }
-  phi::funcs::ForRange<Context> for_range(dev_ctx, numel);
+  funcs::ForRange<Context> for_range(dev_ctx, numel);
   LgammaGradFunctor<T> functor(dout_data, x_data, dx_data, numel);
   for_range(functor);
 }
