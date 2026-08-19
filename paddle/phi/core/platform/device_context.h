@@ -108,8 +108,13 @@ class IPUDeviceContext
 namespace xpu = baidu::xpu::api;
 #endif
 
-#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+#if (defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)) && \
+    !defined(PADDLE_WITH_CUSTOM_DEVICE)
 using CUDAPinnedDeviceContext = phi::GPUPinnedContext;
+#endif
+
+#if defined(PADDLE_WITH_XPU)
+using XPUPinnedDeviceContext = phi::XPUPinnedContext;
 #endif
 
 void EmplaceDeviceContexts(
@@ -133,10 +138,18 @@ struct DefaultDeviceContextType<phi::IPUPlace> {
 };
 #endif
 
-#if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
+#if (defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)) && \
+    !defined(PADDLE_WITH_CUSTOM_DEVICE)
 template <>
 struct DefaultDeviceContextType<phi::GPUPinnedPlace> {
   using TYPE = paddle::platform::CUDAPinnedDeviceContext;
+};
+#endif
+
+#if defined(PADDLE_WITH_XPU)
+template <>
+struct DefaultDeviceContextType<phi::XPUPinnedPlace> {
+  using TYPE = paddle::platform::XPUPinnedDeviceContext;
 };
 #endif
 

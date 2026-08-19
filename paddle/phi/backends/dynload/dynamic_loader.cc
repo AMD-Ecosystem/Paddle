@@ -68,10 +68,16 @@ PHI_DEFINE_string(rccl_dir,
                   "dlopen will search rccl from LD_LIBRARY_PATH");
 #endif
 
-// use hardcoded path for now to ensure correctness
 #ifdef PADDLE_WITH_FLAGCX
 COMMON_DECLARE_string(flagcx_dir);
 #endif
+
+PHI_DEFINE_EXPORTED_string(
+    flagcx_dir,  // NOLINT
+    "",
+    "Specify path for loading libflagcx.so. For instance, "
+    "For instance, /usr/local/flagcx/lib. If default, "
+    "dlopen will search flagcx from LD_LIBRARY_PATH");
 
 #ifdef PADDLE_WITH_XPU
 PD_DEFINE_string(xpti_dir, "", "Specify path for loading libxpti.so.");
@@ -184,7 +190,7 @@ static inline void* GetDsoHandleFromSpecificPath(const std::string& spec_path,
                                                  const std::string& dso_name,
                                                  int dynload_flags) {
   void* dso_handle = nullptr;
-  if (!spec_path.empty()) {
+  if (!spec_path.empty() || !dso_name.empty()) {
     // search xxx.so from custom path
     VLOG(3) << "Try to find library: " << dso_name
             << " from specific path: " << spec_path;

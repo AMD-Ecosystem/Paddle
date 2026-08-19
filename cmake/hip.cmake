@@ -178,18 +178,26 @@ set(HIP_CLANG_FLAGS ${HIP_CXX_FLAGS})
 # host linker to link.
 list(APPEND HIP_HCC_FLAGS -fno-gpu-rdc)
 if(ROCM_6)
+  # AMD ROCm overlay: target AMD Instinct gfx942 on ROCm 6+.
   list(APPEND HIP_HCC_FLAGS --offload-arch=gfx942)
 else()
+  list(APPEND HIP_HCC_FLAGS --offload-arch=gfx906) # Z100 (ZIFANG)
   list(APPEND HIP_HCC_FLAGS --offload-arch=gfx926) # K100 (KONGING)
   list(APPEND HIP_HCC_FLAGS --offload-arch=gfx928) # K100_AI (KONGING_AI)
+  list(APPEND HIP_HCC_FLAGS --offload-arch=gfx936) # BW1000 (BOWEN)
 endif()
 list(APPEND HIP_CLANG_FLAGS -fno-gpu-rdc)
 if(ROCM_6)
+  # AMD ROCm overlay: target AMD Instinct gfx942 on ROCm 6+.
   list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx942)
 else()
+  list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx906) # Z100 (ZIFANG)
   list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx926) # K100 (KONGING)
   list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx928) # K100_AI (KONGING_AI)
+  list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx936) # BW1000 (BOWEN)
 endif()
+
+
 if(HIP_COMPILER STREQUAL clang)
   set(hip_library_name amdhip64)
 else()
@@ -209,3 +217,7 @@ endif()
 message(STATUS "ROCM_HIPRTC_LIB: ${ROCM_HIPRTC_LIB}")
 
 include(thrust)
+
+if(WITH_Z100)
+  add_definitions(-DCINN_WITH_Z100)
+endif()

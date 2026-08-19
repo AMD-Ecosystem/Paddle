@@ -20,6 +20,10 @@ limitations under the License. */
 
 #include "paddle/phi/common/data_type.h"
 #include "paddle/phi/core/enforce.h"
+
+#ifdef PADDLE_WITH_FLAGCX
+#include <flagcx.h>
+#endif
 namespace phi {
 
 #define _PhiForEachDataTypeHelper_(callback, cpp_type, data_type) \
@@ -241,7 +245,8 @@ inline ncclDataType_t ToNCCLDataType(DataType type) {
     return ncclUint8;
   } else if (type == DataType::INT8) {
     return ncclInt8;
-  } else if (type == DataType::BOOL) {
+  } else if (type == DataType::BOOL || type == DataType::FLOAT8_E4M3FN ||
+             type == DataType::FLOAT8_E5M2) {
     return ncclUint8;
 #if (NCCL_VERSION_CODE >= 21000 && CUDA_VERSION >= 11000) || \
     defined(PADDLE_WITH_HIP)

@@ -24,6 +24,10 @@
 #include "paddle/phi/core/enforce.h"
 #include "paddle/phi/core/utils/data_type.h"
 
+#ifdef PADDLE_WITH_FLAGCX
+#include <flagcx.h>
+#endif
+
 namespace phi::distributed {
 
 // set this flag to `true` and recompile to enable dynamic checks
@@ -35,9 +39,9 @@ FlagcxCommContext::FlagcxCommContext(int rank,
     : CommContext(rank, size),
       flagcx_version_(0),
       flagcx_handler_(flagcx_handler) {
-  flagcxCommInitRank(
+  phi::dynload::flagcxCommInitRank(
       &flagcx_handler_->comm, size_, flagcx_handler_->uniqueId, rank_),
-      flagcxGetVersion(&flagcx_version_);
+      phi::dynload::flagcxGetVersion(&flagcx_version_);
 }
 
 int FlagcxCommContext::GetFlagcxVersion() { return flagcx_version_; }

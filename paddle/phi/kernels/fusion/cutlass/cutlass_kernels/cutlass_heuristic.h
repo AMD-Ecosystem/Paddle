@@ -60,9 +60,14 @@ static std::vector<CutlassTileConfig> get_candidate_tiles(
   };
   std::vector<CutlassTileConfig> quant_B_configs_sm80{
       CutlassTileConfig::CtaShape16x128x64_WarpShape16x32x64,
+      CutlassTileConfig::CtaShape16x256x64_WarpShape16x64x64,
       CutlassTileConfig::CtaShape32x128x64_WarpShape32x32x64,
+      CutlassTileConfig::CtaShape64x64x64_WarpShape32x32x64,
+      CutlassTileConfig::CtaShape64x128x64_WarpShape64x32x64,
       CutlassTileConfig::CtaShape64x128x64_WarpShape64x64x64,
+      CutlassTileConfig::CtaShape128x64x64_WarpShape64x32x64,
       CutlassTileConfig::CtaShape128x128x64_WarpShape64x64x64,
+      CutlassTileConfig::CtaShape128x128x64_WarpShape128x32x64,
       CutlassTileConfig::CtaShape128x256x64_WarpShape64x64x64,
   };
   if (is_moe) {
@@ -109,10 +114,12 @@ static std::vector<CutlassGemmConfig> get_candidate_configs(
       is_weight_only, simt_configs_only, sm, group_size, is_moe);
 
   std::vector<CutlassGemmConfig> candidate_configs;
-  const int min_stages = 2;
+  int min_stages = 2;
   // Note(yuanlehome): max_stages must smaller than 5!
-  const int max_stages = sm >= 80 ? 4 : 2;
-
+  int max_stages = sm >= 80 ? 4 : 2;
+  if (is_moe) {
+    max_stages = 5;
+  }
   for (const auto& tile_config : tiles) {
     for (int stages = min_stages; stages <= max_stages; ++stages) {
       CutlassGemmConfig config{tile_config, SplitKStyle::NO_SPLIT_K, 1, stages};

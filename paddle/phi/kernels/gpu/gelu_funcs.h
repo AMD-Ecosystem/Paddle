@@ -105,14 +105,9 @@ static __global__ void FP16FastGeluBwdCUDAKernel(const __half* x,
 #pragma unroll
     for (int i = 0; i < VecSize; ++i) {
       __half2 tmp_fp16_2;
-#ifdef PADDLE_WITH_HIP
-#if HIP_VERSION >= 60000000
-      tmp_fp16_2.x = x_in_arr[i];
-      tmp_fp16_2.y = y_g_in_arr[i];
-#else
+#if defined(PADDLE_WITH_HIP) && HIP_VERSION < 60100000
       tmp_fp16_2.x = *reinterpret_cast<uint16_t*>(&x_in_arr[i]);
       tmp_fp16_2.y = *reinterpret_cast<uint16_t*>(&y_g_in_arr[i]);
-#endif
 #else
       tmp_fp16_2.x = x_in_arr[i];
       tmp_fp16_2.y = y_g_in_arr[i];

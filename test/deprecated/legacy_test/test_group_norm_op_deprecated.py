@@ -586,6 +586,7 @@ class TestGroupNormBF16Op_With_NHWC(TestGroupNormBF16Op):
         self.python_out_sig = ["Y"]
         self.data_format = "NHWC"
         self.prim_op_type = "comp"
+        self.channel_last = True
 
         self.dtype = np.uint16
         self.shape = (1, 3, 5, 512)
@@ -1023,11 +1024,8 @@ class PrimNet(paddle.nn.Layer):
 
 
 def apply_to_static(net, use_cinn):
-    build_strategy = paddle.static.BuildStrategy()
-    build_strategy.build_cinn_pass = use_cinn
-    return paddle.jit.to_static(
-        net, build_strategy=build_strategy, full_graph=True
-    )
+    backend = "CINN" if use_cinn else None
+    return paddle.jit.to_static(net, backend=backend, full_graph=True)
 
 
 # The original GroupNorm cannot support NHWC format

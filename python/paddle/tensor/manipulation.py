@@ -907,10 +907,6 @@ def crop(
             raise TypeError(
                 f"Attr(shape)'s dtype of Op(crop_tensor) should be int32, but received: {type(shape_val)}."
             )
-        if shape_val == 0:
-            raise ValueError(
-                f"Attr(shape) of Op(crop_tensor) should not be zero, but received: {shape_val}."
-            )
         if shape_val < -1:
             raise ValueError(
                 f"When the element in Attr(shape) of Op(crop_tensor) is negative, only -1 is supported, but received: {shape_val}."
@@ -1460,8 +1456,6 @@ def concat(
         else:
             input = [input]
 
-        if not isinstance(input, paddle.pir.Value):
-            input = [t for t in input if t.shape.count(0) == 0]
         return _C_ops.concat(input, axis)
     else:
         check_type(input, 'input', (list, tuple, Variable), 'concat')
@@ -4058,6 +4052,7 @@ def gather(
             x,
             'x',
             [
+                'bool',
                 'float16',
                 'float32',
                 'float64',
@@ -5165,7 +5160,7 @@ def masked_scatter(
     zeros_like_x = paddle.zeros_like(x, dtype=int)
     mask = paddle.add(paddle.cast(mask, dtype="int"), zeros_like_x)
     mask_prefix = paddle.clip(mask.cumsum() - 1, min=0)
-    if in_dynamic_mode():
+    if in_dynamic_mode() and mask_prefix.numel() != 0:
         assert (
             mask_prefix[-1] <= value.numel()
         ), f'mask true nums must be <= value size, but got mask true nums is {mask_prefix[-1].item()}, value size is {value.numel().item()}'
@@ -5280,6 +5275,20 @@ def atleast_1d(*inputs, name=None):
             [123]), Tensor(shape=[1, 1], dtype=float32, place=Place(cpu), stop_gradient=True,
             [[1.23000002]])]
     """
+    if len(inputs) == 1 and isinstance(inputs[0], (list, tuple)):
+        if any(
+            isinstance(
+                item,
+                (
+                    paddle.Tensor,
+                    paddle.base.framework.Variable,
+                    paddle.base.libpaddle.pir.Value,
+                ),
+            )
+            for item in inputs[0]
+        ):
+            inputs = inputs[0]
+
     out = []
     for input in inputs:
         if not isinstance(
@@ -5369,6 +5378,20 @@ def atleast_2d(*inputs, name=None):
             [[123]]), Tensor(shape=[1, 1, 1], dtype=float32, place=Place(cpu), stop_gradient=True,
             [[[1.23000002]]])]
     """
+    if len(inputs) == 1 and isinstance(inputs[0], (list, tuple)):
+        if any(
+            isinstance(
+                item,
+                (
+                    paddle.Tensor,
+                    paddle.base.framework.Variable,
+                    paddle.base.libpaddle.pir.Value,
+                ),
+            )
+            for item in inputs[0]
+        ):
+            inputs = inputs[0]
+
     out = []
     for input in inputs:
         if not isinstance(
@@ -5447,6 +5470,20 @@ def atleast_3d(*inputs, name=None):
             [[[123]]]), Tensor(shape=[1, 1, 1, 1], dtype=float32, place=Place(cpu), stop_gradient=True,
             [[[[1.23000002]]]])]
     """
+    if len(inputs) == 1 and isinstance(inputs[0], (list, tuple)):
+        if any(
+            isinstance(
+                item,
+                (
+                    paddle.Tensor,
+                    paddle.base.framework.Variable,
+                    paddle.base.libpaddle.pir.Value,
+                ),
+            )
+            for item in inputs[0]
+        ):
+            inputs = inputs[0]
+
     out = []
     for input in inputs:
         if not isinstance(
@@ -6012,10 +6049,10 @@ def tensordot(
         sx, sy = shape_x[dim_x], shape_y[dim_y]
         if sx == 1:
             shape_y[dim_y] = 1
-            y = y.sum(dim_y).reshape(shape_y)
+            y = y.sum(dim_y, dtype=y.dtype).reshape(shape_y)
         elif sy == 1:
             shape_x[dim_x] = 1
-            x = x.sum(dim_x).reshape(shape_x)
+            x = x.sum(dim_x, dtype=x.dtype).reshape(shape_x)
         else:
             assert sx == sy, (
                 "The dimensional size for 'x' and 'y' in "
@@ -6219,7 +6256,8 @@ def repeat_interleave(
     if isinstance(repeats, (Variable, paddle.pir.Value)) and not repeats.shape:
         repeats = paddle.reshape(repeats, [1])
     if axis is None:
-        x = paddle.flatten(x)
+        if x.ndim != 1:
+            x = paddle.flatten(x)
         axis = 0
     if in_dynamic_or_pir_mode():
         if isinstance(repeats, (Variable, paddle.pir.Value)):
@@ -6420,9 +6458,50 @@ def masked_fill(
     if np.isscalar(value):
         value = paddle.full([], value, x.dtype)
 
-    mask = paddle.logical_not(mask)
-    out = paddle.where(mask, x, value)
-    return out
+    if mask.dtype != "bool":
+        mask = paddle.cast(mask, "bool")
+
+    if in_dynamic_or_pir_mode():
+        out = _C_ops.masked_fill(x, mask, value)
+        return out
+    else:
+        check_variable_and_dtype(
+            x,
+            'x',
+            [
+                'bool',
+                'float16',
+                'bfloat16',
+                'float32',
+                'float64',
+                'int16',
+                'int32',
+                'int64',
+                'int8',
+                'unit8',
+                'complex64',
+                'complex128',
+            ],
+            'masked_fill',
+        )
+        check_variable_and_dtype(
+            mask,
+            'mask',
+            ['bool'],
+            'masked_fill',
+        )
+        helper = LayerHelper("masked_fill", **locals())
+        out = helper.create_variable_for_type_inference(dtype=x.dtype)
+        helper.append_op(
+            type='masked_fill',
+            inputs={
+                'x': x,
+                'mask': mask,
+                'value': value,
+            },
+            outputs={'out': out},
+        )
+        return out
 
 
 @inplace_apis_in_dygraph_only
@@ -6436,9 +6515,11 @@ def masked_fill_(
     if np.isscalar(value):
         value = paddle.full([], value, x.dtype)
 
-    mask = paddle.logical_not(mask)
-    out = paddle.where_(mask, x, value)
-    return out
+    if mask.dtype != "bool":
+        mask = paddle.cast(mask, "bool")
+
+    x = _C_ops.masked_fill_(x, mask, value)
+    return x
 
 
 @overload
@@ -6561,7 +6642,11 @@ def take_along_axis(
         arr = paddle.broadcast_to(arr, broadcast_shape)
     else:
         for i in range(len(arr.shape)):
-            if i != axis and arr.shape[i] < indices.shape[i]:
+            if (
+                i != axis
+                and arr.shape[i] != -1
+                and arr.shape[i] < indices.shape[i]
+            ):
                 raise RuntimeError(
                     f"Size does not match at dimension {i} expected index {indices.shape} to be smaller than self {arr.shape} apart from dimension {axis}"
                 )

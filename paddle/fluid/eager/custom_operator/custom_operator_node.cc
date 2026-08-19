@@ -204,7 +204,7 @@ RunCustomOpNode::operator()(paddle::small_vector<std::vector<paddle::Tensor>,
   VLOG(6) << "Prepare Grad inputs";
   for (auto& in : tmp_ins) {
     for (auto& tensor : in) {
-      if (tensor.initialized() && tensor.is_dense_tensor() &&
+      if (tensor.has_allocation() && tensor.is_dense_tensor() &&
           !std::dynamic_pointer_cast<phi::DenseTensor>(tensor.impl())
                ->meta()
                .is_contiguous()) {
@@ -262,7 +262,7 @@ RunCustomOpNode::operator()(paddle::small_vector<std::vector<paddle::Tensor>,
     if (ctx.OutputRangeAt(i).first + 1 == ctx.OutputRangeAt(i).second) {
       paddle::Tensor* out_tensor =
           ctx.MutableOutputAt(ctx.OutputRangeAt(i).first);
-      if (!out_tensor->initialized()) {
+      if (!out_tensor->has_allocation()) {
         PADDLE_ENFORCE(
             paddle::framework::detail::IsOptionalVar(
                 grad_outputs_names.at(i)) ||
@@ -373,6 +373,10 @@ RunCustomOpNode::operator()(paddle::small_vector<std::vector<paddle::Tensor>,
     grad_node->SetAttrs(attrs);
   }
 
+  if (HasNodePostHook()) {
+    outs = ApplyNodePostHooks(outs, hooked_grads);
+  }
+
   return outs;
 }
 
@@ -457,6 +461,10 @@ RunCustomOpDoubleGradNode::operator()(
   for (size_t i = 0; i < ctx.OutputRange().size(); ++i) {
     auto output_pair = ctx.OutputRangeAt(i);
     outs[i] = ctx.OutputsBetween(output_pair.first, output_pair.second);
+  }
+
+  if (HasNodePostHook()) {
+    outs = ApplyNodePostHooks(outs, hooked_grads);
   }
 
   return outs;

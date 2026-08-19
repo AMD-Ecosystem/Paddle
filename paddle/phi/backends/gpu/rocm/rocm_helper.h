@@ -34,6 +34,16 @@ typedef hipDataType hipDataType_t;
 #define HIP_DATATYPE_R_64F HIP_R_64F
 #endif
 
+#if HIP_VERSION >= 60100000
+using hipDataType_t = hipDataType;
+constexpr hipDataType_t HIP_DATATYPE_R_32F = hipDataType::HIP_R_32F;
+constexpr hipDataType_t HIP_DATATYPE_R_64F = hipDataType::HIP_R_64F;
+constexpr hipDataType_t HIP_DATATYPE_R_16F = hipDataType::HIP_R_16F;
+constexpr hipDataType_t HIP_DATATYPE_R_8I = hipDataType::HIP_R_8I;
+constexpr hipDataType_t HIP_DATATYPE_R_16BF = hipDataType::HIP_R_16BF;
+constexpr hipDataType_t HIP_DATATYPE_R_32I = hipDataType::HIP_R_32I;
+#endif
+
 namespace phi {
 namespace backends {
 namespace gpu {
