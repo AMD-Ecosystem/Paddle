@@ -141,10 +141,22 @@ set(THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_HIP)
 # of the ROCm build in HIP language mode so host translation units that
 # transitively include thrust build. This requires a Clang toolchain: configure
 # the ROCm build with the ROCm clang++ as the C/C++ compiler
-# (-DCMAKE_C_COMPILER=<rocm>/llvm/bin/clang -DCMAKE_CXX_COMPILER=.../clang++);
-# the guard below no-ops on a non-Clang compiler so a CPU/GCC configure is safe.
+# (-DCMAKE_C_COMPILER=<rocm>/llvm/bin/clang -DCMAKE_CXX_COMPILER=.../clang++).
+#
+# Do NOT put `-x hip` in the global CMAKE_CXX_FLAGS. CMake's configure-time
+# check_cxx_symbol_exists / check_type_size / compiler-ABI try-compiles reuse
+# CMAKE_CXX_FLAGS; under `-x hip` they treat the intermediate as HIP source and
+# default to gfx906, so e.g. cmake/flags.cmake's UINT64_MAX probe fails and
+# aborts configure. It would also leak into ExternalProjects that capture
+# ${CMAKE_CXX_FLAGS} (protobuf, onednn), which are ordinary host C++ and should
+# not be compiled in HIP language mode. Instead, record the intent here and let
+# the top-level CMakeLists apply it via add_compile_options AFTER all
+# configure-time check_*() calls (i.e. after include(flags)) and after the
+# third_party externals are declared, so only Paddle's own targets (added via
+# add_subdirectory(paddle)) receive the flag. The guard no-ops on a non-Clang
+# compiler so a CPU/GCC configure is safe.
 if(ROCM_GE_6 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -x hip -fno-gpu-rdc")
+  set(PADDLE_HOST_HIP_LANGUAGE ON)
 endif()
 
 # define HIP_CXX_FLAGS

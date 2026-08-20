@@ -27,9 +27,13 @@ and a non-HIP Clang C++ compile fails on host-only `__half`/`__hip_bfloat16`
 conversion ambiguities in the CCCL headers. `__HIP_NO_HALF_CONVERSIONS__` /
 `__HIP_NO_HALF_OPERATORS__` do NOT resolve this.
 
-The overlay `cmake/hip.cmake` now adds `-x hip -fno-gpu-rdc` to the host C++
-flags, but only when the C++ compiler is Clang. So the ROCm build MUST be
-configured with the ROCm clang as the C/C++ compiler:
+The overlay compiles Paddle's own host C++ targets in Clang HIP language mode
+(`-x hip -fno-gpu-rdc`), but only when the C++ compiler is Clang. The flag is
+applied via `add_compile_options` scoped to Paddle's targets (in the top-level
+`CMakeLists.txt`, after `include(flags)`), NOT added to the global
+`CMAKE_CXX_FLAGS`; this keeps it out of CMake's configure-time `check_*()`
+try-compiles and out of the third_party ExternalProjects (protobuf, onednn).
+The ROCm build MUST be configured with the ROCm clang as the C/C++ compiler:
 
 ```
 -DCMAKE_C_COMPILER=/opt/rocm/llvm/bin/clang
@@ -37,12 +41,12 @@ configured with the ROCm clang as the C/C++ compiler:
 ```
 
 (Use the actual `${ROCM_PATH}/llvm/bin` on the manylinux base.) On a non-Clang
-compiler the `-x hip` guard no-ops, which keeps a CPU/GCC configure safe but does
-NOT fix the thrust host-compile break -- ROCm builds must use clang.
+compiler the HIP-language flag no-ops, which keeps a CPU/GCC configure safe but
+does NOT fix the thrust host-compile break -- ROCm builds must use clang.
 
 ## Configure
 
-Env seams on the manylinux base (see the hipSHIFT porter/validator notes):
+Environment prerequisites on the manylinux base:
 
 ```
 git config --global --add safe.directory '*'         # source tree bind-mount ownership
@@ -53,11 +57,23 @@ export MIOPEN_USER_DB_PATH=/work/miopen MIOPEN_CUSTOM_CACHE_DIR=/work/miopen
 The manylinux `cp3xx` interpreters are static-only (no shared libpython); use the
 RHEL8 system python3.11 which ships `/usr/lib64/libpython3.11.so.1.0`.
 
+The ROCm clang on the manylinux base cannot find `-lstdc++` by default (the
+linkable `libstdc++.so` lives under gcc-toolset, not `/usr`). Point clang at the
+gcc-toolset toolchain on both the C and CXX flags (pick the highest available via
+`ls -d /opt/rh/gcc-toolset-*/root | sort -V | tail -1`):
+
+```
+-DCMAKE_C_FLAGS=--gcc-toolchain=/opt/rh/gcc-toolset-14/root/usr
+-DCMAKE_CXX_FLAGS=--gcc-toolchain=/opt/rh/gcc-toolset-14/root/usr
+```
+
 ```
 cmake -S . -B build \
   -DWITH_ROCM=ON -DWITH_RCCL=ON \
   -DCMAKE_C_COMPILER=/opt/rocm/llvm/bin/clang \
   -DCMAKE_CXX_COMPILER=/opt/rocm/llvm/bin/clang++ \
+  -DCMAKE_C_FLAGS=--gcc-toolchain=/opt/rh/gcc-toolset-14/root/usr \
+  -DCMAKE_CXX_FLAGS=--gcc-toolchain=/opt/rh/gcc-toolset-14/root/usr \
   -DCMAKE_HIP_ARCHITECTURES=gfx942 \        # gfx950 for the primary target
   -DPYTHON_EXECUTABLE=/usr/bin/python3.11 \
   -DPYTHON_INCLUDE_DIR=/usr/include/python3.11 \
