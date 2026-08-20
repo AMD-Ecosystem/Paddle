@@ -125,6 +125,28 @@ set(CMAKE_CXX_FLAGS
     "${CMAKE_CXX_FLAGS} -DTHRUST_DEVICE_SYSTEM=THRUST_DEVICE_SYSTEM_HIP")
 set(THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_HIP)
 
+# On ROCm 6+, rocThrust bundles CCCL/libcudacxx. thrust/complex.h (included by
+# paddle/phi/common/complex.h) pulls in cuda/std/cmath half/bf16 math overloads
+# that reference intrinsics (__hisnan, __hisinf, __habs, __hmax,
+# __double2bfloat16) only declared in the HIP fp16/bf16 headers under
+# `defined(__clang__) && defined(__HIP__)`. A plain host C++ compile has neither,
+# so these overloads are undeclared -- and even a Clang C++ (non-HIP) compile
+# fails on host-only __half<->__hip_bfloat16 conversion ambiguities in the CCCL
+# headers. Setting __HIP_NO_HALF_CONVERSIONS__/__HIP_NO_HALF_OPERATORS__ does not
+# help: the CCCL fp16/bf16 path is force-enabled by __HIP_PLATFORM_AMD__ and its
+# intrinsics simply are not visible to a host compile. The one compilation mode
+# that accepts thrust/complex.h on this toolchain is Clang's HIP language mode
+# (-x hip), which makes the fp16/bf16 intrinsics available and resolves the
+# overloads while leaving ordinary host C++ unaffected. Compile the host C++ side
+# of the ROCm build in HIP language mode so host translation units that
+# transitively include thrust build. This requires a Clang toolchain: configure
+# the ROCm build with the ROCm clang++ as the C/C++ compiler
+# (-DCMAKE_C_COMPILER=<rocm>/llvm/bin/clang -DCMAKE_CXX_COMPILER=.../clang++);
+# the guard below no-ops on a non-Clang compiler so a CPU/GCC configure is safe.
+if(ROCM_GE_6 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -x hip -fno-gpu-rdc")
+endif()
+
 # define HIP_CXX_FLAGS
 list(APPEND HIP_CXX_FLAGS -fPIC)
 list(APPEND HIP_CXX_FLAGS -D__HIP_PLATFORM_HCC__=1)
