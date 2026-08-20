@@ -202,6 +202,20 @@ else()
   list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx936) # BW1000 (BOWEN)
 endif()
 
+# CMake >= 4.x's HIP language support treats an empty CMAKE_HIP_ARCHITECTURES as a
+# hard generate-time error for any target with HIP sources. The offload-arch
+# compiler flags above are not sufficient for that check, so set the property from
+# the same architecture list so a bare "cmake .." configures on modern CMake
+# without the caller passing -DCMAKE_HIP_ARCHITECTURES.
+if(NOT DEFINED CMAKE_HIP_ARCHITECTURES OR CMAKE_HIP_ARCHITECTURES STREQUAL "")
+  if(ROCM_GE_6)
+    set(CMAKE_HIP_ARCHITECTURES "gfx942")
+  else()
+    set(CMAKE_HIP_ARCHITECTURES "gfx906;gfx926;gfx928;gfx936")
+  endif()
+endif()
+message(STATUS "CMAKE_HIP_ARCHITECTURES: ${CMAKE_HIP_ARCHITECTURES}")
+
 
 if(HIP_COMPILER STREQUAL clang)
   set(hip_library_name amdhip64)
