@@ -11,20 +11,19 @@ index 9229ec8..67fb2fe 100644
 +  set(CMAKE_MODULE_PATH "${HIP_PATH}/cmake" ${CMAKE_MODULE_PATH})
 +else()
 +  set(CMAKE_MODULE_PATH "${ROCM_PATH}/lib/cmake/hip" ${CMAKE_MODULE_PATH})
-+  set(ROCM_6 ON)
++  set(ROCM_GE_6 ON)
 +endif()
- 
+
  find_package(HIP REQUIRED)
  include_directories(${ROCM_PATH}/include)
 @@ -76,5 +81,9 @@ endif()
  message(STATUS "HIP library name: ${hip_library_name}")
- 
+
  # set HIP link libs
 -find_library(ROCM_HIPRTC_LIB ${hip_library_name} HINTS ${HIP_PATH}/lib)
-+if(ROCM_6)
++if(ROCM_GE_6)
 +  find_library(ROCM_HIPRTC_LIB ${hip_library_name} HINTS ${ROCM_PATH}/lib)
 +else()
 +  find_library(ROCM_HIPRTC_LIB ${hip_library_name} HINTS ${HIP_PATH}/lib)
 +endif()
  message(STATUS "ROCM_HIPRTC_LIB: ${ROCM_HIPRTC_LIB}")
-\ No newline at end of file

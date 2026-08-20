@@ -1,3 +1,5 @@
+# Modifications Copyright (C) 2026 Advanced Micro Devices, Inc. All rights reserved.
+
 if(NOT WITH_ROCM)
   return()
 endif()
@@ -62,8 +64,11 @@ macro(find_hip_version hip_header_file)
       HIP_VERSION
       "${HIP_MAJOR_VERSION} * 10000000 + ${HIP_MINOR_VERSION} * 100000   + ${HIP_PATCH_VERSION}"
     )
+    # ROCM_GE_6 = "ROCm 6 or newer" (true for every ROCm >= 6, including the
+    # ROCm 10 build floor). It is NOT "exactly ROCm 6"; guards below read as
+    # "on ROCm 6+" not "on ROCm 6 only".
     if(HIP_VERSION GREATER 60000000)
-      set(ROCM_6 ON)
+      set(ROCM_GE_6 ON)
     endif()
     message(
       STATUS
@@ -88,8 +93,8 @@ macro(find_package_and_include PACKAGE_NAME)
   message(STATUS "${PACKAGE_NAME} version: ${${PACKAGE_NAME}_VERSION}")
 endmacro()
 
-if(ROCM_6)
-  message(STATUS "Current HIP header rocm6")
+if(ROCM_GE_6)
+  message(STATUS "Current HIP is ROCm 6 or newer")
 endif()
 find_package_and_include(miopen)
 find_package_and_include(rocblas)
@@ -177,7 +182,7 @@ set(HIP_CLANG_FLAGS ${HIP_CXX_FLAGS})
 # Ask hcc to generate device code during compilation so we can use
 # host linker to link.
 list(APPEND HIP_HCC_FLAGS -fno-gpu-rdc)
-if(ROCM_6)
+if(ROCM_GE_6)
   # AMD ROCm overlay: target AMD Instinct gfx942 on ROCm 6+.
   list(APPEND HIP_HCC_FLAGS --offload-arch=gfx942)
 else()
@@ -187,7 +192,7 @@ else()
   list(APPEND HIP_HCC_FLAGS --offload-arch=gfx936) # BW1000 (BOWEN)
 endif()
 list(APPEND HIP_CLANG_FLAGS -fno-gpu-rdc)
-if(ROCM_6)
+if(ROCM_GE_6)
   # AMD ROCm overlay: target AMD Instinct gfx942 on ROCm 6+.
   list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx942)
 else()
@@ -206,11 +211,20 @@ endif()
 message(STATUS "HIP library name: ${hip_library_name}")
 
 # set HIP link libs
-if(ROCM_6)
-  find_library(ROCM_HIPRTC_LIB ${hip_library_name} HINTS /opt/rocm/lib)
+if(ROCM_GE_6)
+  # AMD ROCm overlay: on ROCm 6+ the HIP runtime lib and the clang toolchain
+  # live under ${ROCM_PATH} (do NOT hardcode /opt/rocm -- the manylinux ROCm
+  # base installs the toolkit elsewhere). Only set the compiler if it was not
+  # already selected by the toolchain / cache.
+  find_library(ROCM_HIPRTC_LIB ${hip_library_name} HINTS ${ROCM_PATH}/lib
+                                                         ${HIP_PATH}/lib)
 
-  set(CMAKE_C_COMPILER "/opt/rocm/llvm/bin/clang")
-  set(CMAKE_CXX_COMPILER "/opt/rocm/llvm/bin/clang++")
+  if(NOT CMAKE_C_COMPILER)
+    set(CMAKE_C_COMPILER "${HIP_CLANG_PATH}/clang")
+  endif()
+  if(NOT CMAKE_CXX_COMPILER)
+    set(CMAKE_CXX_COMPILER "${HIP_CLANG_PATH}/clang++")
+  endif()
 else()
   find_library(ROCM_HIPRTC_LIB ${hip_library_name} HINTS ${HIP_PATH}/lib)
 endif()
