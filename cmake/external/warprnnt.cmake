@@ -47,8 +47,14 @@ if(WITH_ROCM)
       patch -p1 <
       ${PADDLE_SOURCE_DIR}/patches/warprnnt/CMakeLists.txt.rocm.patch)
   if(ROCM_GE_6)
+    # Chain (append) the hip.cmake patch onto the base CMakeLists patch rather
+    # than replacing it -- mirroring warpctc.cmake -- so both apply. The base
+    # CMakeLists.txt.rocm.patch is load-bearing (adds -DWARPRNNT_WITH_HIP,
+    # include(hip), and CMAKE_PREFIX_PATH); dropping it would leave the newly
+    # added hip.cmake.patch inert and warp-rnnt would not build for ROCm.
     set(WARPRNNT_PATCH_ROCM_COMMAND
-        patch -p1 < ${PADDLE_SOURCE_DIR}/patches/warprnnt/hip.cmake.patch)
+        ${WARPRNNT_PATCH_ROCM_COMMAND} && patch -p1 <
+        ${PADDLE_SOURCE_DIR}/patches/warprnnt/hip.cmake.patch)
   endif()
 endif()
 if(NOT WIN32 AND WITH_GPU)
