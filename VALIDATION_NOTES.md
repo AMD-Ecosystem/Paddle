@@ -1,108 +1,158 @@
-# Building and validating PaddlePaddle on ROCm (AMD Instinct)
+# Building and Testing PaddlePaddle on AMD Instinct GPUs with ROCm
 
-This branch refreshes the AMD ROCm/HIP support in Paddle to upstream v3.4.0 and
-targets the ROCm 10 build floor on AMD Instinct GPUs (gfx942 base; gfx950
-primary). The AMD divergence versus upstream v3.4.0 is a thin overlay (13 files:
-build glue under `cmake/`, a few ROCm backend helpers under `paddle/phi/`, and
-three vendored-dependency patches under `patches/`).
+This branch carries the AMD ROCm and HIP support for PaddlePaddle v3.4.0. It
+builds Paddle from source for AMD Instinct GPUs and produces a Python wheel.
+There are no prebuilt packages for this branch.
 
-## Toolchain / environment
+## What You Need
 
-- ROCm 10.0 or newer. Validated on the manylinux base image
-  `registry.aifoundry.amd.com/rocm-manylinux228-rhel810:10.0.0a20260730`
-  (`/opt/rocm/.info/version` = 10.0.0, HIP internal 7.15.x, clang 23.0.0).
-- AMD Instinct MI300X (gfx942) confirmed via `rocminfo` inside the build
-  container. gfx950 is the primary target and must also be built/validated.
+- An AMD Instinct GPU. The steps were run on an AMD Instinct MI355X (`gfx950`).
+  AMD Instinct MI300X uses `gfx942`.
+- Ubuntu 24.04 with Python 3.12.
+- ROCm 10.1.0. Earlier ROCm releases do not build this branch.
+- About 30 GB of free disk space and a many-core build host. A full build
+  compiles several thousand translation units.
 
-## REQUIRED: compile the C/C++ side with the ROCm clang
+## 1. Install the Build Prerequisites
 
-On ROCm 6+, rocThrust bundles CCCL/libcudacxx. `thrust/complex.h` (included by
-`paddle/phi/common/complex.h`) pulls in `cuda/std/cmath` fp16/bf16 math overloads
-that reference intrinsics (`__hisnan`, `__hisinf`, `__habs`, `__hmax`,
-`__double2bfloat16`) only available under Clang's HIP language mode
-(`defined(__clang__) && defined(__HIP__)`). A plain host g++ compile of any
-translation unit that transitively includes thrust (for example
-`paddle/pir/src/core/block_argument.cc`) fails with `'... has not been declared'`,
-and a non-HIP Clang C++ compile fails on host-only `__half`/`__hip_bfloat16`
-conversion ambiguities in the CCCL headers. `__HIP_NO_HALF_CONVERSIONS__` /
-`__HIP_NO_HALF_OPERATORS__` do NOT resolve this.
-
-The overlay compiles Paddle's own host C++ targets in Clang HIP language mode
-(`-x hip -fno-gpu-rdc`), but only when the C++ compiler is Clang. The flag is
-applied via `add_compile_options` scoped to Paddle's targets (in the top-level
-`CMakeLists.txt`, after `include(flags)`), NOT added to the global
-`CMAKE_CXX_FLAGS`; this keeps it out of CMake's configure-time `check_*()`
-try-compiles and out of the third_party ExternalProjects (protobuf, onednn).
-The ROCm build MUST be configured with the ROCm clang as the C/C++ compiler:
-
-```
--DCMAKE_C_COMPILER=/opt/rocm/llvm/bin/clang
--DCMAKE_CXX_COMPILER=/opt/rocm/llvm/bin/clang++
+```bash
+sudo apt-get update
+sudo apt-get install -y git build-essential cmake patch patchelf wget curl \
+  python3 python3-dev python3-venv
 ```
 
-(Use the actual `${ROCM_PATH}/llvm/bin` on the manylinux base.) On a non-Clang
-compiler the HIP-language flag no-ops, which keeps a CPU/GCC configure safe but
-does NOT fix the thrust host-compile break -- ROCm builds must use clang.
+## 2. Install ROCm
 
-## Configure
+Install ROCm from the public ROCm Python packages into a virtual environment.
+Use `device-gfx942` instead of `device-gfx950` for AMD Instinct MI300X.
 
-Environment prerequisites on the manylinux base:
+```bash
+python3 -m venv paddle-rocm
+. paddle-rocm/bin/activate
+pip install --upgrade pip
+pip install --index-url https://stable.repo.amd.com/rocm/whl-next/ \
+  "rocm[libraries,devel,device-gfx950]==10.1.0"
 
-```
-git config --global --add safe.directory '*'         # source tree bind-mount ownership
-dnf install -y wget python3.11-devel                 # jit download test + shared libpython
-export MIOPEN_USER_DB_PATH=/work/miopen MIOPEN_CUSTOM_CACHE_DIR=/work/miopen
-```
+export ROCM_PATH=$(rocm-sdk path --root)
+export HIP_PATH=$ROCM_PATH
+export PATH=$ROCM_PATH/bin:$ROCM_PATH/lib/llvm/bin:$PATH
+export LD_LIBRARY_PATH=$ROCM_PATH/lib/llvm/lib:$ROCM_PATH/lib:${LD_LIBRARY_PATH:-}
 
-The manylinux `cp3xx` interpreters are static-only (no shared libpython); use the
-RHEL8 system python3.11 which ships `/usr/lib64/libpython3.11.so.1.0`.
-
-The ROCm clang on the manylinux base cannot find `-lstdc++` by default (the
-linkable `libstdc++.so` lives under gcc-toolset, not `/usr`). Point clang at the
-gcc-toolset toolchain on both the C and CXX flags (pick the highest available via
-`ls -d /opt/rh/gcc-toolset-*/root | sort -V | tail -1`):
-
-```
--DCMAKE_C_FLAGS=--gcc-toolchain=/opt/rh/gcc-toolset-14/root/usr
--DCMAKE_CXX_FLAGS=--gcc-toolchain=/opt/rh/gcc-toolset-14/root/usr
+rocminfo | grep "Marketing Name"
 ```
 
-```
-cmake -S . -B build \
-  -DWITH_ROCM=ON -DWITH_RCCL=ON \
-  -DCMAKE_C_COMPILER=/opt/rocm/llvm/bin/clang \
-  -DCMAKE_CXX_COMPILER=/opt/rocm/llvm/bin/clang++ \
-  -DCMAKE_C_FLAGS=--gcc-toolchain=/opt/rh/gcc-toolset-14/root/usr \
-  -DCMAKE_CXX_FLAGS=--gcc-toolchain=/opt/rh/gcc-toolset-14/root/usr \
-  -DCMAKE_HIP_ARCHITECTURES=gfx942 \        # gfx950 for the primary target
-  -DPYTHON_EXECUTABLE=/usr/bin/python3.11 \
-  -DPYTHON_INCLUDE_DIR=/usr/include/python3.11 \
-  -DPYTHON_LIBRARY=/usr/lib64/libpython3.11.so.1.0 -DPY_VERSION=3.11
+Keep these environment variables set for the build and whenever you import
+Paddle. Paddle loads the ROCm libraries and the OpenMP runtime from
+`LD_LIBRARY_PATH`, and the import fails without it.
+
+## 3. Get the Source
+
+```bash
+git clone --depth 1 --branch rocm-enablement https://github.com/AMD-Ecosystem/Paddle.git
+cd Paddle
 ```
 
-The overlay auto-sets `CMAKE_HIP_ARCHITECTURES` from the arch list, so passing it
-explicitly is belt-and-braces (and is how the gfx950 target selects its arch).
+## 4. Apply the rocPRIM Host Guards
 
-## Build
+Paddle host C++ code includes rocPRIM headers through hipCUB and rocThrust. Two
+constructs in the ROCm 10.1 rocPRIM headers only compile in device code. The
+helper script adds a guard for each. It edits two headers inside the ROCm
+installation at `$ROCM_PATH`, and it is safe to run more than once.
 
+```bash
+bash tools/rocm/apply_rocprim_host_guards.sh
 ```
-cmake --build build -j$(nproc)
+
+## 5. Install the Python Build Dependencies
+
+```bash
+pip install -r python/requirements.txt \
+  "protobuf<=3.20.2" "numpy<2" "pybind11-stubgen<3" \
+  pyyaml requests decorator astor opt_einsum setuptools wheel
 ```
 
-Note: `-x hip` compiles the host C++ side in HIP language mode, which increases
-build time versus a plain g++ build (device codegen passes run for host TUs).
-This is inherent to the ROCm 10 CCCL bundle and unavoidable for any host TU that
-includes thrust.
+The three version limits matter. Paddle v3.4.0 generates code against the
+protobuf 3.20 API, builds against the NumPy 1.x C API, and calls the
+`pybind11-stubgen` 2.x interface when it packages the wheel.
 
-## Validate
+## 6. Configure and Build
 
-Run Paddle's documented test suite on the built wheel (gfx942 hard gate, gfx950
-primary). At minimum: `python -c "import paddle; paddle.utils.run_check()"` plus
-small conv/matmul/gelu forward+backward, then the unit-test suite for the touched
-backends. Record PASS/FAIL/SKIP per arch plus coverage.
+Set `ARCH` to the feature-qualified target ID of your GPU. Read it from
+`rocminfo`.
 
-## Known human-track gaps (not ported here)
+```bash
+rocminfo | grep "amdhsa--gfx"
+```
 
-- BF16 convolution via MIOpen (Immediate/solution API hand-tuning).
-- FlashAttention on ROCm (routes through AOTriton / Composable Kernel, not this
-  source path); `extern_flashattn` is guarded off on all ROCm >= 6 builds.
+For AMD Instinct MI350X and MI355X the value is `gfx950:sramecc+:xnack-`. For
+AMD Instinct MI300X it is `gfx942:sramecc+:xnack-`. A bare name such as
+`gfx950` builds, and then every GPU kernel fails to load at run time.
+
+```bash
+ARCH="gfx950:sramecc+:xnack-"
+
+for attempt in 1 2 3 4 5; do
+  cmake -S . -B build \
+    -DWITH_ROCM=ON -DWITH_GPU=OFF -DWITH_RCCL=ON \
+    -DWITH_TESTING=OFF -DWITH_DISTRIBUTE=OFF \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DCMAKE_C_COMPILER="$ROCM_PATH/lib/llvm/bin/clang" \
+    -DCMAKE_CXX_COMPILER="$ROCM_PATH/lib/llvm/bin/clang++" \
+    -DROCM_PATH="$ROCM_PATH" -DHIP_PATH="$ROCM_PATH" \
+    -DCMAKE_PREFIX_PATH="$(rocm-sdk path --cmake)" \
+    -DPY_VERSION=3.12 -DPYTHON_EXECUTABLE="$(which python)" \
+    -DCMAKE_HIP_ARCHITECTURES="$ARCH" -DAMDGPU_TARGETS="$ARCH" -DGPU_ARCHS="$ARCH" \
+    && break
+  echo "configure attempt $attempt failed, retrying"
+done
+
+cmake --build build -j"$(nproc)"
+```
+
+The configure step downloads several third-party archives, and a download can
+fail partway. The loop runs the configure step again when that happens.
+
+The wheel is written to `build/python/dist/`.
+
+## 7. Install and Test
+
+```bash
+pip install --force-reinstall --no-deps build/python/dist/paddlepaddle_dcu-*.whl
+
+cd /tmp
+python "$OLDPWD/tools/rocm/verify_gpu.py"
+```
+
+Run the check from outside the source tree so that Python imports the
+installed wheel. The script confirms that the build has ROCm support, runs
+the built-in Paddle installation check, compares nine operators between the
+CPU and the GPU, and runs a short training loop on the GPU. It prints
+`RESULT: PASS` when everything succeeds.
+
+You can also check a build by hand.
+
+```python
+import paddle
+
+print(paddle.device.is_compiled_with_rocm())  # True
+paddle.set_device("gpu:0")
+x = paddle.randn([512, 512])
+print(float((x @ x).abs().mean()))
+```
+
+## What the ROCm Support Changes
+
+- CMake support for the ROCm 10.1 toolchain, including the requested GPU
+  architecture list and the vendored third-party patches.
+- Host C++ code compiles as plain C++. `thrust/complex.h` is included only in
+  device code.
+- CUDA-only dynamic-loader headers are guarded so that a ROCm build does not
+  include them.
+- Sorting and top-k kernels use the rocPRIM and hipCUB interfaces in ROCm
+  10.1 and handle the 64-lane wavefront width of AMD Instinct GPUs.
+
+## Not Included
+
+- BF16 convolution through MIOpen.
+- FlashAttention. The `extern_flashattn` dependency is disabled for ROCm
+  builds.

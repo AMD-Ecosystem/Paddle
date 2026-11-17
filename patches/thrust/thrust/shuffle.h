@@ -35,7 +35,7 @@
 #pragma once
 
 #include <thrust/detail/config.h>
-#include <thrust/detail/cpp11_required.h>
+// <thrust/detail/cpp11_required.h> removed in ROCm 10.1 rocThrust (C++11 is baseline); dropped.
 
 #if THRUST_CPP_DIALECT >= 2011
 

@@ -47,25 +47,16 @@ inline static size_t round_up(size_t n, size_t q) {
 }
 
 #ifdef __HIPCC__
-namespace rocprim {
-namespace detail {
-template <>
-struct radix_key_codec_base<phi::float16>
-    : radix_key_codec_integral<phi::float16, uint16_t> {};
+// ROCm 10.1 removed the internal rocprim::detail::radix_key_codec_base /
+// radix_key_codec_integral API; custom key types now register via the public
+// rocprim::traits::define<> interface (rocprim/type_traits.hpp). Register
+// phi::float16 and phi::bfloat16 as floating-point keys so rocPRIM radix sort
+// orders them correctly. The floating-point codec keys on the sign bit of the
+// float_bit_mask (sign/exponent/mantissa bit masks), matching the sign-flip
+// ordering the old radix_key_codec_integral<T, uint16_t> provided. The masks
+// mirror rocprim::half (0x8000/0x7C00/0x03FF) and rocprim::bfloat16
+// (0x8000/0x7F80/0x007F).
 
-template <>
-struct radix_key_codec_base<phi::bfloat16>
-    : radix_key_codec_integral<phi::bfloat16, uint16_t> {};
-
-#if HIP_VERSION >= 50400000
-template <>
-struct float_bit_mask<phi::float16> : float_bit_mask<rocprim::half> {};
-
-template <>
-struct float_bit_mask<phi::bfloat16> : float_bit_mask<rocprim::bfloat16> {};
-#endif
-}  // namespace detail
-}  // namespace rocprim
 namespace cub = hipcub;
 #else
 // set cub base traits in order to handle float16
@@ -419,7 +410,13 @@ __global__ void KeMatrixTopK(T* output,
   const int bid = blockIdx.x;
   for (int64_t i = bid; i < num; i += grid_dim) {
     int top_num = k;
-    __shared__ Pair<T> shared_max[BlockSize / WARP_SIZE];
+    // shared_max holds one entry per warp. On wave64 (ROCm) WARP_SIZE==64, so a block of
+    // 32 threads (a partial warp) makes BlockSize / WARP_SIZE == 0 -> a zero-length array,
+    // which HIP device code forbids (on CUDA WARP_SIZE==32 gave size 1). Round up so there
+    // is always at least one slot; the cross-warp gather below stays guarded by the
+    // unchanged `tid < BlockSize / WARP_SIZE`, so this only fixes the illegal declaration.
+    constexpr int kNumWarps = (BlockSize + WARP_SIZE - 1) / WARP_SIZE;
+    __shared__ Pair<T> shared_max[kNumWarps];
     T* out = output + i * output_stride;
     int64_t* inds = indices + i * k;
     Pair<T> topk[MaxLength];
