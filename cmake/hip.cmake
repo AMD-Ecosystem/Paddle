@@ -155,12 +155,21 @@ set(THRUST_DEVICE_SYSTEM THRUST_DEVICE_SYSTEM_HIP)
 # third_party externals are declared, so only Paddle's own targets (added via
 # add_subdirectory(paddle)) receive the flag. The guard no-ops on a non-Clang
 # compiler so a CPU/GCC configure is safe.
-if(ROCM_GE_6 AND CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-  set(PADDLE_HOST_HIP_LANGUAGE ON)
-endif()
+# Host C++ no longer needs HIP language mode: phi/common/complex.h now guards
+# thrust/complex.h behind device compilation, so host .cc TUs do not pull
+# rocThrust/CCCL and compile as plain C++. Keeping host OUT of `-x hip` is what
+# stops __HIPCC__ leaking onto host code (the enforce.h/PADDLE_ENFORCE break in
+# cf_op.cc and ~100 siblings). Default OFF; opt back in with
+# -DPADDLE_HOST_HIP_LANGUAGE=ON if a host TU is found to still need `-x hip`.
+option(PADDLE_HOST_HIP_LANGUAGE
+       "Compile Paddle host C++ in Clang HIP language mode (-x hip)" OFF)
 
 # define HIP_CXX_FLAGS
 list(APPEND HIP_CXX_FLAGS -fPIC)
+# ROCm thrust-compat: force-include the compat shim FIRST into every HIP TU so
+# rocThrust's internal algo cross-references (e.g. copy_if.h -> thrust::inclusive_scan)
+# resolve, pre-empting the "no member named '<algo>' in namespace 'thrust'" class.
+list(APPEND HIP_CXX_FLAGS -include ${PADDLE_SOURCE_DIR}/paddle/phi/kernels/funcs/thrust_compat.h)
 list(APPEND HIP_CXX_FLAGS -D__HIP_PLATFORM_HCC__=1)
 list(APPEND HIP_CXX_FLAGS -D__HIP_PLATFORM_AMD__=1)
 # Note(qili93): HIP has compile conflicts of float16.h as platform::float16 overload std::is_floating_point and std::is_integer
@@ -213,40 +222,45 @@ endif()
 
 set(HIP_HCC_FLAGS ${HIP_CXX_FLAGS})
 set(HIP_CLANG_FLAGS ${HIP_CXX_FLAGS})
+
+# Resolve the AMD GPU architecture(s) to build device code for. Honor a caller-provided
+# list (-DAMDGPU_TARGETS=... , -DGPU_ARCHS=... , or -DCMAKE_HIP_ARCHITECTURES=...) so the
+# same tree can target gfx942 (MI300X), gfx950 (MI350X/MI355X), etc.; default to the
+# ROCm-6+ AMD Instinct baseline (gfx942) only when nothing is specified. Previously the
+# offload-arch was HARDCODED to gfx942 here, so a build requesting another arch (e.g.
+# gfx950) silently produced gfx942-only kernels and every native kernel launch failed at
+# runtime with hipErrorInvalidImage on that device (host code ran, kernels wrote nothing).
+set(_PADDLE_ROCM_ARCHS "")
+if(DEFINED AMDGPU_TARGETS AND NOT AMDGPU_TARGETS STREQUAL "")
+  set(_PADDLE_ROCM_ARCHS "${AMDGPU_TARGETS}")
+elseif(DEFINED GPU_ARCHS AND NOT GPU_ARCHS STREQUAL "")
+  set(_PADDLE_ROCM_ARCHS "${GPU_ARCHS}")
+elseif(DEFINED CMAKE_HIP_ARCHITECTURES AND NOT CMAKE_HIP_ARCHITECTURES STREQUAL "")
+  set(_PADDLE_ROCM_ARCHS "${CMAKE_HIP_ARCHITECTURES}")
+endif()
+if(_PADDLE_ROCM_ARCHS STREQUAL "")
+  if(ROCM_GE_6)
+    set(_PADDLE_ROCM_ARCHS "gfx942") # AMD Instinct baseline on ROCm 6+
+  else()
+    set(_PADDLE_ROCM_ARCHS "gfx906;gfx926;gfx928;gfx936")
+  endif()
+endif()
+
 # Ask hcc to generate device code during compilation so we can use
 # host linker to link.
 list(APPEND HIP_HCC_FLAGS -fno-gpu-rdc)
-if(ROCM_GE_6)
-  # AMD ROCm overlay: target AMD Instinct gfx942 on ROCm 6+.
-  list(APPEND HIP_HCC_FLAGS --offload-arch=gfx942)
-else()
-  list(APPEND HIP_HCC_FLAGS --offload-arch=gfx906) # Z100 (ZIFANG)
-  list(APPEND HIP_HCC_FLAGS --offload-arch=gfx926) # K100 (KONGING)
-  list(APPEND HIP_HCC_FLAGS --offload-arch=gfx928) # K100_AI (KONGING_AI)
-  list(APPEND HIP_HCC_FLAGS --offload-arch=gfx936) # BW1000 (BOWEN)
-endif()
 list(APPEND HIP_CLANG_FLAGS -fno-gpu-rdc)
-if(ROCM_GE_6)
-  # AMD ROCm overlay: target AMD Instinct gfx942 on ROCm 6+.
-  list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx942)
-else()
-  list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx906) # Z100 (ZIFANG)
-  list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx926) # K100 (KONGING)
-  list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx928) # K100_AI (KONGING_AI)
-  list(APPEND HIP_CLANG_FLAGS --offload-arch=gfx936) # BW1000 (BOWEN)
-endif()
+foreach(_arch IN LISTS _PADDLE_ROCM_ARCHS)
+  list(APPEND HIP_HCC_FLAGS --offload-arch=${_arch})
+  list(APPEND HIP_CLANG_FLAGS --offload-arch=${_arch})
+endforeach()
 
 # CMake >= 4.x's HIP language support treats an empty CMAKE_HIP_ARCHITECTURES as a
-# hard generate-time error for any target with HIP sources. The offload-arch
-# compiler flags above are not sufficient for that check, so set the property from
-# the same architecture list so a bare "cmake .." configures on modern CMake
-# without the caller passing -DCMAKE_HIP_ARCHITECTURES.
+# hard generate-time error for any target with HIP sources. Set the property from the
+# same resolved list so a bare "cmake .." configures on modern CMake and the two stay
+# consistent.
 if(NOT DEFINED CMAKE_HIP_ARCHITECTURES OR CMAKE_HIP_ARCHITECTURES STREQUAL "")
-  if(ROCM_GE_6)
-    set(CMAKE_HIP_ARCHITECTURES "gfx942")
-  else()
-    set(CMAKE_HIP_ARCHITECTURES "gfx906;gfx926;gfx928;gfx936")
-  endif()
+  set(CMAKE_HIP_ARCHITECTURES "${_PADDLE_ROCM_ARCHS}")
 endif()
 message(STATUS "CMAKE_HIP_ARCHITECTURES: ${CMAKE_HIP_ARCHITECTURES}")
 

@@ -23,11 +23,21 @@
 #include "paddle/common/hostdevice.h"
 #ifdef PADDLE_WITH_CUDA
 #include <cuComplex.h>
-#include <thrust/complex.h>
 #endif  // PADDLE_WITH_CUDA
 
 #ifdef PADDLE_WITH_HIP
 #include <hip/hip_complex.h>
+#endif
+
+// thrust/complex.h is DEVICE-ONLY on ROCm: rocThrust bundles CCCL/libcudacxx whose
+// fp16/bf16 complex path only compiles in HIP device/language mode. Pulling it into
+// host .cc TUs is what forced the global `-x hip`, which in turn leaked __HIPCC__ onto
+// host code and broke enforce.h's PADDLE_ENFORCE (cf_op.cc). Include it ONLY when
+// actually device-compiling -- matching the operator+/-/* guards below, which already
+// fall back to member-wise host arithmetic. (CUDA's thrust/complex.h is host-safe, so
+// this is a no-op for the CUDA build.)
+#if (defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)) && \
+    (defined(__CUDA_ARCH__) || defined(__HIPCC__))
 #include <thrust/complex.h>  // NOLINT
 #endif
 
@@ -68,11 +78,15 @@ struct PADDLE_ALIGN(sizeof(T) * 2) complex {
 
 #if defined(PADDLE_WITH_CUDA) || defined(PADDLE_WITH_HIP)
 
+#if defined(__CUDA_ARCH__) || defined(__HIPCC__)
+  // thrust::complex interop is only needed in device code (thrust algorithms) and
+  // thrust/complex.h is only included when device-compiling (see top of file).
   template <typename T1>
   HOSTDEVICE inline explicit complex(const thrust::complex<T1>& c) {
     real = c.real();
     imag = c.imag();
   }
+#endif
 
 #if defined(PADDLE_WITH_CCCL)
   template <typename T1>
@@ -82,10 +96,12 @@ struct PADDLE_ALIGN(sizeof(T) * 2) complex {
   }
 #endif
 
+#if defined(__CUDA_ARCH__) || defined(__HIPCC__)
   template <typename T1>
   HOSTDEVICE inline explicit operator thrust::complex<T1>() const {
     return thrust::complex<T1>(real, imag);
   }
+#endif
 
 #ifdef PADDLE_WITH_HIP
   HOSTDEVICE inline explicit operator hipFloatComplex() const {

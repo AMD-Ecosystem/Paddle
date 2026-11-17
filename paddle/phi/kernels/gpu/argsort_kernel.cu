@@ -29,25 +29,16 @@
 #include "paddle/phi/kernels/transpose_kernel.h"
 
 #ifdef __HIPCC__
-namespace rocprim {
-namespace detail {
-template <>
-struct radix_key_codec_base<phi::float16>
-    : radix_key_codec_integral<phi::float16, uint16_t> {};
+// ROCm 10.1 removed the internal rocprim::detail::radix_key_codec_base /
+// radix_key_codec_integral API; custom key types now register via the public
+// rocprim::traits::define<> interface (rocprim/type_traits.hpp). Register
+// phi::float16 and phi::bfloat16 as floating-point keys so rocPRIM radix sort
+// orders them correctly. The floating-point codec keys on the sign bit of the
+// float_bit_mask (sign/exponent/mantissa bit masks), matching the sign-flip
+// ordering the old radix_key_codec_integral<T, uint16_t> provided. The masks
+// mirror rocprim::half (0x8000/0x7C00/0x03FF) and rocprim::bfloat16
+// (0x8000/0x7F80/0x007F).
 
-template <>
-struct radix_key_codec_base<phi::bfloat16>
-    : radix_key_codec_integral<phi::bfloat16, uint16_t> {};
-
-#if HIP_VERSION >= 50400000
-template <>
-struct float_bit_mask<phi::float16> : float_bit_mask<rocprim::half> {};
-
-template <>
-struct float_bit_mask<phi::bfloat16> : float_bit_mask<rocprim::bfloat16> {};
-#endif
-}  // namespace detail
-}  // namespace rocprim
 #else
 // set cub base traits in order to handle float16
 namespace cub {

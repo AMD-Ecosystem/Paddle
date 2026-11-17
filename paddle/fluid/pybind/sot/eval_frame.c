@@ -319,7 +319,10 @@ static PyObject *_custom_eval_frame(PyThreadState *tstate,
 #if PY_3_13_PLUS
     frame_proxy->locals = f_locals;
 #endif
-    PyObject *arg = frame_proxy;
+    // PyInterpreterFrameProxy begins with PyObject_HEAD, so it is a PyObject; cast
+    // explicitly. The ROCm/manylinux clang promotes -Wincompatible-pointer-types to an
+    // error (stricter than the gcc build), which rejects the implicit conversion.
+    PyObject *arg = (PyObject *)frame_proxy;
 #else
     PyObject *arg = frame;
 #endif
